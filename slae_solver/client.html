@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Solving SLAE</title>
+</head>
+<body>
+<h2>Uploading files for SLAE</h2>
+<form id="slaeForm" enctype="multipart/form-data">
+    <label>Coefficient matrix (CSV):
+        <input type="file" name="matrix" accept=".csv" required>
+    </label>
+    <br><br>
+    <label>Vector of the right part (CSV):
+        <input type="file" name="vector" accept=".csv" required>
+    </label>
+    <br><br>
+    <button type="button" onclick="sendFiles()">Solve</button>
+</form>
+
+<br>
+<a id="downloadLink" style="display:none;">Download Solution</a>
+
+<script>
+    function sendFiles() {
+        const form = document.getElementById('slaeForm');
+        const formData = new FormData(form);
+
+        fetch('/solve', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => {
+            if (!res.ok) throw new Error("Error in calculation");
+            return res.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const link = document.getElementById('downloadLink');
+            link.href = url;
+            link.download = "solution.csv";
+            link.style.display = "inline";
+            link.textContent = "Download Solution";
+        })
+        .catch(err => alert(err));
+    }
+</script>
+</body>
+</html>
