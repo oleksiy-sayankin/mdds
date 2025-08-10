@@ -1,5 +1,18 @@
+# Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+pylint
+pycodestyle
+ruff
+wheel
 fastapi
 uvicorn
 numpy
 pandas
 python-multipart
+pytest
+scipy
+mpi4py
+petsc
+petsc4py
+black
