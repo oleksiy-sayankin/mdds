@@ -2,8 +2,10 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 """pets solver"""
+import numpy as np
 
 from slae_solver.solver_interface import LinearSolverInterface
+from scipy.sparse import csr_matrix
 
 
 class PetscSolver(LinearSolverInterface):
@@ -24,6 +26,10 @@ class PetscSolver(LinearSolverInterface):
 
         n = len(b)
         PETSc = self.PETSc
+
+        # Convert numpy array to csr_matrix
+        if isinstance(A, np.ndarray):
+            A = csr_matrix(A, dtype=float)
 
         # Create PETSc matrix
         # pylint: disable=no-member
