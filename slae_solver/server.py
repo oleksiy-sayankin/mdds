@@ -5,11 +5,12 @@
 Main entry point
 """
 import logging
-from pathlib import Path
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
 import numpy as np
 import io
+
+from common_logging.setup_logging import setup_logging
 
 # Import solvers
 from slae_solver.solvers.numpy_exact_solver import NumpyExactSolver
@@ -18,16 +19,10 @@ from slae_solver.solvers.numpy_pinv_solver import NumpyPinvSolver
 from slae_solver.solvers.petsc_solver import PetscSolver
 from slae_solver.solvers.scipy_gmres_solver import ScipyGmresSolver
 
-# Create logs directory
-Path("logs").mkdir(exist_ok=True)
+# Apply logging config
+setup_logging()
 
-# Configure logging
-logging.basicConfig(
-    filename="logs/server.log",
-    filemode="a",
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
