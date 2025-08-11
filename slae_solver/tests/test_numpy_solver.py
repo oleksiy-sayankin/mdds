@@ -4,8 +4,8 @@
 import unittest
 import numpy as np
 from slae_solver.solvers.numpy_exact_solver import NumpyExactSolver
-from slae_solver.solvers.numpy_lstsq_solver import NumpyLeastSquaresSolver
-from slae_solver.solvers.numpy_pinv_solver import NumpyPseudoinverseSolver
+from slae_solver.solvers.numpy_lstsq_solver import NumpyLstsqSolver
+from slae_solver.solvers.numpy_pinv_solver import NumpyPinvSolver
 
 
 def test_exact_solver():
@@ -19,7 +19,7 @@ def test_exact_solver():
 def test_lstsq_solver():
     A = np.array([[3, 2], [1, 4]])
     b = np.array([10, 8])
-    solver = NumpyLeastSquaresSolver()
+    solver = NumpyLstsqSolver()
     x = solver.solve(A, b)
     assert np.allclose(A @ x, b)
 
@@ -27,7 +27,7 @@ def test_lstsq_solver():
 def test_pinv_solver():
     A = np.array([[3, 2], [1, 4]])
     b = np.array([10, 8])
-    solver = NumpyPseudoinverseSolver()
+    solver = NumpyPinvSolver()
     x = solver.solve(A, b)
     assert np.allclose(A @ x, b)
 

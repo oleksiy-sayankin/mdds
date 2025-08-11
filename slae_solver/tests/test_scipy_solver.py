@@ -3,7 +3,7 @@
 
 import unittest
 import numpy as np
-from slae_solver.solvers.scipy_gmres_solver import ScipyGMRESSolver
+from slae_solver.solvers.scipy_gmres_solver import ScipyGmresSolver
 
 
 def test_scipy_gmres_solver_sparse_matrix():
@@ -11,7 +11,7 @@ def test_scipy_gmres_solver_sparse_matrix():
     A = np.array([[4, 1], [1, 3]], dtype=float)
     b = np.array([1, 2], dtype=float)
 
-    solver = ScipyGMRESSolver(tol=1e-10, maxiter=50)
+    solver = ScipyGmresSolver(tol=1e-10, maxiter=50)
     x = solver.solve(A, b)
 
     # Verify Ax ≈ b

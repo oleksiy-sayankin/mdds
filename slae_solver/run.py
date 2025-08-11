@@ -3,12 +3,12 @@
 """
 Entry point for running server with chosen solver
 """
-from slae_solver.solvers.numpy_exact_solver import NumpyExactSolver
-from slae_solver.server_factory import create_app
 import uvicorn
 
-solver = NumpyExactSolver()
-app = create_app(solver)
-
 if __name__ == "__main__":
-    uvicorn.run("slae_solver.run:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(
+        "slae_solver.server:app",  # full module path
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )

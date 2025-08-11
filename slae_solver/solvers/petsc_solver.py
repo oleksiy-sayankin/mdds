@@ -6,7 +6,7 @@
 from slae_solver.solver_interface import LinearSolverInterface
 
 
-class PETScSolver(LinearSolverInterface):
+class PetscSolver(LinearSolverInterface):
     """Solve linear systems using PETSc (KSP solver)."""
 
     def __init__(self, ksp_type="gmres", tol=1e-8, maxiter=1000):

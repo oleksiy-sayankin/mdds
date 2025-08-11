@@ -7,7 +7,7 @@ import numpy as np
 from slae_solver.solver_interface import LinearSolverInterface
 
 
-class NumpyLeastSquaresSolver(LinearSolverInterface):
+class NumpyLstsqSolver(LinearSolverInterface):
     """Solve linear systems using least squares (numpy.linalg.lstsq)."""
 
     def solve(self, A, b):

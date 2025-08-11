@@ -1,51 +1,80 @@
-<!--Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
-Refer to the LICENSE file in the root directory for full license details.-->
-
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Solving SLAE</title>
+    <title>SLAE Solver</title>
 </head>
 <body>
-<h2>Uploading files for SLAE</h2>
-<form id="slaeForm" enctype="multipart/form-data">
-    <label>Coefficient matrix (CSV):
-        <input type="file" name="matrix" accept=".csv" required>
-    </label>
-    <br><br>
-    <label>Vector of the right part (CSV):
-        <input type="file" name="vector" accept=".csv" required>
-    </label>
-    <br><br>
-    <button type="button" onclick="sendFiles()">Solve</button>
-</form>
+<h1>SLAE Solver</h1>
 
-<br>
+<!-- File inputs -->
+<label for="matrixFile">Matrix (CSV):</label>
+<input type="file" id="matrixFile" accept=".csv"><br><br>
+
+<label for="rhsFile">Right-hand side (CSV):</label>
+<input type="file" id="rhsFile" accept=".csv"><br><br>
+
+<!-- Solver method selection -->
+<label for="solverMethod">Solver method:</label>
+<select id="solverMethod">
+    <option value="numpy_exact_solver" selected>numpy exact solver</option>
+    <option value="numpy_lstsq_solver">numpy lstsq solver</option>
+    <option value="numpy_pinv_solver">numpy pinv solver</option>
+    <option value="petsc_solver">petsc solver</option>
+    <option value="scipy_gmres_solver">scipy solver</option>
+</select><br><br>
+
+<!-- Buttons -->
+<button onclick="sendFiles()">Solve</button>
 <a id="downloadLink" style="display:none;">Download Solution</a>
 
+<!-- JS script at the end to ensure DOM is loaded -->
 <script>
-    function sendFiles() {
-        const form = document.getElementById('slaeForm');
-        const formData = new FormData(form);
+    async function sendFiles() {
+        const matrixInput = document.getElementById("matrixFile");
+        const rhsInput = document.getElementById("rhsFile");
+        const solverMethod = document.getElementById("solverMethod").value;
 
-        fetch('/solve', {
-            method: 'POST',
-            body: formData
-        })
-        .then(res => {
-            if (!res.ok) throw new Error("Error in calculation");
-            return res.blob();
-        })
-        .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const link = document.getElementById('downloadLink');
-            link.href = url;
-            link.download = "solution.csv";
-            link.style.display = "inline";
-            link.textContent = "Download Solution";
-        })
-        .catch(err => alert(err));
+        console.log("matrixInput = " + matrixInput);
+        console.log("rhsInput = " + rhsInput);
+        console.log("solverMethod = " + solverMethod);
+
+        if (!matrixInput.files.length || !rhsInput.files.length) {
+            alert("Please select both files.");
+            return;
+        }
+
+        const matrixFile = matrixInput.files[0];
+        const rhsFile = rhsInput.files[0];
+
+        console.log("matrixFile = " + matrixFile);
+        console.log("rhsFile = " + rhsFile);
+
+        const formData = new FormData();
+        formData.append("matrix", matrixFile);
+        formData.append("rhs", rhsFile);
+        formData.append("method", solverMethod);
+
+        try {
+            const response = await fetch("/solve", {
+                method: "POST",
+                body: formData
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.getElementById("downloadLink");
+                a.href = url;
+                a.download = "solution.csv";
+                a.style.display = "inline";
+            } else {
+                alert("Error solving system");
+            }
+        } catch (error) {
+            console.error("Error sending files:", error);
+            alert("An error occurred while sending files.");
+        }
     }
 </script>
 </body>

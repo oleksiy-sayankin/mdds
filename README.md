@@ -21,10 +21,10 @@ git clone git@github.com:oleksiy-sayankin/mdds.git
 2. Create Pyton env an install libraries
 
 ```
-cd mdds/slae_solver
+cd mdds
 python3 -m venv mdds_env
 source mdds_env/bin/activate
-pip install -r requirements.txt
+pip install -r slae_solver/requirements.txt
 ```
 
 3. Run server in console

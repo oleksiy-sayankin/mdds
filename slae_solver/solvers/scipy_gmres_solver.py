@@ -8,7 +8,7 @@ from scipy.sparse.linalg import gmres
 from slae_solver.solver_interface import LinearSolverInterface
 
 
-class ScipyGMRESSolver(LinearSolverInterface):
+class ScipyGmresSolver(LinearSolverInterface):
     """Solve sparse linear systems using GMRES iterative method from SciPy."""
 
     def __init__(self, tol=1e-8, maxiter=None):

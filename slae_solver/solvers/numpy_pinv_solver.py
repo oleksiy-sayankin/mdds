@@ -7,7 +7,7 @@ import numpy as np
 from slae_solver.solver_interface import LinearSolverInterface
 
 
-class NumpyPseudoinverseSolver(LinearSolverInterface):
+class NumpyPinvSolver(LinearSolverInterface):
     """Solve linear systems using pseudoinverse (numpy.linalg.pinv)."""
 
     def solve(self, A, b):
