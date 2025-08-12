@@ -22,15 +22,18 @@ git clone git@github.com:oleksiy-sayankin/mdds.git
 
 ```
 cd mdds
-python3 -m venv mdds_env
+make setup_python_env
+```
+
+3. Activate python environment
+```
 source mdds_env/bin/activate
-pip install -r slae_solver/requirements.txt
 ```
 
-3. Run server in console
+4. Run server in console
 
 ```
-make all
+make run_all
 ```
 
 Open link in browser http://127.0.0.1:8000/
@@ -52,4 +55,5 @@ and _vector.csv_:
 ```
 
 6. Upload files and press "Solve" button
-7. Use _Download Solution_ link to see the result
+
+7. Use _Download Solution link to see the result

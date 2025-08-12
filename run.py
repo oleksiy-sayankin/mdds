@@ -7,7 +7,7 @@ import uvicorn
 
 if __name__ == "__main__":
     uvicorn.run(
-        "slae_solver.server:app",  # full module path
+        "mdds_server.server:app",  # full module path
         host="0.0.0.0",
         port=8000,
         reload=True,

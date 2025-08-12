@@ -39,7 +39,7 @@ SOLVER_MAPPING = {
 @app.get("/")
 def index():
     try:
-        with open("slae_solver/client.html", "r", encoding="utf-8") as f:
+        with open("mdds_client/client.html", "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load client.html: {e}")
