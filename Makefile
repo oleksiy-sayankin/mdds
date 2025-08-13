@@ -10,6 +10,12 @@ PROJECT_ROOT := .
 run_all:
 	make reformat
 	make check_code_style
+	make test_and_run
+
+#
+# Run tests and start server
+#
+test_and_run:
 	make test
 	make run_server
 

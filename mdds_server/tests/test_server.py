@@ -61,6 +61,16 @@ def server():
     stop_server()
 
 
+def test_root_endpoint():
+    """
+    Base test for root end point
+    """
+    response = requests.get(f"{BASE_URL}/")
+    assert (
+        response.status_code == 200
+    ), f"Server returned {response.status_code}: {response.text}"
+
+
 @pytest.mark.parametrize("solver_method", SOLVER_METHODS)
 def test_solve_endpoint(solver_method):
     """

@@ -1,0 +1,40 @@
+<!-- Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.-->
+<!-- Refer to the LICENSE file in the root directory for full license details.-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SLAE Solver</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+</head>
+<body>
+<div id="root">
+<h1>SLAE Solver</h1>
+
+<!-- File inputs -->
+<label for="matrixFile">Matrix (CSV):</label>
+<input type="file" id="matrixFile" accept=".csv"><br><br>
+
+<label for="rhsFile">Right-hand side (CSV):</label>
+<input type="file" id="rhsFile" accept=".csv"><br><br>
+
+<!-- Solver method selection -->
+<label for="solverMethod">Solver method:</label>
+<select id="solverMethod">
+    <option value="numpy_exact_solver" selected>numpy exact solver</option>
+    <option value="numpy_lstsq_solver">numpy lstsq solver</option>
+    <option value="numpy_pinv_solver">numpy pinv solver</option>
+    <option value="petsc_solver">petsc solver</option>
+    <option value="scipy_gmres_solver">scipy solver</option>
+</select><br><br>
+
+<!-- Buttons -->
+<button id="solveBtn">Solve</button>
+<button id="downloadBtn" disabled>Download Solution</button>
+</div>
+<!-- JS script at the end to ensure DOM is loaded -->
+<script src="/static/index.js"></script>
+</body>
+</html>

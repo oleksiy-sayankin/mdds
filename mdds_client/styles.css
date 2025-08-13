@@ -1,0 +1,18 @@
+/*
+Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+Refer to the LICENSE file in the root directory for full license details.
+*/
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+label {
+    font-weight: bold;
+}
+
+button {
+    margin-top: 10px;
+    padding: 6px 12px;
+}

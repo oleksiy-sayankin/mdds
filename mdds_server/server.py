@@ -5,10 +5,12 @@
 Main entry point
 """
 import logging
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import numpy as np
 import io
+import os
 
 from common_logging.setup_logging import setup_logging
 
@@ -26,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+CLIENT_DIR = os.path.join(os.path.dirname(__file__), "..", "mdds_client")
+app.mount("/static", StaticFiles(directory=CLIENT_DIR, html=True), name="static")
+
 # Solver mapping
 SOLVER_MAPPING = {
     "numpy_exact_solver": NumpyExactSolver,
@@ -38,11 +43,7 @@ SOLVER_MAPPING = {
 
 @app.get("/")
 def index():
-    try:
-        with open("mdds_client/client.html", "r", encoding="utf-8") as f:
-            return HTMLResponse(f.read())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load client.html: {e}")
+    return FileResponse(os.path.join(CLIENT_DIR, "index.html"))
 
 
 @app.post("/solve")
