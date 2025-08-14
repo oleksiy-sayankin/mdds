@@ -8,8 +8,9 @@ PROJECT_ROOT := .
 # Run server and tests with existing python env
 #
 run_all:
-	make reformat
-	make check_code_style
+	make reformat_python
+	make check_python_code_style
+	make reformat_js
 	make test_and_run
 
 #
@@ -20,18 +21,25 @@ test_and_run:
 	make run_server
 
 #
-# Check code style
+# Reformat JavaScript files
 #
-check_code_style:
-	echo "[INFO] Checking code style"
+reformat_js:
+	echo "[INFO] Reformating JavaScript sources"
+	prettier --write mdds_client/
+
+#
+# Check python code style
+#
+check_python_code_style:
+	echo "[INFO] Checking python code style"
 	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)* --ignore=E501
 	ruff check $(PROJECT_ROOT) --fix --force-exclude $(VENV_DIR) --respect-gitignore
 	pylint $(PROJECT_ROOT) --ignore $(VENV_DIR) --errors-only
 
 #
-# Reformat code
+# Reformat Python code
 #
-reformat:
+reformat_python:
 	echo "[INFO] Reformating python sources"
 	black .  --exclude $(VENV_DIR)/ --verbose
 #

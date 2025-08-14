@@ -9,7 +9,9 @@ Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains cod
 Requirements
 
 ```
-sudo apt install python3-pip python3-full git libblas-dev liblapack-dev
+sudo apt update
+sudo apt install python3-pip python3-full git libblas-dev liblapack-dev nodejs npm
+sudo npm install -g prettier
 ```
 
 1. Clone repository
@@ -56,4 +58,4 @@ and _vector.csv_:
 
 6. Upload files and press "Solve" button
 
-7. Use _Download Solution link to see the result
+7. Use _Download Solution_ button to see the result
