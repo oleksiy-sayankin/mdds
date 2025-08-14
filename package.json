@@ -1,0 +1,28 @@
+{
+  "name": "mdds",
+  "version": "1.0.0",
+  "description": "Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains code for solving equation systems.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oleksiy-sayankin/mdds.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/oleksiy-sayankin/mdds/issues"
+  },
+  "homepage": "https://github.com/oleksiy-sayankin/mdds#readme",
+  "devDependencies": {
+    "@eslint/css": "^0.10.0",
+    "@eslint/js": "^9.33.0",
+    "@eslint/json": "^0.13.1",
+    "@eslint/markdown": "^7.1.0",
+    "eslint": "^9.33.0",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^16.3.0"
+  }
+}

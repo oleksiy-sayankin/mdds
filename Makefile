@@ -2,6 +2,7 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 VENV_DIR := mdds_env
+NODE_MODULES := node_modules
 PROJECT_ROOT := .
 
 #
@@ -11,6 +12,7 @@ run_all:
 	make reformat_python
 	make check_python_code_style
 	make reformat_js
+	make check_js_code_style
 	make test_and_run
 
 #
@@ -32,16 +34,23 @@ reformat_js:
 #
 check_python_code_style:
 	echo "[INFO] Checking python code style"
-	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)* --ignore=E501
+	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES) --ignore=E501
 	ruff check $(PROJECT_ROOT) --fix --force-exclude $(VENV_DIR) --respect-gitignore
 	pylint $(PROJECT_ROOT) --ignore $(VENV_DIR) --errors-only
+
+#
+# Check JavaScript code style
+#
+check_js_code_style:
+	echo "[INFO] Checking JavaScript code style"
+	eslint mdds_client/ --debug --fix
 
 #
 # Reformat Python code
 #
 reformat_python:
 	echo "[INFO] Reformating python sources"
-	black .  --exclude $(VENV_DIR)/ --verbose
+	black .  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
 #
 # Run tests
 #

@@ -12,6 +12,7 @@ Requirements
 sudo apt update
 sudo apt install python3-pip python3-full git libblas-dev liblapack-dev nodejs npm
 sudo npm install -g prettier
+sudo npm install eslint @eslint/js globals @eslint/json @eslint/markdown @eslint/css --save-dev
 ```
 
 1. Clone repository
