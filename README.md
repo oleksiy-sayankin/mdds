@@ -2,7 +2,51 @@
 
 Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains code for solving equation systems.
 
-## Installation guide
+## Users Installation Guide
+
+### Ubuntu 24.x.x
+
+1. Install Docker 
+
+[Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+
+2. Start Docker Daemon
+```
+sudo systemctl start docker
+```
+
+3. Pull Docker Image
+
+```
+docker pull oleksiysayankin/mdds:latest
+```
+4. Run MDDS Server
+```
+docker run -p 8000:8000 oleksiysayankin/mdds:latest
+```
+5. Open link in browser http://127.0.0.1:8000/
+
+6. Create sample data files
+
+Create two text files: _matrix.csv_:
+
+```
+3,2
+1,4
+```
+
+and _vector.csv_:
+
+``` 
+10
+8
+```
+
+7. Upload files and press _Solve_ button
+
+8. Use _Download Solution_ button to see the result
+
+## Developers Installation Guide
 
 ### Ubuntu 24.x.x
 
@@ -38,25 +82,3 @@ source mdds_env/bin/activate
 ```
 make run_all
 ```
-
-Open link in browser http://127.0.0.1:8000/
-
-5. Create sample data files
-
-Create two text files: _matrix.csv_:
-
-```
-3,2
-1,4
-```
-
-and _vector.csv_:
-
-``` 
-10
-8
-```
-
-6. Upload files and press "Solve" button
-
-7. Use _Download Solution_ button to see the result

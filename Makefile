@@ -4,6 +4,8 @@
 VENV_DIR := mdds_env
 NODE_MODULES := node_modules
 PROJECT_ROOT := .
+PROJECT_NAME := mdds
+USER_NAME := oleksiysayankin
 
 #
 # Run server and tests with existing python env
@@ -21,6 +23,21 @@ run_all:
 test_and_run:
 	make test
 	make run_server
+
+#
+# Build Docker image
+#
+build_image:
+	echo "[INFO] Building Docker image"
+	docker buildx build --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
+
+
+#
+# Push Docker image
+#
+push_image:
+	echo "[INFO] Pushing Docker image"
+	docker push $(USER_NAME)/$(PROJECT_NAME):latest
 
 #
 # Reformat JavaScript files
