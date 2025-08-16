@@ -57,6 +57,9 @@ sudo apt update
 sudo apt install python3-pip python3-full git libblas-dev liblapack-dev nodejs npm
 sudo npm install -g prettier
 sudo npm install eslint @eslint/js globals @eslint/json @eslint/markdown @eslint/css --save-dev
+sudo npm install --save-dev jest jsdom jest-environment-jsdom
+sudo npm install --save-dev babel-jest @babel/core @babel/preset-env
+sudo npm install --save-dev eslint-plugin-jest
 ```
 
 1. Clone repository

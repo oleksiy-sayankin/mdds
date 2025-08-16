@@ -3,3 +3,4 @@ __pycache__
 mdds_env
 logs
 node_modules
+package-lock.json

@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", function () {
   downloadBtn.addEventListener("click", downloadSolution);
 });
 
-function downloadSolution() {
+export function downloadSolution() {
   if (!window.solutionBlob) return;
 
   const url = URL.createObjectURL(window.solutionBlob);
@@ -21,7 +21,7 @@ function downloadSolution() {
   document.body.removeChild(a);
 }
 
-async function sendFiles() {
+export async function sendFiles() {
   const matrixInput = document.getElementById("matrixFile");
   const rhsInput = document.getElementById("rhsFile");
   const solverMethod = document.getElementById("solverMethod").value;

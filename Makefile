@@ -21,7 +21,8 @@ run_all:
 # Run tests and start server
 #
 test_and_run:
-	make test
+	make test_python
+	make test_js
 	make run_server
 
 #
@@ -68,12 +69,20 @@ check_js_code_style:
 reformat_python:
 	echo "[INFO] Reformating python sources"
 	black .  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
+
 #
-# Run tests
+# Run Python tests
 #
-test:
-	echo "[INFO] Running unit tests"
+test_python:
+	echo "[INFO] Running Python unit tests"
 	pytest -v
+
+#
+# Run JavaScript tests
+#
+test_js:
+	echo "[INFO] Running JavaScript unit tests"
+	npm test
 
 #
 # Run server
