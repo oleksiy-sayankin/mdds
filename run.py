@@ -4,11 +4,17 @@
 Entry point for running server with chosen solver
 """
 import uvicorn
+from mdds_server.config_loader import Config
 
 if __name__ == "__main__":
+    config = Config()
+    host = config.get("server", "host", default="0.0.0.0")
+    port = config.get("server", "port", default=8000)
+    reload = config.get("server", "reload", default="true")
+
     uvicorn.run(
-        "mdds_server.server:app",  # full module path
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        "mdds_server.server:app",
+        host=host,
+        port=port,
+        reload=reload,
     )
