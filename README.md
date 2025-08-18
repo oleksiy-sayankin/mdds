@@ -60,6 +60,7 @@ sudo npm install eslint @eslint/js globals @eslint/json @eslint/markdown @eslint
 sudo npm install --save-dev jest jsdom jest-environment-jsdom
 sudo npm install --save-dev babel-jest @babel/core @babel/preset-env
 sudo npm install --save-dev eslint-plugin-jest
+sudo npm install --save-dev bats
 ```
 
 1. Clone repository

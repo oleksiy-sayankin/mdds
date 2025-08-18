@@ -5,13 +5,14 @@
   "description": "Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains code for solving equation systems.",
   "main": "index.js",
   "scripts": {
-    "test": "jest --env=jsdom --verbose"
+    "test": "jest --env=jsdom --verbose",
+    "test:e2e": "bats test/e2e"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/oleksiy-sayankin/mdds.git"
   },
-  "author": "",
+  "author": "Oleksiy Oleksandrovych Sayankin",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/oleksiy-sayankin/mdds/issues"
@@ -28,6 +29,7 @@
     "@eslint/json": "^0.13.1",
     "@eslint/markdown": "^7.1.0",
     "babel-jest": "^29.7.0",
+    "bats": "^1.12.0",
     "eslint": "^9.33.0",
     "eslint-plugin-jest": "^29.0.1",
     "eslint-plugin-react": "^7.37.5",
