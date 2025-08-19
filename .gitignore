@@ -4,3 +4,4 @@ mdds_env
 logs
 node_modules
 package-lock.json
+tests/e2e/.env

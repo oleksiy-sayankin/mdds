@@ -6,6 +6,8 @@ NODE_MODULES := node_modules
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
 USER_NAME := oleksiysayankin
+MDDS_SERVER_PORT := 8000
+E2E_HOME := tests/e2e
 
 #
 # Run server and tests with existing python env
@@ -90,6 +92,18 @@ test_js:
 run_server:
 	echo "[INFO] Starting web-server"
 	python -m run
+
+#
+# Start Docker container and run end to end tests
+#
+setup_and_run_e2e:
+	echo "[INFO] Starting up environment"
+	echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
+	docker-compose -f $(E2E_HOME)/docker-compose.yml up -d
+	echo "[INFO] Running end to end tests"
+	npm run test:e2e
+	echo "[INFO] Shutting down environment"
+	docker-compose -f $(E2E_HOME)/docker-compose.yml down
 
 #
 # Setup python environment

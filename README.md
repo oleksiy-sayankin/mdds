@@ -55,6 +55,7 @@ Requirements
 ```
 sudo apt update
 sudo apt install python3-pip python3-full git libblas-dev liblapack-dev nodejs npm
+sudo apt install docker-compose
 sudo npm install -g prettier
 sudo npm install eslint @eslint/js globals @eslint/json @eslint/markdown @eslint/css --save-dev
 sudo npm install --save-dev jest jsdom jest-environment-jsdom
