@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --env=jsdom --verbose",
-    "test:e2e": "bats test/e2e"
+    "test:e2e": "bats tests/e2e/*.bats"
   },
   "repository": {
     "type": "git",
