@@ -46,6 +46,11 @@ def index():
     return FileResponse(os.path.join(CLIENT_DIR, "index.html"))
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.post("/solve")
 async def solve_endpoint(
     matrix: UploadFile = File(...), rhs: UploadFile = File(...), method: str = Form(...)

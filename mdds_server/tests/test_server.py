@@ -71,6 +71,16 @@ def test_root_endpoint():
     ), f"Server returned {response.status_code}: {response.text}"
 
 
+def test_health_endpoint():
+    """
+    Base test for health end point
+    """
+    response = requests.get(f"{BASE_URL}/health")
+    assert (
+        response.status_code == 200
+    ), f"Server returned {response.status_code}: {response.text}"
+
+
 @pytest.mark.parametrize("solver_method", SOLVER_METHODS)
 def test_solve_endpoint(solver_method):
     """
