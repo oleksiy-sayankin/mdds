@@ -7,6 +7,7 @@ PROJECT_ROOT := .
 PROJECT_NAME := mdds
 USER_NAME := oleksiysayankin
 MDDS_SERVER_PORT := 8000
+MDDS_SERVER_HOST := localhost
 E2E_HOME := tests/e2e
 
 #
@@ -32,7 +33,7 @@ test_and_run:
 #
 build_image:
 	echo "[INFO] Building Docker image"
-	docker buildx build --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
+	docker buildx build --no-cache --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
 
 
 #
@@ -94,16 +95,37 @@ run_server:
 	python -m run
 
 #
+# Wait until server is ready by checking its health state
+#
+wait_for_server:
+	@retry_count=10; \
+	current_retry=1; \
+	echo "[INFO] Waiting for server on port $(MDDS_SERVER_PORT)..."; \
+	while [ $$current_retry -le $$retry_count ]; do \
+		if curl -s http://$(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)/health > /dev/null; then \
+			echo "[INFO] Server is up!"; \
+			exit 0; \
+		else \
+			echo "[INFO] Attempt $$current_retry/$$retry_count: Server not ready yet, retrying..."; \
+			current_retry=$$((current_retry+1)); \
+			sleep 2; \
+		fi; \
+	done; \
+	echo "[ERROR] Server did not become ready after $$retry_count attempts"; \
+	exit 1
+
+#
 # Start Docker container and run end to end tests
 #
 setup_and_run_e2e:
 	echo "[INFO] Starting up environment"
 	echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
-	docker-compose -f $(E2E_HOME)/docker-compose.yml up -d
+	docker compose -f $(E2E_HOME)/docker-compose.yml up -d
+	$(MAKE) wait_for_server
 	echo "[INFO] Running end to end tests"
 	npm run test:e2e
 	echo "[INFO] Shutting down environment"
-	docker-compose -f $(E2E_HOME)/docker-compose.yml down
+	docker compose -f $(E2E_HOME)/docker-compose.yml down
 
 #
 # Setup python environment

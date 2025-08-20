@@ -1,13 +1,8 @@
 # Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
-version: "3.9"
 services:
   mdds_server:
-    image: oleksiy.sayankin/mdds:latest
+    image: oleksiysayankin/mdds
     ports:
       - "${MDDS_SERVER_PORT}:${MDDS_SERVER_PORT}"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${MDDS_SERVER_PORT}/health"]
-      interval: 3s
-      retries: 5
