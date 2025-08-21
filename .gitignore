@@ -5,3 +5,4 @@ logs
 node_modules
 package-lock.json
 tests/e2e/.env
+tests/e2e/output/
