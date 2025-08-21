@@ -11,17 +11,16 @@
 }
 
 # Test solve end point
-#@test "POST /solve returns solution" {
-#  MATRIX="resources/matrix.csv"
-#  RHS="resources/rhs.csv"
-#  OUTPUT="output.csv"
+@test "POST /solve returns solution" {
+  MATRIX="tests/e2e/resources/matrix.csv"
+  RHS="tests/e2e/resources/rhs.csv"
+  OUTPUT="output.csv"
+  run curl -s -X POST http://localhost:8000/solve \
+      -F "matrix=@$MATRIX" \
+      -F "rhs=@$RHS" \
+      -F "method=numpy_exact_solver" \
+      -o "$OUTPUT"
 
-#  run curl -s -X POST http://localhost:8000/solve \
-#      -F "matrix=@$MATRIX" \
-#      -F "rhs=@$RHS" \
-#      -F "method=gmres" \
-#      -o "$OUTPUT"
-
-#  [ "$status" -eq 0 ]
-#  [ -s "$OUTPUT" ]
-#}
+  [ "$status" -eq 0 ]
+  [ -s "$OUTPUT" ]
+}
