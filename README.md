@@ -79,7 +79,7 @@ make setup_python_env
 
 3. Activate python environment
 ```
-source mdds_env/bin/activate
+source source ~/.venvs/mdds/bin/activate
 ```
 
 4. Run server in console

@@ -1,10 +1,11 @@
 # Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
-VENV_DIR := mdds_env
+PYTHON_ENV_HOME := ~/.venvs
 NODE_MODULES := node_modules
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
+VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := oleksiysayankin
 MDDS_SERVER_PORT := 8000
 MDDS_SERVER_HOST := localhost
@@ -147,6 +148,7 @@ clear_python_env:
 #
 create_python_env:
 	echo "[INFO] Creating python environment $(VENV_DIR)"
+	mkdir -p $(VENV_DIR)
 	python3 -m venv $(VENV_DIR)
 
 #
