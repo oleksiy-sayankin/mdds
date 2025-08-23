@@ -4,7 +4,7 @@ Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains cod
 
 ## Users Installation Guide
 
-### Ubuntu 24.x.x
+### Ubuntu
 
 1. Install Docker 
 
@@ -48,20 +48,13 @@ and _vector.csv_:
 
 ## Developers Installation Guide
 
-### Ubuntu 24.x.x
+### Ubuntu
 
 Requirements
 
 ```
 sudo apt update
-sudo apt install python3-pip python3-full git libblas-dev liblapack-dev nodejs npm
-sudo apt install docker-compose
-sudo npm install -g prettier
-sudo npm install eslint @eslint/js globals @eslint/json @eslint/markdown @eslint/css --save-dev
-sudo npm install --save-dev jest jsdom jest-environment-jsdom
-sudo npm install --save-dev babel-jest @babel/core @babel/preset-env
-sudo npm install --save-dev eslint-plugin-jest
-sudo npm install --save-dev bats
+sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev nodejs npm docker.io docker-compose-plugin
 ```
 
 1. Clone repository
@@ -70,19 +63,25 @@ sudo npm install --save-dev bats
 git clone git@github.com:oleksiy-sayankin/mdds.git
 ```
 
-2. Create Pyton env an install libraries
+2. Install npm dependencies
+
+```
+npm install
+```
+
+3. Create Pyton env an install libraries
 
 ```
 cd mdds
 make setup_python_env
 ```
 
-3. Activate python environment
+4. Activate python environment
 ```
-source source ~/.venvs/mdds/bin/activate
+source ~/.venvs/mdds/bin/activate
 ```
 
-4. Run server in console
+5. Run server in console
 
 ```
 make run_all
