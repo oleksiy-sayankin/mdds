@@ -54,14 +54,20 @@ Requirements
 
 ```
 sudo apt update
-sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev nodejs npm docker.io docker-compose-plugin
+sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin
 ```
 
 1. Clone repository
 
 ```
 git clone git@github.com:oleksiy-sayankin/mdds.git
+cd mdds
 ```
+
+2. Install Nodejs 22 LTS, nvm, npm
+
+See [Download Node.js®](https://nodejs.org/en/download).
+
 
 2. Install npm dependencies
 
@@ -72,7 +78,6 @@ npm install
 3. Create Pyton env an install libraries
 
 ```
-cd mdds
 make setup_python_env
 ```
 
