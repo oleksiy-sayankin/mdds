@@ -31,6 +31,13 @@
 
 # Test solve SLAE correctness
 @test "POST /solve solves SLAE correctly" {
+  SOLVERS=(
+    "numpy_exact_solver"
+    "numpy_lstsq_solver"
+    "numpy_pinv_solver"
+    "petsc_solver"
+    "scipy_gmres_solver"
+  )
   MATRIX="tests/e2e/resources/matrix.csv"
   RHS="tests/e2e/resources/rhs.csv"
   EXPECTED="tests/e2e/resources/expected_output.csv"
@@ -40,50 +47,54 @@
 
   run mkdir "$OUTPUT_DIR"
 
-  # Call solve
-  run curl -s -X POST http://localhost:8000/solve \
+  for method in "${SOLVERS[@]}"; do
+    echo "=== Testing solver: $method ==="
+
+    # Call solve
+    run curl -s -X POST http://localhost:8000/solve \
       -F "matrix=@$MATRIX" \
       -F "rhs=@$RHS" \
-      -F "method=numpy_exact_solver" \
+      -F "method=$method" \
       -o "$ACTUAL"
 
-  # Check that status is ok and output is nit empty
-  [ "$status" -eq 0 ]
-  [ -s "$ACTUAL" ]
+    # Check that status is ok and output is nit empty
+    [ "$status" -eq 0 ]
+    [ -s "$ACTUAL" ]
 
-  # Compare line by line actual and expected result
-  expected_lines=$(wc -l < "$EXPECTED")
-  actual_lines=$(wc -l < "$ACTUAL")
-  [ "$expected_lines" -eq "$actual_lines" ]
+    # Compare line by line actual and expected result
+    expected_lines=$(wc -l < "$EXPECTED")
+    actual_lines=$(wc -l < "$ACTUAL")
+    [ "$expected_lines" -eq "$actual_lines" ]
 
 
-  # We read expected file from stdin chanel (has 0 as descriptor)
-  # and actual file from free custom (has 3 as descriptor) chanel.
-  #
-  # This line
-  # done < "$EXPECTED" 3<"$ACTUAL"
-  # redirects stdin (0) and custom (3) channels to while-do loop.
-  #
-  # This line
-  # read -r exp
-  # reads next string from stdin (0) channel.
-  #
-  # This line
-  # read -r act <&3
-  # reads next string from custom (3) channel.
-  #
-  # So we have line by line parallel reading
-  # both from $EXPECTED and $ACTUAL files.
+    # We read expected file from stdin chanel (has 0 as descriptor)
+    # and actual file from free custom (has 3 as descriptor) chanel.
+    #
+    # This line
+    # done < "$EXPECTED" 3<"$ACTUAL"
+    # redirects stdin (0) and custom (3) channels to while-do loop.
+    #
+    # This line
+    # read -r exp
+    # reads next string from stdin (0) channel.
+    #
+    # This line
+    # read -r act <&3
+    # reads next string from custom (3) channel.
+    #
+    # So we have line by line parallel reading
+    # both from $EXPECTED and $ACTUAL files.
 
-  i=1
-  while read -r exp && read -r act <&3; do
-    diff=$(echo "scale=10; $exp - $act" | bc -l)
-    abs_diff=$(echo "if ($diff < 0) -$diff else $diff" | bc -l)
-    too_big=$(echo "$abs_diff > $ERROR" | bc -l)
-    if [ "$too_big" -eq 1 ]; then
-      echo "[ERROR] Line $i mismatch: expected $exp, got $act (diff=$abs_diff)"
-      exit 1
-    fi
-    i=$((i+1))
-  done < "$EXPECTED" 3<"$ACTUAL"
+    i=1
+    while read -r exp && read -r act <&3; do
+      diff=$(echo "scale=10; $exp - $act" | bc -l)
+      abs_diff=$(echo "if ($diff < 0) -$diff else $diff" | bc -l)
+      too_big=$(echo "$abs_diff > $ERROR" | bc -l)
+      if [ "$too_big" -eq 1 ]; then
+        echo "[ERROR] Line $i mismatch: expected $exp, got $act (diff=$abs_diff)"
+        exit 1
+      fi
+      i=$((i+1))
+    done < "$EXPECTED" 3<"$ACTUAL"
+  done
 }
