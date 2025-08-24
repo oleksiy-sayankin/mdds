@@ -1,7 +1,8 @@
+#!/usr/bin/env bats
+
 # Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
-#!/usr/bin/env bats
 
 # Test main page
 @test "GET / returns index.html" {
