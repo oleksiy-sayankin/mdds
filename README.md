@@ -54,7 +54,7 @@ Requirements
 
 ```
 sudo apt update
-sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin
+sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck
 ```
 
 1. Clone repository

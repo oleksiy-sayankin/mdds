@@ -3,7 +3,6 @@
 # Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
-
 # Test main page
 @test "GET / returns index.html" {
   run curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/
@@ -21,10 +20,10 @@
   run mkdir "$OUTPUT_DIR"
 
   run curl -s -X POST http://localhost:8000/solve \
-      -F "matrix=@$MATRIX" \
-      -F "rhs=@$RHS" \
-      -F "method=numpy_exact_solver" \
-      -o "$OUTPUT"
+    -F "matrix=@$MATRIX" \
+    -F "rhs=@$RHS" \
+    -F "method=numpy_exact_solver" \
+    -o "$OUTPUT"
 
   [ "$status" -eq 0 ]
   [ -s "$OUTPUT" ]
@@ -63,10 +62,9 @@
     [ -s "$ACTUAL" ]
 
     # Compare line by line actual and expected result
-    expected_lines=$(wc -l < "$EXPECTED")
-    actual_lines=$(wc -l < "$ACTUAL")
+    expected_lines=$(wc -l <"$EXPECTED")
+    actual_lines=$(wc -l <"$ACTUAL")
     [ "$expected_lines" -eq "$actual_lines" ]
-
 
     # We read expected file from stdin chanel (has 0 as descriptor)
     # and actual file from free custom (has 3 as descriptor) chanel.
@@ -95,7 +93,7 @@
         echo "[ERROR] Line $i mismatch: expected $exp, got $act (diff=$abs_diff)"
         exit 1
       fi
-      i=$((i+1))
-    done < "$EXPECTED" 3<"$ACTUAL"
+      i=$((i + 1))
+    done <"$EXPECTED" 3<"$ACTUAL"
   done
 }

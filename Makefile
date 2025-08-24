@@ -19,6 +19,8 @@ run_all:
 	make check_python_code_style
 	make reformat_js
 	make check_js_code_style
+	make reformat_bash
+	make check_bash_code_style
 	make test_and_run
 
 #
@@ -73,6 +75,20 @@ check_js_code_style:
 reformat_python:
 	echo "[INFO] Reformating python sources"
 	black .  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
+
+#
+# Check bash code style
+#
+check_bash_code_style:
+	echo "[INFO] Checking Bash code style"
+	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) | xargs shellcheck
+
+#
+# Reformat bash shell scripts
+#
+reformat_bash:
+	echo "[INFO] Reformating bash sources"
+	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) |xargs shfmt  -i 2 -w
 
 #
 # Run Python tests
