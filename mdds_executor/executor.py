@@ -59,19 +59,19 @@ def solve_slae(A, b, method):
 
 def callback(ch, method, properties, body):
     task = json.loads(body)
-    job_id = task["job_id"]
-    logger.info(f"Executor got task {job_id} with method={task['method']}")
+    task_id = task["task_id"]
+    logger.info(f"Executor got task {task_id} with method={task['method']}")
 
     solution, status = solve_slae(task["A"], task["b"], task["method"])
 
     result = {
-        "job_id": job_id,
+        "task_id": task_id,
         "status": status,
         "solution": solution,
     }
 
     ch.basic_publish(exchange="", routing_key="result_queue", body=json.dumps(result).encode())
-    logger.info(f"Executor finished task {job_id}, status={status}")
+    logger.info(f"Executor finished task {task_id}, status={status}")
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 def main():
