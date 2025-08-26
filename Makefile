@@ -15,13 +15,19 @@ E2E_HOME := tests/e2e
 # Run server and tests with existing python env
 #
 run_all:
+	make reformat_and_check_all
+	make test_and_run
+
+#
+# Reformat and check all code
+#
+reformat_and_check_all:
 	make reformat_python
 	make check_python_code_style
 	make reformat_js
 	make check_js_code_style
 	make reformat_bash
 	make check_bash_code_style
-	make test_and_run
 
 #
 # Run tests and start server
