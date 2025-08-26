@@ -55,7 +55,7 @@ async def solve_endpoint(
 
     # Prepare CSV output
     output = io.StringIO()
-    np.savetxt(output, x, delimiter=",")
+    # FIXME: np.savetxt(output, x, delimiter=",")
     output.seek(0)
 
     #  5. Close connection
