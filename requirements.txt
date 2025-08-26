@@ -18,4 +18,4 @@ petsc4py
 black
 pyyaml
 requests
-python3-pika
+pika
