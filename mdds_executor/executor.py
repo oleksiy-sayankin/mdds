@@ -11,6 +11,7 @@ import logging
 import os
 import numpy as np
 import pika
+from pika.spec import PERSISTENT_DELIVERY_MODE
 
 from slae_solver.solvers.numpy_exact_solver import NumpyExactSolver
 from slae_solver.solvers.numpy_lstsq_solver import NumpyLstsqSolver
@@ -103,7 +104,7 @@ def callback(channel, delivery, properties, body):
             exchange="",
             routing_key="result_queue",
             body=json.dumps(result).encode(),
-            properties=pika.BasicProperties(delivery_mode=2),  # make message persistent
+            properties=pika.BasicProperties(delivery_mode=PERSISTENT_DELIVERY_MODE),
         )
         logger.info(f"Executor finished task {task_id}, status={status}")
         channel.basic_ack(
