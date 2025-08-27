@@ -25,7 +25,7 @@ setup_logging()
 
 logger = logging.getLogger(__name__)
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 
 # Solver mapping
 SOLVER_MAPPING = {
