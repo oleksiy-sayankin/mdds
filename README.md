@@ -54,7 +54,7 @@ Requirements
 
 ```
 sudo apt update
-sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck
+sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck rabbitmq-server
 ```
 
 1. Clone repository
@@ -86,7 +86,13 @@ make setup_python_env
 source ~/.venvs/mdds/bin/activate
 ```
 
-5. Run server in console
+5. Enable and start RabbitMQ server
+``` 
+sudo systemctl enable rabbitmq-server
+sudo systemctl start rabbitmq-server
+```
+
+6. Run server in console
 
 ```
 make run_all
