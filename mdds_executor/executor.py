@@ -5,7 +5,7 @@
 Executor service is RabbitMQ consumer + solver. It takes Task from Task Queue, solves SLAE and puts
 result (if it exists) into Result Queue.
 """
-
+from datetime import datetime
 import json
 import logging
 import os
@@ -43,6 +43,7 @@ def get_connection():
     #  1. Think about reading heartbeat and blocked_connection_timeout from configuration file;
     #  2. What about re-connect strategies? Say, if there is no connection, wait for 1s, if there is no again, then
     #     5s and then 10s and so on. Think in future.
+    #  3. Think about secure connection to RabbitMQ host (ssl or whatever).
     return pika.BlockingConnection(
         pika.ConnectionParameters(
             RABBITMQ_HOST, heartbeat=600, blocked_connection_timeout=300
@@ -95,6 +96,7 @@ def callback(channel, delivery, properties, body):
 
         result = {
             "task_id": task_id,
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
             "status": status,
             "solution": solution,
         }
