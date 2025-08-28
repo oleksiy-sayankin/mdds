@@ -81,7 +81,15 @@ def solve_slae(
 
 def callback(channel, delivery, properties, body):
     try:
-        logger.debug(body)
+        if logger.isEnabledFor(logging.DEBUG):
+            body_str = body if isinstance(body, str) else str(body)
+            max_len = 200
+            logger.debug(
+                "Body preview: %s%s",
+                body_str[:max_len],
+                "..." if len(body_str) > max_len else "",
+            )
+
         task = json.loads(body)
         if not isinstance(task, dict) or "task_id" not in task:
             raise ValueError("Invalid task format")
