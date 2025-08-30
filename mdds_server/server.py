@@ -57,12 +57,12 @@ INITIAL_TASK_STATUS = "task_in_progress"
 async def lifespan(app: FastAPI):
     """Initialize RabbitMQ and Redis connections at startup, close at shutdown"""
     global rabbitmq_channel, redis_client
-    rabbitmq_channel = connect_to_rabbit_mq(
+    rabbitmq_connection, rabbitmq_channel = connect_to_rabbit_mq(
         RABBITMQ_HOST, TASK_QUEUE_NAME, RESULT_QUEUE_NAME
     )
     redis_client = await get_redis_client(REDIS_HOST, REDIS_PORT)
     yield  # <-- Application works here
-    close_rabbit_mq_connection(rabbitmq_channel)
+    close_rabbit_mq_connection(rabbitmq_connection, rabbitmq_channel)
     await close_redis_client(redis_client)
 
 
