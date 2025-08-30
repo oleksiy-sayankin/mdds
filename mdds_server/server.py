@@ -20,12 +20,12 @@ from pika.adapters.blocking_connection import BlockingChannel
 from aioredis import Redis
 from pika.spec import PERSISTENT_DELIVERY_MODE
 from common_logging.setup_logging import setup_logging
-from mdds_server.csv_helper import load_matrix
-from mdds_server.rabbit_mq_helper import (
+from mdds_server._csv_helper import load_matrix
+from mdds_server._rabbitmq_helper import (
     connect_to_rabbit_mq,
     close_rabbit_mq_connection,
 )
-from mdds_server.redis_helper import get_redis_client, close_redis_client
+from mdds_server._redis_helper import get_redis_client, close_redis_client
 
 # Apply logging config
 setup_logging()
