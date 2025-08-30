@@ -54,7 +54,7 @@ Requirements
 
 ```
 sudo apt update
-sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck rabbitmq-server
+sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck rabbitmq-server redis-server
 ```
 
 1. Clone repository
@@ -92,7 +92,13 @@ sudo systemctl enable rabbitmq-server
 sudo systemctl start rabbitmq-server
 ```
 
-6. Run server in console
+6. Enable and start Redis server
+``` 
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+```
+
+7. Run server in console
 
 ```
 make run_all
