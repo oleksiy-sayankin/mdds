@@ -112,7 +112,7 @@ async def solve_endpoint(
     }
 
     assert redis_client is not None
-    await redis_client.set(task_id, json.dumps(task_doc))
+    await redis_client.set(task_id, json.dumps(task_doc), ex=REDIS_TTL)
     logger.info(f"Task {task_id} stored in Redis with status '{INITIAL_TASK_STATUS}'.")
 
     # Publish task to RabbitMQ
