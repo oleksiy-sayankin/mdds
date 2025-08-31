@@ -58,7 +58,9 @@ INITIAL_TASK_STATUS = TaskStatus.IN_PROGRESS
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize RabbitMQ and Redis connections at startup, close at shutdown"""
+    """Initialize RabbitMQ and Redis connections at startup, close at shutdown. This method
+    is automatically called by FastAPI before every method in this class, and thus it
+    provides a kind of static initialization for web-server."""
     global rabbitmq_channel, redis_client
     rabbitmq_connection, rabbitmq_channel = connect_to_rabbit_mq(
         RABBITMQ_HOST, TASK_QUEUE_NAME, RESULT_QUEUE_NAME
