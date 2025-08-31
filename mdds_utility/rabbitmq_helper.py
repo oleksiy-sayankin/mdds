@@ -17,20 +17,32 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def connect_to_rabbit_mq(rabbit_mq_host: str, task_queue: str, result_queue: str):
+def connect_to_rabbit_mq(rabbit_mq_host: str):
+    # TODO:
+    #  1. Think about reading heartbeat and blocked_connection_timeout from configuration file;
+    #  2. What about re-connect strategies? Say, if there is no connection, wait for 1s, if there is no again, then
+    #     5s and then 10s and so on. Think in future.
+    #  3. Think about secure connection to RabbitMQ host (ssl or whatever).
+
     # Connect to RabbitMQ
     try:
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(host=rabbit_mq_host)
         )
         channel = connection.channel()
-        channel.queue_declare(queue=task_queue, durable=True)
-        channel.queue_declare(queue=result_queue, durable=True)
-        logger.info("Connected to RabbitMQ and declared queues.")
+        logger.info("Connected to RabbitMQ.")
         return connection, channel
     except Exception as e:
         logger.error(f"Failed to connect to RabbitMQ: {e}")
         raise
+
+
+def declare_queues(
+    rabbitmq_channel: BlockingChannel, task_queue: str, result_queue: str
+):
+    rabbitmq_channel.queue_declare(queue=task_queue, durable=True)
+    rabbitmq_channel.queue_declare(queue=result_queue, durable=True)
+    logger.info(f"Declared queues {task_queue} and {result_queue}.")
 
 
 def close_rabbit_mq_connection(

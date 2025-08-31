@@ -27,6 +27,7 @@ from mdds_server._csv_helper import load_matrix
 from mdds_utility.rabbitmq_helper import (
     connect_to_rabbit_mq,
     close_rabbit_mq_connection,
+    declare_queues,
 )
 from mdds_server._redis_helper import get_redis_client, close_redis_client
 
@@ -62,9 +63,8 @@ async def lifespan(app: FastAPI):
     is automatically called by FastAPI before every method in this class, and thus it
     provides a kind of static initialization for web-server."""
     global rabbitmq_channel, redis_client
-    rabbitmq_connection, rabbitmq_channel = connect_to_rabbit_mq(
-        RABBITMQ_HOST, TASK_QUEUE_NAME, RESULT_QUEUE_NAME
-    )
+    rabbitmq_connection, rabbitmq_channel = connect_to_rabbit_mq(RABBITMQ_HOST)
+    declare_queues(rabbitmq_channel, TASK_QUEUE_NAME, RESULT_QUEUE_NAME)
     redis_client = await get_redis_client(REDIS_HOST, REDIS_PORT)
     yield  # <-- Application works here
     close_rabbit_mq_connection(rabbitmq_connection, rabbitmq_channel)
