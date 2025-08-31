@@ -5,14 +5,16 @@
 Executor service is RabbitMQ consumer + solver. It takes Task from Task Queue, solves SLAE and puts
 result (if it exists) into Result Queue.
 """
-from datetime import datetime
-import json
+from datetime import datetime, UTC
 import logging
 import os
 import numpy as np
 import pika
 from pika.spec import PERSISTENT_DELIVERY_MODE
 
+from mdds_dto.result_dto import ResultDTO
+from mdds_dto.task_dto import TaskDTO
+from mdds_dto.task_status import TaskStatus
 from slae_solver.solvers.numpy_exact_solver import NumpyExactSolver
 from slae_solver.solvers.numpy_lstsq_solver import NumpyLstsqSolver
 from slae_solver.solvers.numpy_pinv_solver import NumpyPinvSolver
@@ -53,10 +55,10 @@ def get_connection():
 
 def solve_slae(
     matrix: list, rhs: list, slae_solving_method: str
-) -> tuple[dict | list, str]:
+) -> tuple[list | None, TaskStatus, str | None]:
     if slae_solving_method not in SOLVER_MAPPING:
         logger.error(f"Unknown solver method requested: {slae_solving_method}")
-        return {"error": f"Unknown solver method: {slae_solving_method}"}, "error"
+        return None, TaskStatus.ERROR, f"Unknown solver method: {slae_solving_method}"
 
     # Load files into numpy arrays
     matrix = np.array(matrix)  # We expect N x N matrix here
@@ -73,10 +75,10 @@ def solve_slae(
     try:
         solution = solver.solve(matrix, rhs)
         logger.info(f"Solved SLAE successfully using {slae_solving_method}")
-        return solution.tolist(), "done"
+        return solution.tolist(), TaskStatus.DONE, None
     except Exception as e:
         logger.exception("Error while solving SLAE")
-        return {"error": str(e)}, "error"
+        return None, TaskStatus.ERROR, f"error: {str(e)}"
 
 
 def callback(channel, delivery, properties, body):
@@ -90,33 +92,32 @@ def callback(channel, delivery, properties, body):
                 "..." if len(body_str) > max_len else "",
             )
 
-        task = json.loads(body)
-        if not isinstance(task, dict) or "task_id" not in task:
-            raise ValueError("Invalid task format")
-        task_id = task["task_id"]
+        task = TaskDTO.model_validate_json(body)
         logger.info(
-            f"Executor got task {task_id} with method={task['slae_solving_method']}"
+            f"Executor got task {task["task_id"]} with method={task["slae_solving_method"]}"
         )
 
-        solution, status = solve_slae(
+        solution, status, error_message = solve_slae(
             task["matrix"], task["rhs"], task["slae_solving_method"]
         )
 
-        result = {
-            "task_id": task_id,
-            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-            "status": status,
-            "solution": solution,
-        }
+        result = ResultDTO(
+            task_id=task["task_id"],
+            date_time_task_created=task["date_time_created"],
+            date_time_task_finished=datetime.now(UTC),
+            status=status,
+            solution=solution if status == TaskStatus.DONE else None,
+            error_message=error_message if status == TaskStatus.ERROR else None,
+        )
 
         # Publish solution to result queue
         channel.basic_publish(
             exchange="",
             routing_key="result_queue",
-            body=json.dumps(result).encode(),
+            body=result.model_dump_json(),
             properties=pika.BasicProperties(delivery_mode=PERSISTENT_DELIVERY_MODE),
         )
-        logger.info(f"Executor finished task {task_id}, status={status}")
+        logger.info(f"Executor finished task {task["task_id"]}, status={status}")
         channel.basic_ack(
             delivery_tag=delivery.delivery_tag
         )  # mark message as processed

@@ -20,6 +20,9 @@ from pika.adapters.blocking_connection import BlockingChannel
 from aioredis import Redis
 from pika.spec import PERSISTENT_DELIVERY_MODE
 from common_logging.setup_logging import setup_logging
+from mdds_dto.result_dto import ResultDTO
+from mdds_dto.task_dto import TaskDTO
+from mdds_dto.task_status import TaskStatus
 from mdds_server._csv_helper import load_matrix
 from mdds_server._rabbitmq_helper import (
     connect_to_rabbit_mq,
@@ -50,7 +53,7 @@ REDIS_TTL = int(os.getenv("REDIS_TTL", 86400))  # default 1 day
 rabbitmq_channel: Optional[BlockingChannel] = None
 redis_client: Optional[Redis] = None
 
-INITIAL_TASK_STATUS = "task_in_progress"
+INITIAL_TASK_STATUS = TaskStatus.IN_PROGRESS
 
 
 @asynccontextmanager
@@ -102,33 +105,35 @@ async def solve_endpoint(
 
     # Generate task_id
     task_id = str(uuid.uuid4())
-    date_time_created = datetime.now(UTC).isoformat()
+    date_time_created = datetime.now(UTC)
 
-    # Store initial task state in Redis
-    task_doc = {
-        "task_id": task_id,
-        "date_time_created": date_time_created,
-        "status": INITIAL_TASK_STATUS,
-    }
+    # Store initial result in Redis. It shows only that the task with task_id is in progress.
+    # No solution is ready at this moment. When solution is ready, we replace this temporary
+    # object in Redis with the solution.
+    result = ResultDTO(
+        task_id=task_id,
+        date_time_task_created=date_time_created,
+        status=INITIAL_TASK_STATUS,
+    )
 
     assert redis_client is not None
-    await redis_client.set(task_id, json.dumps(task_doc), ex=REDIS_TTL)
+    await redis_client.set(task_id, result.model_dump_json(), ex=REDIS_TTL)
     logger.info(f"Task {task_id} stored in Redis with status '{INITIAL_TASK_STATUS}'.")
 
     # Publish task to RabbitMQ
-    task_message = {
-        "task_id": task_id,
-        "date_time_created": date_time_created,
-        "matrix": matrix,
-        "rhs": rhs,
-        "slae_solving_method": method,
-    }
+    task = TaskDTO(
+        task_id=task_id,
+        date_time_created=date_time_created,
+        matrix=matrix,
+        rhs=rhs,
+        slae_solving_method=method,
+    )
 
     assert rabbitmq_channel is not None
     rabbitmq_channel.basic_publish(
         exchange="",
         routing_key=TASK_QUEUE_NAME,
-        body=json.dumps(task_message),
+        body=task.model_dump_json(),
         properties=pika.BasicProperties(
             delivery_mode=PERSISTENT_DELIVERY_MODE
         ),  # make message persistent
