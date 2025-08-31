@@ -24,7 +24,7 @@ from mdds_dto.result_dto import ResultDTO
 from mdds_dto.task_dto import TaskDTO
 from mdds_dto.task_status import TaskStatus
 from mdds_server._csv_helper import load_matrix
-from mdds_server._rabbitmq_helper import (
+from mdds_utility.rabbitmq_helper import (
     connect_to_rabbit_mq,
     close_rabbit_mq_connection,
 )
