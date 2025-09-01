@@ -62,6 +62,13 @@ async def lifespan(app: FastAPI):
     """Initialize RabbitMQ and Redis connections at startup, close at shutdown. This method
     is automatically called by FastAPI before every method in this class, and thus it
     provides a kind of static initialization for web-server."""
+    # TODO: Think about async non-blocking methods for creating connection. Here I expect
+    #  that we get connections to RabbitMQ and Redis quickly enough, but what about situations
+    #  when we wait for connection for a long period of time? Or we have retry strategy, say, reconnect
+    #  each 1s, 5s, 10s and so on if there is no connection while starting server? This will
+    #  block the server's start.
+    #  The other problem here is what if connection fails after server starts? There is no
+    #  reconnect strategy for that case and we need to restart server in case of connection lost.
     global rabbitmq_channel, redis_client
     rabbitmq_connection, rabbitmq_channel = connect_to_rabbit_mq(RABBITMQ_HOST)
     declare_queues(rabbitmq_channel, TASK_QUEUE_NAME, RESULT_QUEUE_NAME)
