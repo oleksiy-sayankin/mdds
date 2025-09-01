@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
 # Test main page

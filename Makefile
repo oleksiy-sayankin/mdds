@@ -1,4 +1,4 @@
-# Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
 PYTHON_ENV_HOME := ~/.venvs
@@ -10,7 +10,7 @@ USER_NAME := oleksiysayankin
 MDDS_SERVER_PORT := 8000
 MDDS_SERVER_HOST := localhost
 E2E_HOME := tests/e2e
-CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved."
+CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved."
 
 #
 # Run server and tests with existing python env
