@@ -45,6 +45,11 @@ def declare_queues(
     logger.info(f"Declared queues {task_queue} and {result_queue}.")
 
 
+def declare_queue(rabbitmq_channel: BlockingChannel, result_queue: str):
+    rabbitmq_channel.queue_declare(queue=result_queue, durable=True)
+    logger.info(f"Declared queue {result_queue}.")
+
+
 def close_rabbit_mq_connection(
     rabbitmq_connection: BlockingConnection, rabbitmq_channel: BlockingChannel
 ):
