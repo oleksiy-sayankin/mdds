@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
 """
 Helper for creating and closing connection to Redis client
 """
