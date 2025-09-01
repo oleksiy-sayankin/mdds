@@ -3,13 +3,13 @@ Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 Refer to the LICENSE file in the root directory for full license details.
 -->
 
-# Modeling the dynamics of distributed systems
+# 🚀 Modeling the dynamics of distributed systems
 
 Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains code for solving equation systems.
 
-## Users Installation Guide
+## 👤 Users Installation Guide
 
-### Ubuntu
+### 🐧 Ubuntu
 
 1. Install Docker 
 
@@ -51,9 +51,9 @@ and _vector.csv_:
 
 8. Use _Download Solution_ button to see the result
 
-## Developers Installation Guide
+## 💻 Developers Installation Guide
 
-### Ubuntu
+### 🐧 Ubuntu
 
 Requirements
 
@@ -108,3 +108,17 @@ sudo systemctl start redis-server
 ```
 make run_all
 ```
+
+## 📜 License
+
+This project is licensed under a **dual-license model**:
+
+- ✅ **Free for personal, academic, and experimental use** under the  
+  [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).
+
+- ❌ **Not permitted** for commercial or production use under the non-commercial license.
+
+- 💼 **Commercial use available** via a separate license agreement.  
+  Please contact **Oleksiy Oleksandrovych Sayankin** for details.
+
+👉 See the full text in the [LICENSE](./LICENSE) file.
