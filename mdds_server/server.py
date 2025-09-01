@@ -29,7 +29,7 @@ from mdds_utility.rabbitmq_helper import (
     close_rabbit_mq_connection,
     declare_queues,
 )
-from mdds_server._redis_helper import get_redis_client, close_redis_client
+from mdds_utility.redis_helper_sync import get_redis_client, close_redis_client
 
 # Apply logging config
 setup_logging()
@@ -65,10 +65,10 @@ async def lifespan(app: FastAPI):
     global rabbitmq_channel, redis_client
     rabbitmq_connection, rabbitmq_channel = connect_to_rabbit_mq(RABBITMQ_HOST)
     declare_queues(rabbitmq_channel, TASK_QUEUE_NAME, RESULT_QUEUE_NAME)
-    redis_client = await get_redis_client(REDIS_HOST, REDIS_PORT)
+    redis_client = get_redis_client(REDIS_HOST, REDIS_PORT)
     yield  # <-- Application works here
     close_rabbit_mq_connection(rabbitmq_connection, rabbitmq_channel)
-    await close_redis_client(redis_client)
+    close_redis_client(redis_client)
 
 
 @app.get("/")
