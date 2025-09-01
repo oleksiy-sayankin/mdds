@@ -1,3 +1,8 @@
+<!-- 
+Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+Refer to the LICENSE file in the root directory for full license details.
+-->
+
 # Modeling the dynamics of distributed systems
 
 Dissertation in Glushkov Institute of Cybernetic of NAS of Ukraine. Contains code for solving equation systems.

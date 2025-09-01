@@ -1,3 +1,8 @@
+/*
+* Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved.
+* Refer to the LICENSE file in the root directory for full license details.
+*/
+
 import js from "@eslint/js";
 import globals from "globals";
 import json from "@eslint/json";
