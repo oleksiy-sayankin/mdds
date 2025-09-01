@@ -10,6 +10,7 @@ USER_NAME := oleksiysayankin
 MDDS_SERVER_PORT := 8000
 MDDS_SERVER_HOST := localhost
 E2E_HOME := tests/e2e
+CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksy Oleksandrovych Sayankin. All Rights Reserved."
 
 #
 # Run server and tests with existing python env
@@ -22,6 +23,7 @@ run_all:
 # Reformat and check all code
 #
 reformat_and_check_all:
+	make check_license
 	make reformat_python
 	make check_python_code_style
 	make reformat_js
@@ -179,3 +181,38 @@ create_python_env:
 install_python_libs:
 	echo "[INFO] Installing python libraries"
 	. $(VENV_DIR)/bin/activate; pip install -r requirements.txt
+
+
+#
+# Check that every file in project has license header
+#
+check_license:
+	@echo "🔍 [INFO] Checking license headers in source files..."
+	@FILES=$$(find . \
+		-type f \
+		-not -path "./node_modules/*" \
+		-not -path "./.idea/*" \
+		-not -path "*/__pycache__/*" \
+		-not -path "*/.pytest_cache/*" \
+		-not -path "*/.ruff_cache/*" \
+		-not -path "*/.git/*" \
+		-not -path "./logs/*" \
+		-not -name "*.csv" \
+		-not -name "*.ico" \
+		-not -name "*.gitignore" \
+		-not -name "*.json" \
+		-not -name "*.env" \
+		-not -name "__init__.py"); \
+	STATUS=0; \
+	for f in $$FILES; do \
+		if ! grep -q $(CHECK_LICENSE_STRING) $$f; then \
+			echo "❌ [ERROR] Missing license in: $$f"; \
+			STATUS=1; \
+		fi; \
+	done; \
+	if [ $$STATUS -eq 0 ]; then \
+		echo "✅ [INFO] All files contain license header."; \
+	else \
+		echo "⚠️ [ERROR] Some files are missing license header."; \
+		exit 1; \
+	fi
