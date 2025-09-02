@@ -15,109 +15,111 @@ CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All 
 #
 # Run server and tests with existing python env
 #
-run_all:
-	make reformat_and_check_all
-	make test_and_run
+run_all: reformat_and_check_all test_and_run
 
 #
 # Reformat and check all code
 #
-reformat_and_check_all:
-	make check_license
-	make reformat_python
-	make check_python_code_style
-	make reformat_js
-	make check_js_code_style
-	make reformat_bash
-	make check_bash_code_style
+reformat_and_check_all: check_license reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style
 
 #
 # Run tests and start server
 #
-test_and_run:
-	make test_python
-	make test_js
-	make run_server
+test_and_run: test_python test_js run_server
 
 #
 # Build Docker image
 #
 build_image:
-	echo "[INFO] Building Docker image"
+	@echo "[INFO] Building Docker image..."
 	docker buildx build --no-cache --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
+	@echo "✅ [INFO] Building Docker image completed."
 
 
 #
 # Push Docker image
 #
 push_image:
-	echo "[INFO] Pushing Docker image"
+	@echo "[INFO] Pushing Docker image..."
 	docker push $(USER_NAME)/$(PROJECT_NAME):latest
+	@echo "✅ [INFO] Pushing Docker image completed."
 
 #
 # Reformat JavaScript files
 #
 reformat_js:
-	echo "[INFO] Reformating JavaScript sources"
+	@echo "[INFO] Reformating JavaScript sources..."
 	prettier --write mdds_client/
+	@echo "✅ [INFO] Reformating JavaScript sources completed."
 
 #
 # Check python code style
 #
 check_python_code_style:
-	echo "[INFO] Checking python code style"
+	@echo "[INFO] Checking python code style..."
 	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES) --ignore=E501
 	ruff check $(PROJECT_ROOT) --fix --force-exclude $(VENV_DIR) --respect-gitignore
 	pylint $(PROJECT_ROOT) --ignore $(VENV_DIR) --errors-only
+	@echo "✅ [INFO] Checking python code style completed."
 
 #
 # Check JavaScript code style
 #
 check_js_code_style:
-	echo "[INFO] Checking JavaScript code style"
+	@echo "[INFO] Checking JavaScript code style..."
 	eslint mdds_client/ --debug --fix
+	@echo "✅ [INFO] Checking JavaScript code style completed."
 
 #
 # Reformat Python code
 #
 reformat_python:
-	echo "[INFO] Reformating python sources"
+	@echo "[INFO] Reformating python sources..."
 	black .  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
+	@echo "✅ [INFO] Reformating python sources completed."
 
 #
 # Check bash code style
 #
 check_bash_code_style:
-	echo "[INFO] Checking Bash code style"
+	@echo "[INFO] Checking Bash code style..."
 	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) | xargs shellcheck
+	@echo "✅ [INFO] Checking Bash code style completed."
 
 #
 # Reformat bash shell scripts
 #
 reformat_bash:
-	echo "[INFO] Reformating bash sources"
+	@echo "[INFO] Reformating bash sources..."
 	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) |xargs shfmt  -i 2 -w
+	@echo "✅ [INFO] Reformating bash shell scripts completed."
 
 #
 # Run Python tests
 #
 test_python:
-	echo "[INFO] Running Python unit tests"
+	@echo "[INFO] Running Python unit tests..."
 	pytest -v
+	@echo "✅ [INFO] Python tests completed."
 
 #
 # Run JavaScript tests
 #
 test_js:
-	echo "[INFO] Running JavaScript unit tests"
-	npm test
+	@echo "[INFO] Running JavaScript unit tests..."
+	if ! npm test; then \
+		echo "❌ [ERROR] JS tests failed"; \
+		exit 1; \
+	fi
+	@echo "✅ [INFO] JavaScript tests completed."
 
 #
 # Run server
 #
 run_server:
-	echo "[INFO] Starting web-server"
+	@echo "[INFO] Starting web-server..."
 	python -m run
+	@echo "✅ [INFO] Starting web-server completed. Web-server is up!"
 
 #
 # Wait until server is ready by checking its health state
@@ -128,7 +130,7 @@ wait_for_server:
 	echo "[INFO] Waiting for server on port $(MDDS_SERVER_PORT)..."; \
 	while [ $$current_retry -le $$retry_count ]; do \
 		if curl -s http://$(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)/health > /dev/null; then \
-			echo "[INFO] Server is up!"; \
+			echo "✅ [INFO] Server is up!"; \
 			exit 0; \
 		else \
 			echo "[INFO] Attempt $$current_retry/$$retry_count: Server not ready yet, retrying..."; \
@@ -136,51 +138,52 @@ wait_for_server:
 			sleep 2; \
 		fi; \
 	done; \
-	echo "[ERROR] Server did not become ready after $$retry_count attempts"; \
+	echo "❌ [ERROR] Server did not become ready after $$retry_count attempts"; \
 	exit 1
 
 #
 # Start Docker container and run end to end tests
 #
 setup_and_run_e2e:
-	echo "[INFO] Starting up environment"
+	@echo "[INFO] Starting up environment..."
 	echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
 	docker compose -f $(E2E_HOME)/docker-compose.yml up -d
 	$(MAKE) wait_for_server
-	echo "[INFO] Running end to end tests"
+	@echo "[INFO] Running end to end tests..."
 	npm run test:e2e
-	echo "[INFO] Shutting down environment"
+	@echo "[INFO] Shutting down environment..."
 	docker compose -f $(E2E_HOME)/docker-compose.yml down
+	@echo "✅ [INFO] End to end tests completed."
 
 #
 # Setup python environment
 #
-setup_python_env:
-	make clear_python_env
-	make create_python_env
-	make install_python_libs
+setup_python_env: clear_python_env create_python_env install_python_libs
 
 #
 # Clear python environment
 #
 clear_python_env:
-	echo "[INFO] Clearing python environment"
+	@echo "[INFO] Clearing python environment $(VENV_DIR)..."
 	rm -Rf $(VENV_DIR)
+	@echo "✅ [INFO] Clearing python environment $(VENV_DIR) completed.")
 
 #
 # Create python environment
 #
 create_python_env:
-	echo "[INFO] Creating python environment $(VENV_DIR)"
+	@echo "[INFO] Creating python environment $(VENV_DIR)..."
 	mkdir -p $(VENV_DIR)
 	python3 -m venv $(VENV_DIR)
+	@echo "✅ [INFO] Creating python environment $(VENV_DIR) completed."
 
 #
 # Install python libraries
 #
 install_python_libs:
-	echo "[INFO] Installing python libraries"
+	@echo "[INFO] Installing python libraries..."
 	. $(VENV_DIR)/bin/activate; pip install -r requirements.txt
+	@echo "✅ [INFO] Installing python libraries competed."
 
 
 #
