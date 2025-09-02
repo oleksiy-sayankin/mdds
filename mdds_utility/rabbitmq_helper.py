@@ -8,8 +8,10 @@ import logging
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel, BlockingConnection
+from pika.spec import PERSISTENT_DELIVERY_MODE
 
 from common_logging.setup_logging import setup_logging
+from mdds_dto.task_dto import TaskDTO
 
 # Apply logging config
 setup_logging()
@@ -65,3 +67,17 @@ def close_rabbit_mq_connection(
             logger.info("RabbitMQ connection closed.")
     except Exception as e:
         logger.exception(f"Error closing connection: : {e}")
+
+
+def publish_to_queue(
+    rabbitmq_channel: BlockingChannel, task_queue_name: str, task: TaskDTO
+):
+    rabbitmq_channel.basic_publish(
+        exchange="",
+        routing_key=task_queue_name,
+        body=task.model_dump_json(),
+        properties=pika.BasicProperties(
+            delivery_mode=PERSISTENT_DELIVERY_MODE
+        ),  # make message persistent
+    )
+    logger.info(f"Task {task.task_id} published to RabbitMQ.")

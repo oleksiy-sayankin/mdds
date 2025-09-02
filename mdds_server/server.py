@@ -4,10 +4,8 @@
 """
 Main entry point
 """
-import json
 import logging
 import uuid
-import pika
 import os
 
 from contextlib import asynccontextmanager
@@ -17,8 +15,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pika.adapters.blocking_connection import BlockingChannel
-from aioredis import Redis
-from pika.spec import PERSISTENT_DELIVERY_MODE
+from redis import Redis
 from common_logging.setup_logging import setup_logging
 from mdds_dto.result_dto import ResultDTO
 from mdds_dto.task_dto import TaskDTO
@@ -28,8 +25,14 @@ from mdds_utility.rabbitmq_helper import (
     connect_to_rabbit_mq,
     close_rabbit_mq_connection,
     declare_queues,
+    publish_to_queue,
 )
-from mdds_utility.redis_helper_sync import get_redis_client, close_redis_client
+from mdds_utility.redis_helper_sync import (
+    get_redis_client,
+    close_redis_client,
+    put_data_to_storage,
+    get_data_from_storage,
+)
 
 # Apply logging config
 setup_logging()
@@ -126,8 +129,7 @@ async def solve_endpoint(
     )
 
     assert redis_client is not None
-    await redis_client.set(task_id, result.model_dump_json(), ex=REDIS_TTL)
-    logger.info(f"Task {task_id} stored in Redis with status '{INITIAL_TASK_STATUS}'.")
+    put_data_to_storage(redis_client, task_id, result)
 
     # Publish task to RabbitMQ
     task = TaskDTO(
@@ -139,27 +141,19 @@ async def solve_endpoint(
     )
 
     assert rabbitmq_channel is not None
-    rabbitmq_channel.basic_publish(
-        exchange="",
-        routing_key=TASK_QUEUE_NAME,
-        body=task.model_dump_json(),
-        properties=pika.BasicProperties(
-            delivery_mode=PERSISTENT_DELIVERY_MODE
-        ),  # make message persistent
-    )
-    logger.info(f"Task {task_id} published to RabbitMQ.")
+    publish_to_queue(rabbitmq_channel, TASK_QUEUE_NAME, task)
 
     # Return just task_id (client polls results later)
     return {"task_id": task_id}
 
 
 @app.get("/result/{task_id}")
-async def get_result_endpoint(task_id: str):
+async def get_result_endpoint(task_id: str) -> str:
     """
     Retrieves task status/result from Redis.
     """
-    task_data = await redis_client.get(task_id)
+    task_data = get_data_from_storage(redis_client, task_id)
     if not task_data:
-        return {"error": "no_task_with_with_provided_id"}
+        return "no_task_with_with_provided_id"
 
-    return json.loads(task_data)
+    return task_data.model_dump_json()
