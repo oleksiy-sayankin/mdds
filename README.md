@@ -59,7 +59,15 @@ Requirements
 
 ```
 sudo apt update
-sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck rabbitmq-server redis-server
+sudo apt install python3-pip python3 python3-venv git libblas-dev liblapack-dev docker.io docker-compose-plugin shfmt shellcheck rabbitmq-server redis-server libxml2-utils
+```
+Java
+```
+wget "https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.deb"
+sudo apt install ./jdk-21_linux-x64_bin.deb
+
+mkdir ~/google/google-java-format
+wget https://github.com/google/google-java-format/releases/download/v1.23.0/google-java-format-1.23.0-all-deps.jar -O ~/google/google-java-format/google-java-format.jar
 ```
 
 1. Clone repository
@@ -103,7 +111,12 @@ sudo systemctl enable redis-server
 sudo systemctl start redis-server
 ```
 
-7. Run server in console
+7. Install SonarQube Server
+
+See [here](https://docs.sonarsource.com/sonarqube-server/latest/server-installation/introduction/).
+Create SonarQube token and put it to  `.sonar_token` file in root of the project.
+
+8. Run server in console
 
 ```
 make run_all

@@ -7,9 +7,12 @@ PROJECT_ROOT := .
 PROJECT_NAME := mdds
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := oleksiysayankin
-MDDS_SERVER_PORT := 8000
-MDDS_SERVER_HOST := localhost
+MDDS_SERVER_PORT ?= 8000
+MDDS_SERVER_HOST ?= localhost
 E2E_HOME := tests/e2e
+SONAR_HOST_URL ?= http://localhost:9000
+SONAR_PROJECT_KEY ?= mdds
+SONAR_TOKEN ?= $(shell cat .sonar_token)
 CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved."
 
 #
@@ -20,12 +23,18 @@ run_all: reformat_and_check_all test_and_run
 #
 # Reformat and check all code
 #
-reformat_and_check_all: check_license reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style
+reformat_and_check_all: check_license reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
 
 #
 # Run tests and start server
 #
-test_and_run: test_python test_js run_server
+test_and_run: test_all run_server
+
+#
+# Run all tests
+#
+test_all: test_python test_js test_java test_e2e
+
 
 #
 # Build Docker image
@@ -103,6 +112,67 @@ test_python:
 	@echo "✅ [INFO] Python tests completed."
 
 #
+# Reformat Java sources
+#
+reformat_java:
+	@echo "[INFO] Reformatting Java sources..."
+	@find src -name "*.java" | xargs java -jar ~/google/google-java-format/google-java-format.jar --replace
+	@echo "✅ [INFO] Reformatting Java sources completed."
+
+#
+# Reformat XML files (including pom.xml)
+#
+reformat_xml:
+	@echo "[INFO] Reformatting XML sources..."
+	@find . -type f -name "*.xml" \
+		-not -path "./$(NODE_MODULES)/*" | while read -r file; do \
+		echo "   → $$file"; \
+		xmllint --format "$$file" --output "$$file"; \
+	done
+	@echo "✅ [INFO] Reformatting XML sources completed."
+
+#
+# Perform Sonar Qube scan and put the results to console
+#
+sonar_scan:
+	@echo "[INFO] Running SonarQube analysis..."
+	mvn clean verify sonar:sonar \
+	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
+	  -Dsonar.host.url=$(SONAR_HOST_URL) \
+	  -Dsonar.login=$(SONAR_TOKEN)
+
+	@echo "[INFO] Checking SonarQube Quality Gate status..."
+	@sleep 5 # Wait for report is done by Soner Qube Server
+	@STATUS=$$(curl -s -u $(SONAR_TOKEN): \
+	  "$(SONAR_HOST_URL)/api/qualitygates/project_status?projectKey=$(SONAR_PROJECT_KEY)" \
+	  | jq -r '.projectStatus.status'); \
+	if [ "$$STATUS" = "ERROR" ]; then \
+	  echo "❌ [ERROR] Quality Gate failed! Listing critical issues:"; \
+	  curl -s -u $(SONAR_TOKEN): \
+	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
+	    | jq -r '.issues[] | "- " + .severity + " | " + .component + ":" + (.line|tostring) + " → " + .message'; \
+	  exit 1; \
+	else \
+	  echo "✅ [INFO] Quality Gate passed: $$STATUS"; \
+	fi
+
+#
+# Run Java Tests
+#
+test_java:
+	@echo "[INFO] Running Java Unit Tests..."
+	mvn clean test || { echo "❌ [ERROR] Java Unit Tests failed"; exit 1; }
+	@echo "✅  [INFO] Running Java Unit Tests completed"
+
+#
+# Build Jars
+#
+build_jars:
+	@echo "[INFO] Building jars..."
+	mvn clean install -DskipTests=true
+	@echo "✅ [INFO] Building jars completed"
+
+#
 # Run JavaScript tests
 #
 test_js:
@@ -144,7 +214,7 @@ wait_for_server:
 #
 # Start Docker container and run end to end tests
 #
-setup_and_run_e2e:
+test_e2e:
 	@echo "[INFO] Starting up environment..."
 	echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
 	docker compose -f $(E2E_HOME)/docker-compose.yml up -d
@@ -200,8 +270,10 @@ check_license:
 		-not -path "*/.ruff_cache/*" \
 		-not -path "*/.git/*" \
 		-not -path "./logs/*" \
+		-not -path "./target/*" \
 		-not -name "*.csv" \
 		-not -name "*.ico" \
+		-not -name ".sonar_token" \
 		-not -name "*.gitignore" \
 		-not -name "*.json" \
 		-not -name "*.env" \
