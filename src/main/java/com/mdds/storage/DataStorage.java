@@ -3,17 +3,15 @@
  * Refer to the LICENSE file in the root directory for full license details.
  */
 
-package com.mdds;
-
-import dto.ResultDTO;
+package com.mdds.storage;
 
 /** Represents common key value data storage such as Redis, MongoDB ect. */
 public interface DataStorage {
   void connect();
 
-  void put(String key, ResultDTO value);
+  void put(String key, Object value);
 
-  ResultDTO get(String key);
+  <T> T get(String key, Class<T> type);
 
   void close();
 }
