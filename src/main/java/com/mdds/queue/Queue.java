@@ -3,17 +3,15 @@
  * Refer to the LICENSE file in the root directory for full license details.
  */
 
-package com.mdds;
+package com.mdds.queue;
 
-import dto.TaskDTO;
-
-/** Common interface for Task Queue. */
-public interface TaskQueue {
+/** Common interface for Task Queue and Result Queue. */
+public interface Queue {
   void connect();
 
   void declareQueue(String queueName);
 
-  void publish(TaskDTO task);
+  void publish(Object task, String queueName);
 
   void close();
 }
