@@ -4,12 +4,13 @@
  */
 package com.mdds.queue.rebbitmq;
 
+import com.mdds.queue.MddsCancelCallback;
+import com.mdds.queue.MddsDeliverCallback;
 import com.mdds.queue.Queue;
 import com.mdds.util.JsonHelper;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.*;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
@@ -81,9 +82,39 @@ public class RabbitMqQueue implements Queue {
   }
 
   @Override
+  public void deleteQueue(String queueName) {
+    try {
+      channel.queueDelete(queueName);
+    } catch (IOException e) {
+      throw new RabbitMqConnectionException(e);
+    }
+  }
+
+  @Override
   public void publish(Object task, String queueName) {
     try {
       channel.basicPublish("", queueName, null, JsonHelper.toJson(task).getBytes());
+    } catch (IOException e) {
+      throw new RabbitMqConnectionException(e);
+    }
+  }
+
+  @Override
+  public void registerConsumer(
+      String queueName,
+      MddsDeliverCallback mddsDeliverCallback,
+      MddsCancelCallback mddsCancelCallback) {
+    DeliverCallback deliverCallback =
+        (consumerTag, delivery) -> {
+          String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+          mddsDeliverCallback.handle(message);
+          // Acknowledge the message to RabbitMQ
+          channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+        };
+    CancelCallback cancelCallback = consumerTag -> mddsCancelCallback.handle();
+    try {
+      channel.basicConsume(
+          queueName, false, deliverCallback, cancelCallback); // 'false' for manual acknowledgment
     } catch (IOException e) {
       throw new RabbitMqConnectionException(e);
     }

@@ -11,7 +11,12 @@ public interface Queue {
 
   void declareQueue(String queueName);
 
+  void deleteQueue(String queueName);
+
   void publish(Object task, String queueName);
+
+  void registerConsumer(
+      String queueName, MddsDeliverCallback deliverCallback, MddsCancelCallback cancelCallback);
 
   void close();
 }
