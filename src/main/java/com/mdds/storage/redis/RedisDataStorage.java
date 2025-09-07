@@ -17,16 +17,7 @@ public class RedisDataStorage implements DataStorage {
   private UnifiedJedis jedis;
   private static final Logger LOGGER = LoggerFactory.getLogger(RedisDataStorage.class);
 
-  private static final DataStorage DATA_STORAGE = new RedisDataStorage();
-
-  private RedisDataStorage() {}
-
-  public static DataStorage getInstance() {
-    return DATA_STORAGE;
-  }
-
-  @Override
-  public void connect() {
+  public RedisDataStorage() {
     var properties = new Properties();
     try (var input = getClass().getClassLoader().getResourceAsStream("redis.properties")) {
       if (input == null) {
@@ -42,12 +33,20 @@ public class RedisDataStorage implements DataStorage {
     int port =
         Integer.parseInt(
             System.getProperty("redis.port", properties.getProperty("redis.port", "6379")));
+    connect(host, port);
+  }
+
+  public RedisDataStorage(String host, int port) {
+    connect(host, port);
+  }
+
+  private void connect(String host, int port) {
     jedis = new UnifiedJedis("redis://" + host + ":" + port);
     LOGGER.info("Connected to Redis redis://{}:{}", host, port);
   }
 
   @Override
-  public void put(String key, Object value) {
+  public <T> void put(String key, T value) {
     jedis.set(key, JsonHelper.toJson(value));
   }
 

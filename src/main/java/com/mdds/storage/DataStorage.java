@@ -6,12 +6,28 @@
 package com.mdds.storage;
 
 /** Represents common key value data storage such as Redis, MongoDB ect. */
-public interface DataStorage {
-  void connect();
+public interface DataStorage extends AutoCloseable {
 
-  void put(String key, Object value);
+  /**
+   * Puts key/value pair to storage.
+   *
+   * @param key key to put.
+   * @param value value to put.
+   * @param <T> common type of the value.
+   */
+  <T> void put(String key, T value);
 
+  /**
+   * Gets value from storage by known key.
+   *
+   * @param key known key to get value.
+   * @param type type of the value.
+   * @return value from the storage.
+   * @param <T> destination class type for the value.
+   */
   <T> T get(String key, Class<T> type);
 
+  /** Closes connection (if any) to storage. */
+  @Override
   void close();
 }
