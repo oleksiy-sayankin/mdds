@@ -21,7 +21,7 @@ class TestJsonHelper {
     Instant instant = Instant.parse(isoFormattedString);
     task.setId(taskId);
     task.setDateTime(instant);
-    task.setSLAESolvingMethod("test solving method");
+    task.setSlaeSolvingMethod("test solving method");
     task.setMatrix(new double[][] {{2.2, 3.3}, {4.5, 6.3}});
     task.setRhs(new double[] {4.7, 8.9});
     var actualJson = JsonHelper.toJson(task);
@@ -42,7 +42,7 @@ class TestJsonHelper {
     Instant instant = Instant.parse(isoFormattedString);
     expectedTask.setId(taskId);
     expectedTask.setDateTime(instant);
-    expectedTask.setSLAESolvingMethod("test solving method");
+    expectedTask.setSlaeSolvingMethod("test solving method");
     expectedTask.setMatrix(new double[][] {{2.2, 3.3}, {4.5, 6.3}});
     expectedTask.setRhs(new double[] {4.7, 8.9});
     var actualTask = JsonHelper.fromJson(json, TaskDTO.class);

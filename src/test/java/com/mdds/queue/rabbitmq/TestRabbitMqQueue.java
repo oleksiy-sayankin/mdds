@@ -51,7 +51,7 @@ class TestRabbitMqQueue {
     expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSLAESolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
     try (Queue queue = RabbitMqQueue.newQueue()) {
@@ -69,7 +69,7 @@ class TestRabbitMqQueue {
     expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSLAESolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
     try (Queue queue = RabbitMqQueue.newQueue()) {
@@ -87,7 +87,7 @@ class TestRabbitMqQueue {
     expectedTask.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSLAESolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
     try (Queue queue = RabbitMqQueue.newQueue()) {
