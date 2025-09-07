@@ -26,7 +26,7 @@ class TestJsonHelper {
     task.setRhs(new double[] {4.7, 8.9});
     var actualJson = JsonHelper.toJson(task);
     var expectedJson =
-        "{\"id\":\"testId\",\"dateTime\":1725466860.000000000,\"matrix\":[[2.2,3.3],[4.5,6.3]],\"rhs\":[4.7,8.9],\"slaesolvingMethod\":\"test"
+        "{\"id\":\"testId\",\"dateTime\":1725466860.000000000,\"matrix\":[[2.2,3.3],[4.5,6.3]],\"rhs\":[4.7,8.9],\"slaeSolvingMethod\":\"test"
             + " solving method\"}";
     Assertions.assertEquals(expectedJson, actualJson);
   }
@@ -34,7 +34,7 @@ class TestJsonHelper {
   @Test
   void testFromJson() {
     var json =
-        "{\"id\":\"testId\",\"dateTime\":1725466860.000000000,\"matrix\":[[2.2,3.3],[4.5,6.3]],\"rhs\":[4.7,8.9],\"slaesolvingMethod\":\"test"
+        "{\"id\":\"testId\",\"dateTime\":1725466860.000000000,\"matrix\":[[2.2,3.3],[4.5,6.3]],\"rhs\":[4.7,8.9],\"slaeSolvingMethod\":\"test"
             + " solving method\"}";
     var expectedTask = new TaskDTO();
     var taskId = "testId";
