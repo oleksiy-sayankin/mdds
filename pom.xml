@@ -12,6 +12,7 @@
     <log4j-core.version>2.25.1</log4j-core.version>
     <jackson-databind.version>2.20.0</jackson-databind.version>
     <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
     <mockito.version>5.19.0</mockito.version>
   </properties>
   <dependencies>
@@ -118,9 +119,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.3</version>
-        <configuration>
-          <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
-        </configuration>
       </plugin>
     </plugins>
   </build>
