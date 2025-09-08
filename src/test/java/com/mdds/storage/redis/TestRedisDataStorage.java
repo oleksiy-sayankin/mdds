@@ -13,7 +13,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-/** We expect that Redis service is up and running for this tests. */
+/** We expect that Redis service is up and running for these tests. */
 class TestRedisDataStorage {
 
   @Test
@@ -50,6 +50,24 @@ class TestRedisDataStorage {
           () -> {
             dataStorage.put(taskId, expectedResult);
           });
+      var actualResult = dataStorage.get(taskId, ResultDTO.class);
+      Assertions.assertEquals(expectedResult, actualResult);
+    }
+  }
+
+  @Test
+  void testGetAndRedisWithParams() {
+    var expectedResult = new ResultDTO();
+    var taskId = "test";
+    expectedResult.setTaskId(taskId);
+    expectedResult.setDateTimeTaskCreated(Instant.now());
+    expectedResult.setDateTimeTaskFinished(Instant.now());
+    expectedResult.setTaskStatus(TaskStatus.DONE);
+    expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
+    expectedResult.setErrorMessage("");
+    try (var dataStorage = DataStorageFactory.createRedis("localhost", 6379)) {
+      Assertions.assertDoesNotThrow(
+          () -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
       Assertions.assertEquals(expectedResult, actualResult);
     }
