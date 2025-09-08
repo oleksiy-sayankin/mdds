@@ -4,8 +4,12 @@
  */
 package com.mdds.queue.rabbitmq;
 
+import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
+
 import com.rabbitmq.client.AMQP;
+import java.io.IOException;
 import java.util.Map;
+import java.util.Properties;
 
 /** Utility method for RabbitMq. */
 public final class RabbitMqHelper {
@@ -19,5 +23,40 @@ public final class RabbitMqHelper {
    */
   public static AMQP.BasicProperties convertFrom(Map<String, Object> headers) {
     return new AMQP.BasicProperties.Builder().headers(headers).build();
+  }
+
+  /**
+   * Reads RabbitMq connection parameters from properties file in classpath.
+   *
+   * @param rabbitMqProperties *.properties file in classpath.
+   * @return record with connection parameters
+   */
+  public static RabbitMqProperties readFromFile(String rabbitMqProperties) {
+    var properties = new Properties();
+    try (var input =
+        RabbitMqHelper.class.getClassLoader().getResourceAsStream(rabbitMqProperties)) {
+      if (input == null) {
+        throw new RabbitMqConnectionException("File not found in resources: " + rabbitMqProperties);
+      }
+      properties.load(input);
+    } catch (IOException e) {
+      throw new RabbitMqConnectionException("Could not load file: " + rabbitMqProperties, e);
+    }
+    var host =
+        System.getProperty("rabbitmq.host", properties.getProperty("rabbitmq.host", DEFAULT_HOST));
+    int port =
+        Integer.parseInt(
+            System.getProperty(
+                "rabbitmq.port",
+                properties.getProperty("rabbitmq.port", String.valueOf(DEFAULT_PORT))));
+    var user =
+        System.getProperty(
+            "rabbitmq.user.name", properties.getProperty("rabbitmq.user.name", DEFAULT_USER));
+    var password =
+        System.getProperty(
+            "rabbitmq.user.password",
+            properties.getProperty(
+                "rabbitmq.user.password", new String(RabbitMqProperties.DEFAULT_PASSWORD)));
+    return new RabbitMqProperties(host, port, user, password);
   }
 }

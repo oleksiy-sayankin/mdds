@@ -2,21 +2,16 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.queue.rabbitmq;
+package com.mdds.queue;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromFile;
 import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 
-import com.mdds.queue.*;
-import com.rabbitmq.client.Channel;
+import com.mdds.queue.rabbitmq.RabbitMqConnectionException;
+import com.mdds.queue.rabbitmq.RabbitMqProperties;
 import dto.TaskDTO;
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -25,8 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-class TestRabbitMqQueue {
-
+class TestQueueFactory {
   private static final String TASK_QUEUE_NAME = "task_queue";
 
   @Test
@@ -38,8 +32,20 @@ class TestRabbitMqQueue {
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (RabbitMqQueue queue =
-              new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword)) {
+          try (Queue queue =
+              QueueFactory.createRabbitMq(randomHost, randomPort, randomUser, randomPassword)) {
+            // Do nothing.
+          }
+        });
+  }
+
+  @Test
+  void testNoConnectionToRabbitMq() {
+    RabbitMqProperties properties = readFromFile("no.connection.rabbitmq.properties");
+    assertThrows(
+        RabbitMqConnectionException.class,
+        () -> {
+          try (Queue queue = QueueFactory.createRabbitMq(properties)) {
             // Do nothing.
           }
         });
@@ -50,43 +56,17 @@ class TestRabbitMqQueue {
     var taskId = "test_id";
     var timeCreated = Instant.now();
     var expectedTask = new TaskDTO();
-    expectedTask.setRhs(new double[] {73.4, 764.6});
-    expectedTask.setMatrix(new double[][] {{783.7, 757.6}, {72.9, 4.75}});
+    expectedTask.setRhs(new double[] {3.4, 4.6});
+    expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(readFromFile(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
-  }
-
-  @Test
-  void testPublishWithException() throws IOException {
-    Channel mockChannel = mock(Channel.class);
-    doThrow(new IOException("Simulated failure"))
-        .when(mockChannel)
-        .basicPublish(anyString(), anyString(), any(), any());
-    Message<String> message = new Message<>("payload", Map.of(), Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
-      queue.setChannel(mockChannel);
-      assertThrows(
-          RabbitMqConnectionException.class, () -> queue.publish(TASK_QUEUE_NAME, message));
-    }
-  }
-
-  @Test
-  void testNoConnectionToRabbitMq() {
-    RabbitMqProperties properties = readFromFile("no.connection.rabbitmq.properties");
-    assertThrows(
-        RabbitMqConnectionException.class,
-        () -> {
-          try (RabbitMqQueue queue = new RabbitMqQueue(properties)) {
-            // Do nothing.
-          }
-        });
   }
 
   @Test
@@ -101,7 +81,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(readFromFile(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -119,7 +99,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(readFromFile(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 
@@ -153,7 +133,7 @@ class TestRabbitMqQueue {
     var properties =
         new RabbitMqProperties(
             DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD));
-    try (RabbitMqQueue queue = new RabbitMqQueue(properties)) {
+    try (Queue queue = QueueFactory.createRabbitMq(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 
@@ -184,8 +164,9 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue =
-        new RabbitMqQueue(DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD))) {
+    try (Queue queue =
+        QueueFactory.createRabbitMq(
+            DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD))) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 

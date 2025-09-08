@@ -6,12 +6,12 @@ package com.mdds.queue.rabbitmq;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.mdds.queue.*;
 import com.mdds.util.JsonHelper;
 import com.rabbitmq.client.*;
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,70 +19,15 @@ import org.slf4j.LoggerFactory;
 /** Queue that delivers tasks to Executors. */
 public class RabbitMqQueue implements Queue {
   private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqQueue.class);
-
-  private RabbitMqQueue(String rabbitMqConfFileName) {
-    connect(rabbitMqConfFileName);
-  }
-
-  public static Queue newQueue() {
-    return new RabbitMqQueue("rabbitmq.properties");
-  }
-
-  public static Queue newQueue(String rabbitMqConfFileName) {
-    return new RabbitMqQueue(rabbitMqConfFileName);
-  }
-
   private Channel channel;
   private Connection connection;
 
-  private void connect(String rabbitMqConfFileName) {
-    ConnectionFactory factory = new ConnectionFactory();
-
-    var properties = new Properties();
-    try (var input = getClass().getClassLoader().getResourceAsStream(rabbitMqConfFileName)) {
-      if (input == null) {
-        LOGGER.error("rabbitmq.properties not found in resources");
-        throw new RabbitMqConnectionException();
-      }
-      properties.load(input);
-    } catch (IOException e) {
-      LOGGER.error("Could not load rabbitmq.properties file.");
-      throw new RabbitMqConnectionException(e);
-    }
-    var host =
-        System.getProperty("rabbitmq.host", properties.getProperty("rabbitmq.host", "localhost"));
-    int port =
-        Integer.parseInt(
-            System.getProperty("rabbitmq.port", properties.getProperty("rabbitmq.port", "5672")));
-    var user =
-        System.getProperty(
-            "rabbitmq.user.name", properties.getProperty("rabbitmq.user.name", "guest"));
-    var password =
-        System.getProperty(
-            "rabbitmq.user.password", properties.getProperty("rabbitmq.user.password", "guest"));
-
-    factory.setHost(host);
-    factory.setPort(port);
-    factory.setUsername(user);
-    factory.setPassword(password);
-
-    try {
-      connection = factory.newConnection();
-      channel = connection.createChannel();
-    } catch (IOException | TimeoutException e) {
-      LOGGER.error("Failed to create RabbitMq connection");
-      throw new RabbitMqConnectionException(e);
-    }
+  public RabbitMqQueue(RabbitMqProperties properties) {
+    connect(properties.host(), properties.port(), properties.user(), properties.password());
   }
 
-  private void declareQueue(String queueName) {
-    // Declare a queue (idempotent - creates if it doesn't exist)
-    try {
-      channel.queueDeclare(queueName, false, false, false, null);
-    } catch (IOException e) {
-      LOGGER.error("Failed to declare queue {}", queueName);
-      throw new RabbitMqConnectionException(e);
-    }
+  public RabbitMqQueue(String host, int port, String user, String password) {
+    connect(host, port, user, password);
   }
 
   @Override
@@ -95,8 +40,7 @@ public class RabbitMqQueue implements Queue {
           RabbitMqHelper.convertFrom(message.headers()),
           JsonHelper.toJson(message.payload()).getBytes());
     } catch (IOException e) {
-      LOGGER.error("Failed to publish to queue {}", queueName);
-      throw new RabbitMqConnectionException(e);
+      throw new RabbitMqConnectionException("Failed to publish to queue: " + queueName, e);
     }
   }
 
@@ -118,8 +62,8 @@ public class RabbitMqQueue implements Queue {
                   try {
                     channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
                   } catch (IOException e) {
-                    LOGGER.error("Failed to acknowledge to queue {}", queueName);
-                    throw new RabbitMqConnectionException(e);
+                    throw new RabbitMqConnectionException(
+                        "Failed to acknowledge to queue: " + queueName, e);
                   }
                 }
 
@@ -128,8 +72,8 @@ public class RabbitMqQueue implements Queue {
                   try {
                     channel.basicNack(delivery.getEnvelope().getDeliveryTag(), false, requeue);
                   } catch (IOException e) {
-                    LOGGER.error("Failed to reject message from queue {}", queueName);
-                    throw new RabbitMqConnectionException(e);
+                    throw new RabbitMqConnectionException(
+                        "Failed to reject message from queue: " + queueName, e);
                   }
                 }
               };
@@ -148,16 +92,15 @@ public class RabbitMqQueue implements Queue {
               deliverCallback,
               cancelCallback); // 'false' for manual acknowledgment
     } catch (IOException e) {
-      LOGGER.error("Failed consume from queue {}", queueName);
-      throw new RabbitMqConnectionException(e);
+      throw new RabbitMqConnectionException("Failed consume from queue: " + queueName, e);
     }
 
     return () -> {
       try {
         channel.basicCancel(tag);
       } catch (IOException e) {
-        LOGGER.error("Failed cancel subscription '{}', consumer tag '{}'", queueName, tag);
-        throw new RabbitMqConnectionException(e);
+        throw new RabbitMqConnectionException(
+            "Failed cancel subscription '" + queueName + "', consumer tag '" + tag + "'", e);
       }
     };
   }
@@ -167,8 +110,7 @@ public class RabbitMqQueue implements Queue {
     try {
       channel.queueDelete(queueName);
     } catch (IOException e) {
-      LOGGER.error("Failed to delete queue {}", queueName);
-      throw new RabbitMqConnectionException(e);
+      throw new RabbitMqConnectionException("Failed to delete queue: " + queueName, e);
     }
   }
 
@@ -176,12 +118,43 @@ public class RabbitMqQueue implements Queue {
   public void close() {
     try {
       if (channel != null && channel.isOpen()) channel.close();
-      if (connection != null && connection.isOpen()) {
-        connection.close();
+    } catch (Exception e) {
+      LOGGER.warn("Failed to close channel", e);
+    } finally {
+      try {
+        if (connection != null && connection.isOpen()) connection.close();
+      } catch (Exception e) {
+        LOGGER.warn("Failed to close connection", e);
       }
+    }
+  }
+
+  @VisibleForTesting
+  void setChannel(Channel channel) {
+    this.channel = channel;
+  }
+
+  private void declareQueue(String queueName) {
+    // Declare a queue (idempotent - creates if it doesn't exist)
+    try {
+      channel.queueDeclare(queueName, false, false, false, null);
+    } catch (IOException e) {
+      throw new RabbitMqConnectionException("Failed to declare queue: " + queueName, e);
+    }
+  }
+
+  private void connect(String host, int port, String user, String password) {
+    ConnectionFactory factory = new ConnectionFactory();
+    factory.setHost(host);
+    factory.setPort(port);
+    factory.setUsername(user);
+    factory.setPassword(password);
+
+    try {
+      connection = factory.newConnection();
+      channel = connection.createChannel();
     } catch (IOException | TimeoutException e) {
-      LOGGER.error("Failed to close channel or connection.");
-      throw new RabbitMqConnectionException(e);
+      throw new RabbitMqConnectionException("Failed to create RabbitMq connection", e);
     }
   }
 }

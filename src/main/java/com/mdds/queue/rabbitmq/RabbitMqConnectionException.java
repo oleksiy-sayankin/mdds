@@ -6,11 +6,12 @@ package com.mdds.queue.rabbitmq;
 
 /** Exception during connection try to RabbitMq. */
 public class RabbitMqConnectionException extends RuntimeException {
-  public RabbitMqConnectionException(Throwable cause) {
-    super(cause);
+
+  public RabbitMqConnectionException(String message, Throwable cause) {
+    super(message, cause);
   }
 
-  public RabbitMqConnectionException() {
-    super();
+  public RabbitMqConnectionException(String message) {
+    super(message);
   }
 }
