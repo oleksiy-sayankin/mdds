@@ -15,5 +15,5 @@ public class TaskDTO {
   private Instant dateTime;
   private double[][] matrix;
   private double[] rhs;
-  private String SlaeSolvingMethod;
+  private String slaeSolvingMethod;
 }
