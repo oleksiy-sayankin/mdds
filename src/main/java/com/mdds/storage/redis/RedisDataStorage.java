@@ -6,41 +6,22 @@ package com.mdds.storage.redis;
 
 import com.mdds.storage.DataStorage;
 import com.mdds.util.JsonHelper;
-import java.io.IOException;
-import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.UnifiedJedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 /** Data storage that stores data in Redis key-value DB. */
 public class RedisDataStorage implements DataStorage {
   private UnifiedJedis jedis;
   private static final Logger LOGGER = LoggerFactory.getLogger(RedisDataStorage.class);
 
-  public RedisDataStorage() {
-    var properties = new Properties();
-    try (var input = getClass().getClassLoader().getResourceAsStream("redis.properties")) {
-      if (input == null) {
-        throw new RedisConnectionException("redis.properties not found in resources");
-      }
-      properties.load(input);
-    } catch (IOException e) {
-      throw new RedisConnectionException("Could not load redis.properties file.", e);
-    }
-    var host = System.getProperty("redis.host", properties.getProperty("redis.host", "localhost"));
-    int port =
-        Integer.parseInt(
-            System.getProperty("redis.port", properties.getProperty("redis.port", "6379")));
-    connect(host, port);
+  public RedisDataStorage(RedisProperties properties) {
+    connect(properties.host(), properties.port());
   }
 
   public RedisDataStorage(String host, int port) {
     connect(host, port);
-  }
-
-  private void connect(String host, int port) {
-    jedis = new UnifiedJedis("redis://" + host + ":" + port);
-    LOGGER.info("Connected to Redis redis://{}:{}", host, port);
   }
 
   @Override
@@ -61,6 +42,26 @@ public class RedisDataStorage implements DataStorage {
   public void close() {
     if (jedis != null) {
       jedis.close();
+    }
+  }
+
+  private void connect(String host, int port) {
+    try {
+      jedis = new UnifiedJedis("redis://" + host + ":" + port);
+      String result = jedis.ping();
+      if ("PONG".equals(result)) {
+        LOGGER.info("Connected to Redis redis://{}:{}", host, port);
+      } else {
+        throw new RedisConnectionException(
+            "Redis connection redis://"
+                + host
+                + ":"
+                + port
+                + " failed with unexpected response: "
+                + result);
+      }
+    } catch (JedisConnectionException e) {
+      throw new RedisConnectionException("Failed to connect to redis://" + host + ":" + port, e);
     }
   }
 }

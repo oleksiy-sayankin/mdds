@@ -5,19 +5,11 @@
 package com.mdds.storage;
 
 import com.mdds.storage.redis.RedisDataStorage;
+import com.mdds.storage.redis.RedisProperties;
 
 /** Factory class for data storages. */
 public final class DataStorageFactory {
   private DataStorageFactory() {}
-
-  /**
-   * Creates Redis Data Storage. Reads host and port from redis.properties file.
-   *
-   * @return Redis Data Storage.
-   */
-  public static DataStorage createRedis() {
-    return new RedisDataStorage();
-  }
 
   /**
    * Creates Redis Data Storage.
@@ -28,5 +20,15 @@ public final class DataStorageFactory {
    */
   public static DataStorage createRedis(String host, int port) {
     return new RedisDataStorage(host, port);
+  }
+
+  /**
+   * Creates Redis Data Storage.
+   *
+   * @param properties connection properties.
+   * @return Connected Redis Data storage.
+   */
+  public static DataStorage createRedis(RedisProperties properties) {
+    return new RedisDataStorage(properties);
   }
 }
