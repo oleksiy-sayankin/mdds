@@ -21,13 +21,11 @@ public class RedisDataStorage implements DataStorage {
     var properties = new Properties();
     try (var input = getClass().getClassLoader().getResourceAsStream("redis.properties")) {
       if (input == null) {
-        LOGGER.error("redis.properties not found in resources");
-        throw new RedisConnectionException();
+        throw new RedisConnectionException("redis.properties not found in resources");
       }
       properties.load(input);
     } catch (IOException e) {
-      LOGGER.error("Could not load redis.properties file.");
-      throw new RedisConnectionException(e);
+      throw new RedisConnectionException("Could not load redis.properties file.", e);
     }
     var host = System.getProperty("redis.host", properties.getProperty("redis.host", "localhost"));
     int port =

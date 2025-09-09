@@ -66,8 +66,7 @@ class TestRedisDataStorage {
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     expectedResult.setErrorMessage("");
     try (var dataStorage = DataStorageFactory.createRedis("localhost", 6379)) {
-      Assertions.assertDoesNotThrow(
-          () -> dataStorage.put(taskId, expectedResult));
+      Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
       Assertions.assertEquals(expectedResult, actualResult);
     }

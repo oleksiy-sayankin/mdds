@@ -6,11 +6,11 @@ package com.mdds.storage.redis;
 
 /** Thrown when there is no connection to Redis. */
 public class RedisConnectionException extends RuntimeException {
-  public RedisConnectionException(Throwable cause) {
-    super(cause);
+  public RedisConnectionException(String message, Throwable cause) {
+    super(message, cause);
   }
 
-  public RedisConnectionException() {
+  public RedisConnectionException(String message) {
     super();
   }
 }
