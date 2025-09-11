@@ -8,15 +8,17 @@ import static com.github.valfirst.slf4jtest.TestLoggerFactory.getTestLogger;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
-import com.github.valfirst.slf4jtest.LoggingEvent;
 import com.github.valfirst.slf4jtest.TestLogger;
+import com.github.valfirst.slf4jtest.TestLoggerFactoryExtension;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(TestLoggerFactoryExtension.class)
 class TestRootServlet {
   private RootServlet servlet;
   private HttpServletRequest request;
@@ -54,11 +56,6 @@ class TestRootServlet {
     servlet.doGet(request, response);
     verify(response)
         .sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
-    var loggingEvents = logger.getLoggingEvents();
-    System.out.println("size = " + loggingEvents.size());
-    for (LoggingEvent li : loggingEvents) {
-      System.out.println(li.getMessage());
-    }
     assertTrue(
         logger.getLoggingEvents().stream()
             .anyMatch(e -> e.getMessage().contains("Error processing root servlet")));
