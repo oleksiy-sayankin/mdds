@@ -30,8 +30,7 @@ class TestDataStorageFactory {
     result.setErrorMessage("");
     try (var dataStorage =
         DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
-      Assertions.assertDoesNotThrow(
-          () -> dataStorage.put(taskId, result));
+      Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, result));
     }
   }
 
@@ -47,8 +46,7 @@ class TestDataStorageFactory {
     expectedResult.setErrorMessage("");
     try (var dataStorage =
         DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
-      Assertions.assertDoesNotThrow(
-          () -> dataStorage.put(taskId, expectedResult));
+      Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
       Assertions.assertEquals(expectedResult, actualResult);
     }
