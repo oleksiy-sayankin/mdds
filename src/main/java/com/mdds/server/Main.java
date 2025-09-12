@@ -49,10 +49,12 @@ public class Main {
     tomcat.getConnector(); // ensure connector created
 
     var ctx = tomcat.addWebapp("", new java.io.File(webappDirLocation).getAbsolutePath());
-    // Register listener and servlet programmatically
+    // Register listener and servlets programmatically
     ctx.addApplicationListener(AppContextListener.class.getName());
     Tomcat.addServlet(ctx, "rootServlet", new RootServlet());
     ctx.addServletMappingDecoded("/", "rootServlet");
+    Tomcat.addServlet(ctx, "healthServlet", new HealthServlet());
+    ctx.addServletMappingDecoded("/health", "healthServlet");
 
     tomcat.start();
     LOGGER.info("Server started at http://{}:{}", host, port);

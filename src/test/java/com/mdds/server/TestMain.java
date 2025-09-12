@@ -9,9 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
@@ -60,5 +62,14 @@ class TestMain {
       String body = reader.lines().reduce("", (a, b) -> a + b);
       assertTrue(body.contains("<html"));
     }
+  }
+
+  @Test
+  void testHealthReturnsStatusOk() throws URISyntaxException, IOException {
+    URI uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/health");
+    URL url = uri.toURL();
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    connection.setRequestMethod("GET");
+    assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
   }
 }
