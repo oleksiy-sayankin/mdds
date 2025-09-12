@@ -170,7 +170,7 @@ sonar_scan:
 	mvn clean verify sonar:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
 	  -Dsonar.host.url=$(SONAR_HOST_URL) \
-	  -Dsonar.login=$(SONAR_TOKEN)
+	  -Dsonar.token=$(SONAR_TOKEN)
 
 	$(call log_info,"Checking SonarQube Quality Gate status...")
 	@sleep 5 # Wait for report is done by Soner Qube Server
