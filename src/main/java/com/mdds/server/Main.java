@@ -36,19 +36,18 @@ public class Main {
    *
    * @param hostName hostname to start web server.
    * @param port port to start web server.
-   * @param webappDirLocation folder with static files for web application.
+   * @param docBase folder with static files for web application.
    * @return minimal Apache Tomcat starter object.
    * @throws LifecycleException when we can not start Tomcat.
    */
-  public static Tomcat start(String hostName, int port, String webappDirLocation)
-      throws LifecycleException {
+  public static Tomcat start(String hostName, int port, String docBase) throws LifecycleException {
     Tomcat tomcat = new Tomcat();
     Host host = tomcat.getHost(); // Get the default host
     host.setName(hostName);
     tomcat.setPort(port);
     tomcat.getConnector(); // ensure connector created
 
-    var ctx = tomcat.addWebapp("", new java.io.File(webappDirLocation).getAbsolutePath());
+    var ctx = tomcat.addWebapp(host, "", docBase);
     // Register listener and servlets programmatically
     ctx.addApplicationListener(AppContextListener.class.getName());
     Tomcat.addServlet(ctx, "rootServlet", new RootServlet());

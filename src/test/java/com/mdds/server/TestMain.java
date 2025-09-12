@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -32,7 +33,8 @@ class TestMain {
   private static final String MDDS_SERVER_WEB_APPLICATION_LOCATION =
       System.getenv()
           .getOrDefault(
-              "MDDS_SERVER_WEB_APPLICATION_LOCATION", MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION);
+              "MDDS_SERVER_WEB_APPLICATION_LOCATION",
+              new File(MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION).getAbsolutePath());
 
   @BeforeAll
   static void startServer() throws LifecycleException {
