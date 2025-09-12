@@ -156,7 +156,9 @@ reformat_java:
 reformat_xml:
 	$(call log_info,"Reformatting XML sources...")
 	@find . -type f -name "*.xml" \
-		-not -path "./$(NODE_MODULES)/*" | while read -r file; do \
+		-not -path "./$(NODE_MODULES)/*" \
+		-not -path "./.idea/*" \
+		-not -path "./target/*" | while read -r file; do \
 		echo "   → $$file"; \
 		xmllint --format "$$file" --output "$$file"; \
 	done
