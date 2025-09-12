@@ -13,12 +13,13 @@ public final class RedisHelper {
   private RedisHelper() {}
 
   /**
-   * Reads Redis connection parameters from properties file in classpath.
+   * Reads Redis connection parameters from properties file in classpath. File is searched inside
+   * *.jar archive in its root folder.
    *
-   * @param redisProperties *.properties file in classpath.
+   * @param redisProperties *.properties file inside *.jar file which is in classpath.
    * @return record with connection parameters
    */
-  public static RedisProperties readFromFile(String redisProperties) {
+  public static RedisProperties readFromResources(String redisProperties) {
     var properties = new Properties();
     try (var input = RabbitMqHelper.class.getClassLoader().getResourceAsStream(redisProperties)) {
       if (input == null) {

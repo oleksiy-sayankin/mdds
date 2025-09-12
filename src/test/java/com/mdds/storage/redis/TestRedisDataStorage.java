@@ -73,7 +73,7 @@ class TestRedisDataStorage {
 
   @Test
   void testWrongConfFile() {
-    var properties = RedisHelper.readFromFile("no.connection.redis.properties");
+    var properties = RedisHelper.readFromResources("no.connection.redis.properties");
     assertThrows(
         RedisConnectionException.class,
         () -> {

@@ -4,7 +4,7 @@
  */
 package com.mdds.storage.redis;
 
-import static com.mdds.storage.redis.RedisHelper.readFromFile;
+import static com.mdds.storage.redis.RedisHelper.readFromResources;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Assertions;
@@ -14,13 +14,13 @@ class TestRedisHelper {
 
   @Test
   void testNoConfFileExists() {
-    assertThrows(RedisConnectionException.class, () -> readFromFile("wrong.file.name"));
+    assertThrows(RedisConnectionException.class, () -> readFromResources("wrong.file.name"));
   }
 
   @Test
-  void testReadFromFile() {
+  void testReadFromResources() {
     var expectedRedisProperties = new RedisProperties("localhost", 6379);
-    var actualRedisProperties = readFromFile("redis.properties");
+    var actualRedisProperties = readFromResources("redis.properties");
     Assertions.assertEquals(expectedRedisProperties, actualRedisProperties);
   }
 }

@@ -4,7 +4,7 @@
  */
 package com.mdds.queue;
 
-import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromFile;
+import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
 import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,7 +41,7 @@ class TestQueueFactory {
 
   @Test
   void testNoConnectionToRabbitMq() {
-    RabbitMqProperties properties = readFromFile("no.connection.rabbitmq.properties");
+    RabbitMqProperties properties = readFromResources("no.connection.rabbitmq.properties");
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
@@ -63,7 +63,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -81,7 +81,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -99,7 +99,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 

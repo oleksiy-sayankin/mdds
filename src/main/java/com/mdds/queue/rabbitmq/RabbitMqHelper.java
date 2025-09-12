@@ -26,12 +26,13 @@ public final class RabbitMqHelper {
   }
 
   /**
-   * Reads RabbitMq connection parameters from properties file in classpath.
+   * Reads RabbitMq connection parameters from properties file in classpath. File is searched inside
+   * *.jar archive in its root folder.
    *
-   * @param rabbitMqProperties *.properties file in classpath.
+   * @param rabbitMqProperties *.properties file inside *.jar file which is in classpath.
    * @return record with connection parameters
    */
-  public static RabbitMqProperties readFromFile(String rabbitMqProperties) {
+  public static RabbitMqProperties readFromResources(String rabbitMqProperties) {
     var properties = new Properties();
     try (var input =
         RabbitMqHelper.class.getClassLoader().getResourceAsStream(rabbitMqProperties)) {

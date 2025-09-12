@@ -4,7 +4,7 @@
  */
 package com.mdds.queue.rabbitmq;
 
-import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromFile;
+import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
 import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -57,7 +57,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -70,7 +70,7 @@ class TestRabbitMqQueue {
         .when(mockChannel)
         .basicPublish(anyString(), anyString(), any(), any());
     Message<String> message = new Message<>("payload", Map.of(), Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.setChannel(mockChannel);
       assertThrows(
           RabbitMqConnectionException.class, () -> queue.publish(TASK_QUEUE_NAME, message));
@@ -79,7 +79,7 @@ class TestRabbitMqQueue {
 
   @Test
   void testNoConnectionToRabbitMq() {
-    RabbitMqProperties properties = readFromFile("no.connection.rabbitmq.properties");
+    RabbitMqProperties properties = readFromResources("no.connection.rabbitmq.properties");
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
@@ -101,7 +101,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -119,7 +119,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromFile(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 

@@ -5,7 +5,7 @@
 package com.mdds.queue.rabbitmq;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.convertFrom;
-import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromFile;
+import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.rabbitmq.client.AMQP;
@@ -17,7 +17,7 @@ class TestRabbitMqHelper {
 
   @Test
   void testNoConfFileExists() {
-    assertThrows(RabbitMqConnectionException.class, () -> readFromFile("wrong.file.name"));
+    assertThrows(RabbitMqConnectionException.class, () -> readFromResources("wrong.file.name"));
   }
 
   @Test
