@@ -44,7 +44,8 @@ class TestRedisDataStorage {
     try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, DEFAULT_PORT)) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
-      Assertions.assertEquals(expectedResult, actualResult);
+      Assertions.assertEquals(
+          expectedResult, actualResult.isPresent() ? actualResult.get() : actualResult);
     }
   }
 

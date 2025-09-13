@@ -6,7 +6,6 @@ package com.mdds.storage;
 
 import static com.mdds.storage.redis.RedisProperties.DEFAULT_HOST;
 import static com.mdds.storage.redis.RedisProperties.DEFAULT_PORT;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.mdds.storage.redis.RedisProperties;
 import dto.ResultDTO;
@@ -48,7 +47,8 @@ class TestDataStorageFactory {
         DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
-      Assertions.assertEquals(expectedResult, actualResult);
+      Assertions.assertEquals(
+          expectedResult, actualResult.isPresent() ? actualResult.get() : actualResult);
     }
   }
 
@@ -65,7 +65,8 @@ class TestDataStorageFactory {
     try (var dataStorage = DataStorageFactory.createRedis("localhost", 6379)) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
-      Assertions.assertEquals(expectedResult, actualResult);
+      Assertions.assertEquals(
+          expectedResult, actualResult.isPresent() ? actualResult.get() : actualResult);
     }
   }
 
@@ -85,7 +86,7 @@ class TestDataStorageFactory {
     try (var dataStorage =
         DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
       Assertions.assertDoesNotThrow(
-          () -> assertNull(dataStorage.get("random key", ResultDTO.class)));
+          () -> Assertions.assertFalse(dataStorage.get("random key", ResultDTO.class).isPresent()));
     }
   }
 }

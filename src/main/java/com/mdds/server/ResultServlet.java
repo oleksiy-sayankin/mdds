@@ -36,11 +36,11 @@ public class ResultServlet extends HttpServlet {
       return;
     }
     var result = storage.get().get(taskId.get(), ResultDTO.class);
-    if (result == null) {
+    if (result.isEmpty()) {
       writeNotFound(response);
       return;
     }
-    writeJson(response, result);
+    writeJson(response, result.get());
   }
 
   private static Optional<String> extractTaskId(

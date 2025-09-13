@@ -5,6 +5,8 @@
 
 package com.mdds.storage;
 
+import java.util.Optional;
+
 /** Represents common key value data storage such as Redis, MongoDB ect. */
 public interface DataStorage extends AutoCloseable {
 
@@ -25,7 +27,7 @@ public interface DataStorage extends AutoCloseable {
    * @return value from the storage.
    * @param <T> destination class type for the value.
    */
-  <T> T get(String key, Class<T> type);
+  <T> Optional<T> get(String key, Class<T> type);
 
   /** Closes connection (if any) to storage. */
   @Override

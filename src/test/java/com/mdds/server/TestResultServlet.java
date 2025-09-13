@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.Instant;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -86,7 +87,7 @@ class TestResultServlet {
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
-    when(dataStorage.get(taskId, ResultDTO.class)).thenReturn(expectedResult);
+    when(dataStorage.get(taskId, ResultDTO.class)).thenReturn(Optional.of(expectedResult));
     servlet.doGet(request, response);
     verify(printWriter).write(JsonHelper.toJson(expectedResult));
   }

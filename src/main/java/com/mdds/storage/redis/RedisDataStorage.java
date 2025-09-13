@@ -6,6 +6,7 @@ package com.mdds.storage.redis;
 
 import com.mdds.storage.DataStorage;
 import com.mdds.util.JsonHelper;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.UnifiedJedis;
@@ -30,12 +31,12 @@ public class RedisDataStorage implements DataStorage {
   }
 
   @Override
-  public <T> T get(String key, Class<T> type) {
+  public <T> Optional<T> get(String key, Class<T> type) {
     var json = jedis.get(key);
     if (json == null) {
-      return null;
+      return Optional.empty();
     }
-    return JsonHelper.fromJson(json, type);
+    return Optional.of(JsonHelper.fromJson(json, type));
   }
 
   @Override
