@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,15 +27,15 @@ public class ResultServlet extends HttpServlet {
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
     LOGGER.info("Processing request in result servlet...");
     response.setContentType("application/json");
-    String taskId = extractTaskId(request, response);
-    if (taskId == null) {
+    var taskId = extractTaskId(request, response);
+    if (taskId.isEmpty()) {
       return;
     }
-    DataStorage storage = getStorage(request, response);
-    if (storage == null) {
+    var storage = getStorage(request, response);
+    if (storage.isEmpty()) {
       return;
     }
-    ResultDTO result = storage.get(taskId, ResultDTO.class);
+    var result = storage.get().get(taskId.get(), ResultDTO.class);
     if (result == null) {
       writeNotFound(response);
       return;
@@ -42,31 +43,34 @@ public class ResultServlet extends HttpServlet {
     writeJson(response, result);
   }
 
-  private static String extractTaskId(HttpServletRequest request, HttpServletResponse response) {
-    String path = request.getPathInfo();
+  private static Optional<String> extractTaskId(
+      HttpServletRequest request, HttpServletResponse response) {
+    var path = request.getPathInfo();
     if (path == null || path.isEmpty()) {
       sendError(response, HttpServletResponse.SC_BAD_REQUEST, "Path is empty");
-      return null;
+      return Optional.empty();
     }
-    String taskId = path.startsWith("/") ? path.substring(path.lastIndexOf('/') + 1) : null;
+    var taskId = path.startsWith("/") ? path.substring(path.lastIndexOf('/') + 1) : null;
     if (taskId == null || taskId.isEmpty()) {
       sendError(response, HttpServletResponse.SC_BAD_REQUEST, "Task id missing");
-      return null;
+      return Optional.empty();
     }
-    return taskId;
+    return Optional.of(taskId);
   }
 
-  private static DataStorage getStorage(HttpServletRequest request, HttpServletResponse response) {
-    DataStorage storage =
-        (DataStorage)
-            request.getServletContext().getAttribute(AppContextListener.ATTR_DATA_STORAGE);
-    if (storage == null) {
-      sendError(
-          response,
-          HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-          "Data Storage Service is not initialized");
-    }
-    return storage;
+  private static Optional<DataStorage> getStorage(
+      HttpServletRequest request, HttpServletResponse response) {
+    return Optional.ofNullable(
+            (DataStorage)
+                request.getServletContext().getAttribute(AppContextListener.ATTR_DATA_STORAGE))
+        .or(
+            () -> {
+              sendError(
+                  response,
+                  HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                  "Data Storage Service is not initialized");
+              return Optional.empty();
+            });
   }
 
   private static void writeNotFound(HttpServletResponse response) {
