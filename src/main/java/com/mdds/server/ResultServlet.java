@@ -24,6 +24,7 @@ public class ResultServlet extends HttpServlet {
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+    LOGGER.info("Processing request in result servlet...");
     response.setContentType("application/json");
     String taskId = extractTaskId(request, response);
     if (taskId == null) {
