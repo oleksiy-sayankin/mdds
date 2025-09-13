@@ -8,6 +8,11 @@ import static com.mdds.server.Main.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mdds.storage.DataStorageFactory;
+import com.mdds.storage.redis.RedisHelper;
+import com.mdds.util.JsonHelper;
+import dto.ResultDTO;
+import dto.TaskStatus;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -16,9 +21,11 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.time.Instant;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -73,5 +80,47 @@ class TestMain {
     HttpURLConnection connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");
     assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
+  }
+
+  @Test
+  void testResultReturnsDataFromDataStorage() throws URISyntaxException, IOException {
+    var taskId = "test_task_id";
+    // Create Result and put it to storage manually
+    var expectedResult = new ResultDTO();
+    expectedResult.setTaskId(taskId);
+    expectedResult.setDateTimeTaskCreated(Instant.now());
+    expectedResult.setDateTimeTaskFinished(Instant.now());
+    expectedResult.setTaskStatus(TaskStatus.DONE);
+    expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
+
+    // We expect Redis service is up and running here
+    try (var storage =
+        DataStorageFactory.createRedis(RedisHelper.readFromResources("redis.properties"))) {
+      storage.put(taskId, expectedResult);
+      // Test that data is in data storage
+      var actualResult = storage.get(taskId, ResultDTO.class);
+      Assertions.assertEquals(
+          expectedResult, actualResult.isPresent() ? actualResult.get() : actualResult);
+    }
+
+    // Request result using endpoint
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/result/" + taskId);
+    var url = uri.toURL();
+    var connection = (HttpURLConnection) url.openConnection();
+    connection.setRequestMethod("GET");
+    assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
+    assertEquals("application/json;charset=ISO-8859-1", connection.getContentType());
+
+    // Read result from the response.
+    var sb = new StringBuilder();
+    try (var reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        sb.append(line);
+      }
+    }
+    var body = sb.toString();
+    var actualResult = JsonHelper.fromJson(body, ResultDTO.class);
+    assertEquals(expectedResult, actualResult);
   }
 }
