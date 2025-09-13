@@ -60,7 +60,7 @@ public class Main {
     ctx.addServletMappingDecoded("/result/{task_id}", "resultServlet");
 
     tomcat.start();
-    LOGGER.info("Server started at http://{}:{}", host, port);
+    LOGGER.info("Server started at http://{}:{}", host.getName(), port);
     return tomcat;
   }
 }
