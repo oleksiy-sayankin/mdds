@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
 /** Get result as document from key-value data storage. */
 @WebServlet(
     name = "resultServlet",
-    urlPatterns = {"/result/{task_id}"})
+    urlPatterns = {"/result/*"})
 public class ResultServlet extends HttpServlet {
   private static final Logger LOGGER = LoggerFactory.getLogger(ResultServlet.class);
 
