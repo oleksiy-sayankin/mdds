@@ -5,7 +5,6 @@
 package com.mdds.server;
 
 import java.io.File;
-import org.apache.catalina.Host;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 import org.slf4j.Logger;

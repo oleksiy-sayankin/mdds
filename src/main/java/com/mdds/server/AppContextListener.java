@@ -7,7 +7,6 @@ package com.mdds.server;
 import com.mdds.storage.DataStorage;
 import com.mdds.storage.DataStorageFactory;
 import com.mdds.storage.redis.RedisHelper;
-import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
