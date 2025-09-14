@@ -5,7 +5,6 @@
 package com.mdds.queue;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
-import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -18,10 +17,35 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
+@Testcontainers
 class TestQueueFactory {
   private static final String TASK_QUEUE_NAME = "task_queue";
+
+  @Container
+  private static final RabbitMQContainer rabbitMq =
+      new RabbitMQContainer("rabbitmq:3.12-management")
+          .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
+          .withExposedPorts(5672, 15672);
+
+  private static String host;
+  private static int port;
+  private static String user;
+  private static String password;
+
+  @BeforeAll
+  static void init() {
+    host = rabbitMq.getHost();
+    port = rabbitMq.getAmqpPort();
+    user = rabbitMq.getAdminUsername();
+    password = rabbitMq.getAdminPassword();
+  }
 
   @Test
   void testNoConfFileExists() {
@@ -63,7 +87,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -81,7 +105,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -99,7 +123,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 
@@ -130,9 +154,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    var properties =
-        new RabbitMqProperties(
-            DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD));
+    var properties = new RabbitMqProperties(host, port, user, password);
     try (Queue queue = QueueFactory.createRabbitMq(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
@@ -164,9 +186,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue =
-        QueueFactory.createRabbitMq(
-            DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD))) {
+    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 

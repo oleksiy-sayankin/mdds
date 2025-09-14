@@ -5,7 +5,6 @@
 package com.mdds.queue.rabbitmq;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
-import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,11 +22,35 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
+@Testcontainers
 class TestRabbitMqQueue {
-
   private static final String TASK_QUEUE_NAME = "task_queue";
+
+  @Container
+  private static final RabbitMQContainer rabbitMq =
+      new RabbitMQContainer("rabbitmq:3.12-management")
+          .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
+          .withExposedPorts(5672, 15672);
+
+  private static String host;
+  private static int port;
+  private static String user;
+  private static String password;
+
+  @BeforeAll
+  static void init() {
+    host = rabbitMq.getHost();
+    port = rabbitMq.getAmqpPort();
+    user = rabbitMq.getAdminUsername();
+    password = rabbitMq.getAdminPassword();
+  }
 
   @Test
   void testNoConfFileExists() {
@@ -57,7 +80,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -70,7 +93,7 @@ class TestRabbitMqQueue {
         .when(mockChannel)
         .basicPublish(anyString(), anyString(), any(), any());
     Message<String> message = new Message<>("payload", Map.of(), Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
       queue.setChannel(mockChannel);
       assertThrows(
           RabbitMqConnectionException.class, () -> queue.publish(TASK_QUEUE_NAME, message));
@@ -101,7 +124,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -119,7 +142,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(readFromResources(DEFAULT_PROPERTIES_FILE))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 
@@ -150,9 +173,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    var properties =
-        new RabbitMqProperties(
-            DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD));
+    var properties = new RabbitMqProperties(host, port, user, password);
     try (RabbitMqQueue queue = new RabbitMqQueue(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
@@ -184,8 +205,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
     Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue =
-        new RabbitMqQueue(DEFAULT_HOST, DEFAULT_PORT, DEFAULT_USER, new String(DEFAULT_PASSWORD))) {
+    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
 
