@@ -25,7 +25,7 @@ public class RootServlet extends HttpServlet {
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
     response.setContentType("text/html");
     try {
-      RequestDispatcher dispatcher = request.getRequestDispatcher("/index.html");
+      var dispatcher = request.getRequestDispatcher("/index.html");
       if (dispatcher == null) {
         response.sendError(HttpServletResponse.SC_NOT_FOUND, "index.html not found");
         LOGGER.error("index.html not found");

@@ -51,7 +51,7 @@ public class RabbitMqQueue implements Queue {
     DeliverCallback deliverCallback =
         (consumerTag, delivery) -> {
           T payload = JsonHelper.fromJson(new String(delivery.getBody(), UTF_8), payloadType);
-          Message<T> message =
+          var message =
               new Message<>(payload, delivery.getProperties().getHeaders(), Instant.now());
 
           Acknowledger acknowledger =
@@ -144,7 +144,7 @@ public class RabbitMqQueue implements Queue {
   }
 
   private void connect(String host, int port, String user, String password) {
-    ConnectionFactory factory = new ConnectionFactory();
+    var factory = new ConnectionFactory();
     factory.setHost(host);
     factory.setPort(port);
     factory.setUsername(user);

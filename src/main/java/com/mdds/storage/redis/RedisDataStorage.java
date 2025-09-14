@@ -49,7 +49,7 @@ public class RedisDataStorage implements DataStorage {
   private void connect(String host, int port) {
     try {
       jedis = new UnifiedJedis("redis://" + host + ":" + port);
-      String result = jedis.ping();
+      var result = jedis.ping();
       if ("PONG".equals(result)) {
         LOGGER.info("Connected to Redis redis://{}:{}", host, port);
       } else {

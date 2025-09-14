@@ -22,19 +22,19 @@ public class AppContextListener implements ServletContextListener {
 
   @Override
   public void contextInitialized(ServletContextEvent sce) {
-    ServletContext ctx = sce.getServletContext();
-    String redisProperties = ctx.getInitParameter("redis.properties"); // optional
+    var ctx = sce.getServletContext();
+    var redisProperties = ctx.getInitParameter("redis.properties"); // optional
     if (redisProperties == null) {
       redisProperties = "redis.properties";
     }
-    DataStorage dataStorage =
+    var dataStorage =
         DataStorageFactory.createRedis(RedisHelper.readFromResources(redisProperties));
     ctx.setAttribute(ATTR_DATA_STORAGE, dataStorage);
   }
 
   @Override
   public void contextDestroyed(ServletContextEvent sce) {
-    ServletContext ctx = sce.getServletContext();
+    var ctx = sce.getServletContext();
     var dataStorage = (DataStorage) ctx.getAttribute(ATTR_DATA_STORAGE);
     if (dataStorage != null) {
       dataStorage.close();

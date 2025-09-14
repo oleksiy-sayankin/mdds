@@ -43,8 +43,8 @@ public class Main {
    * @throws LifecycleException when we can not start Tomcat.
    */
   public static Tomcat start(String hostName, int port, String docBase) throws LifecycleException {
-    Tomcat tomcat = new Tomcat();
-    Host host = tomcat.getHost(); // Get the default host
+    var tomcat = new Tomcat();
+    var host = tomcat.getHost(); // Get the default host
     host.setName(hostName);
     tomcat.setPort(port);
     tomcat.getConnector(); // ensure connector created
