@@ -21,7 +21,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.time.Instant;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
@@ -71,9 +70,9 @@ class TestMain {
 
   @Test
   void testRootReturnsIndexHtml() throws Exception {
-    URI uri = new URI("http://" + MDDS_SERVER_HOST + ":" + String.valueOf(mddsServerPort));
-    URL url = uri.toURL();
-    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + String.valueOf(mddsServerPort));
+    var url = uri.toURL();
+    var connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");
 
     assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
@@ -87,9 +86,9 @@ class TestMain {
 
   @Test
   void testHealthReturnsStatusOk() throws URISyntaxException, IOException {
-    URI uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/health");
-    URL url = uri.toURL();
-    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/health");
+    var url = uri.toURL();
+    var connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");
     assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
   }

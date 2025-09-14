@@ -54,15 +54,14 @@ class TestRabbitMqQueue {
 
   @Test
   void testNoConfFileExists() {
-    String randomHost = "random.host";
-    int randomPort = 89798;
-    String randomUser = "random";
-    String randomPassword = "random";
+    var randomHost = "random.host";
+    var randomPort = 89798;
+    var randomUser = "random";
+    var randomPassword = "random";
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (RabbitMqQueue queue =
-              new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword)) {
+          try (var queue = new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword)) {
             // Do nothing.
           }
         });
@@ -79,8 +78,8 @@ class TestRabbitMqQueue {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -88,12 +87,12 @@ class TestRabbitMqQueue {
 
   @Test
   void testPublishWithException() throws IOException {
-    Channel mockChannel = mock(Channel.class);
+    var mockChannel = mock(Channel.class);
     doThrow(new IOException("Simulated failure"))
         .when(mockChannel)
         .basicPublish(anyString(), anyString(), any(), any());
-    Message<String> message = new Message<>("payload", Map.of(), Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
+    var message = new Message<>("payload", Map.of(), Instant.now());
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.setChannel(mockChannel);
       assertThrows(
           RabbitMqConnectionException.class, () -> queue.publish(TASK_QUEUE_NAME, message));
@@ -102,11 +101,11 @@ class TestRabbitMqQueue {
 
   @Test
   void testNoConnectionToRabbitMq() {
-    RabbitMqProperties properties = readFromResources("no.connection.rabbitmq.properties");
+    var properties = readFromResources("no.connection.rabbitmq.properties");
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (RabbitMqQueue queue = new RabbitMqQueue(properties)) {
+          try (var queue = new RabbitMqQueue(properties)) {
             // Do nothing.
           }
         });
@@ -123,8 +122,8 @@ class TestRabbitMqQueue {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -141,10 +140,10 @@ class TestRabbitMqQueue {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
+      var actualTask = new AtomicReference<>();
 
       MessageHandler<TaskDTO> messageHandler =
           (receivedMessage, ack) -> {
@@ -152,8 +151,7 @@ class TestRabbitMqQueue {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (Subscription subscription =
-          queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
@@ -172,11 +170,11 @@ class TestRabbitMqQueue {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedTask, headers, Instant.now());
     var properties = new RabbitMqProperties(host, port, user, password);
-    try (RabbitMqQueue queue = new RabbitMqQueue(properties)) {
+    try (var queue = new RabbitMqQueue(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
+      var actualTask = new AtomicReference<>();
 
       MessageHandler<TaskDTO> messageHandler =
           (receivedMessage, ack) -> {
@@ -184,8 +182,7 @@ class TestRabbitMqQueue {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (Subscription subscription =
-          queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
@@ -204,10 +201,10 @@ class TestRabbitMqQueue {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (RabbitMqQueue queue = new RabbitMqQueue(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
+      var actualTask = new AtomicReference<>();
 
       MessageHandler<TaskDTO> messageHandler =
           (receivedMessage, ack) -> {
@@ -215,8 +212,7 @@ class TestRabbitMqQueue {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (Subscription subscription =
-          queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));

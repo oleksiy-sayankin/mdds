@@ -23,8 +23,8 @@ class TestRabbitMqHelper {
   @Test
   void testConvertFrom() {
     var headers = new HashMap<String, Object>();
-    String key = "test_key";
-    Object value = new Object();
+    var key = "test_key";
+    var value = new Object();
     headers.put(key, value);
     var expectedBasicProperties = new AMQP.BasicProperties.Builder().headers(headers).build();
     var actualBasicProperties = convertFrom(headers);

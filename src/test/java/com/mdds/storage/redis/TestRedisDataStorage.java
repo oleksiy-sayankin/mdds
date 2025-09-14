@@ -83,8 +83,8 @@ class TestRedisDataStorage {
 
   @Test
   void testNoConfFileExists() {
-    String randomHost = "random.host";
-    int randomPort = 89798;
+    var randomHost = "random.host";
+    var randomPort = 89798;
     assertThrows(
         RedisConnectionException.class,
         () -> {

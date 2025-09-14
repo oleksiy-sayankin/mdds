@@ -17,8 +17,8 @@ class TestJsonHelper {
   void testToJson() {
     var task = new TaskDTO();
     var taskId = "testId";
-    String isoFormattedString = "2024-09-04T16:21:00Z";
-    Instant instant = Instant.parse(isoFormattedString);
+    var isoFormattedString = "2024-09-04T16:21:00Z";
+    var instant = Instant.parse(isoFormattedString);
     task.setId(taskId);
     task.setDateTime(instant);
     task.setSlaeSolvingMethod("test solving method");
@@ -38,8 +38,8 @@ class TestJsonHelper {
             + " solving method\"}";
     var expectedTask = new TaskDTO();
     var taskId = "testId";
-    String isoFormattedString = "2024-09-04T16:21:00Z";
-    Instant instant = Instant.parse(isoFormattedString);
+    var isoFormattedString = "2024-09-04T16:21:00Z";
+    var instant = Instant.parse(isoFormattedString);
     expectedTask.setId(taskId);
     expectedTask.setDateTime(instant);
     expectedTask.setSlaeSolvingMethod("test solving method");
@@ -67,8 +67,7 @@ class TestJsonHelper {
 
   @Test
   void testToJsonWithException() {
-    NotConvertableToJson test;
-    test = new NotConvertableToJson() {};
+    var test = new NotConvertableToJson() {};
     assertThrows(
         JsonException.class,
         () -> {

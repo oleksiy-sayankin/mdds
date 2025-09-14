@@ -49,14 +49,14 @@ class TestQueueFactory {
 
   @Test
   void testNoConfFileExists() {
-    String randomHost = "random.host";
-    int randomPort = 89798;
-    String randomUser = "random";
-    String randomPassword = "random";
+    var randomHost = "random.host";
+    var randomPort = 89798;
+    var randomUser = "random";
+    var randomPassword = "random";
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (Queue queue =
+          try (var queue =
               QueueFactory.createRabbitMq(randomHost, randomPort, randomUser, randomPassword)) {
             // Do nothing.
           }
@@ -65,11 +65,11 @@ class TestQueueFactory {
 
   @Test
   void testNoConnectionToRabbitMq() {
-    RabbitMqProperties properties = readFromResources("no.connection.rabbitmq.properties");
+    var properties = readFromResources("no.connection.rabbitmq.properties");
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (Queue queue = QueueFactory.createRabbitMq(properties)) {
+          try (var queue = QueueFactory.createRabbitMq(properties)) {
             // Do nothing.
           }
         });
@@ -86,8 +86,8 @@ class TestQueueFactory {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -104,8 +104,8 @@ class TestQueueFactory {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -122,10 +122,10 @@ class TestQueueFactory {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
+      var actualTask = new AtomicReference<>();
 
       MessageHandler<TaskDTO> messageHandler =
           (receivedMessage, ack) -> {
@@ -133,8 +133,7 @@ class TestQueueFactory {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (Subscription subscription =
-          queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
@@ -153,11 +152,11 @@ class TestQueueFactory {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedTask, headers, Instant.now());
     var properties = new RabbitMqProperties(host, port, user, password);
-    try (Queue queue = QueueFactory.createRabbitMq(properties)) {
+    try (var queue = QueueFactory.createRabbitMq(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
+      var actualTask = new AtomicReference<>();
 
       MessageHandler<TaskDTO> messageHandler =
           (receivedMessage, ack) -> {
@@ -165,8 +164,7 @@ class TestQueueFactory {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (Subscription subscription =
-          queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
@@ -185,10 +183,10 @@ class TestQueueFactory {
     expectedTask.setDateTime(timeCreated);
     expectedTask.setSlaeSolvingMethod("test_solving_method");
     Map<String, Object> headers = new HashMap<>();
-    Message<TaskDTO> message = new Message<>(expectedTask, headers, Instant.now());
-    try (Queue queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      AtomicReference<TaskDTO> actualTask = new AtomicReference<>();
+      var actualTask = new AtomicReference<>();
 
       MessageHandler<TaskDTO> messageHandler =
           (receivedMessage, ack) -> {
@@ -196,8 +194,7 @@ class TestQueueFactory {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (Subscription subscription =
-          queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
