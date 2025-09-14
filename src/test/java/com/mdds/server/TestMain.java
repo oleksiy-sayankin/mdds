@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mdds.storage.DataStorageFactory;
 import com.mdds.storage.redis.RedisHelper;
+import com.mdds.storage.redis.RedisProperties;
 import com.mdds.util.JsonHelper;
 import dto.ResultDTO;
 import dto.TaskStatus;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import redis.embedded.RedisServer;
 
 class TestMain {
   private static Tomcat tomcat;
@@ -42,18 +44,28 @@ class TestMain {
           .getOrDefault(
               "MDDS_SERVER_WEB_APPLICATION_LOCATION",
               new File(MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION).getAbsolutePath());
+  private static final int REDIS_SERVER_PORT =
+      Integer.parseInt(
+          System.getenv()
+              .getOrDefault("REDIS_SERVER_PORT", String.valueOf(RedisProperties.DEFAULT_PORT)));
+  private static RedisServer redisServer;
 
   @BeforeAll
-  static void startServer() throws LifecycleException {
+  static void startServer() throws LifecycleException, IOException {
+    redisServer = new RedisServer(REDIS_SERVER_PORT);
+    redisServer.start();
     tomcat = Main.start(MDDS_SERVER_HOST, 0, MDDS_SERVER_WEB_APPLICATION_LOCATION);
     mddsServerPort = tomcat.getConnector().getLocalPort();
   }
 
   @AfterAll
-  static void stopServer() throws LifecycleException {
+  static void stopServer() throws LifecycleException, IOException {
     if (tomcat != null) {
       tomcat.stop();
       tomcat.destroy();
+    }
+    if (redisServer != null) {
+      redisServer.stop();
     }
   }
 

@@ -10,12 +10,33 @@ import static com.mdds.storage.redis.RedisProperties.DEFAULT_PORT;
 import com.mdds.storage.redis.RedisProperties;
 import dto.ResultDTO;
 import dto.TaskStatus;
+import java.io.IOException;
 import java.time.Instant;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import redis.embedded.RedisServer;
 
-/** We expect that Redis service is up and running for these tests. */
 class TestDataStorageFactory {
+  private static final int REDIS_SERVER_PORT =
+      Integer.parseInt(
+          System.getenv()
+              .getOrDefault("REDIS_SERVER_PORT", String.valueOf(RedisProperties.DEFAULT_PORT)));
+  private static RedisServer redisServer;
+
+  @BeforeAll
+  static void startServer() throws IOException {
+    redisServer = new RedisServer(REDIS_SERVER_PORT);
+    redisServer.start();
+  }
+
+  @AfterAll
+  static void stopServer() throws IOException {
+    if (redisServer != null) {
+      redisServer.stop();
+    }
+  }
 
   @Test
   void testPut() {
