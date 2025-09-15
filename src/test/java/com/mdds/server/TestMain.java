@@ -5,12 +5,12 @@
 package com.mdds.server;
 
 import static com.mdds.server.Main.*;
+import static com.mdds.util.CustomHelper.findFreePort;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mdds.storage.DataStorageFactory;
 import com.mdds.storage.redis.RedisHelper;
-import com.mdds.storage.redis.RedisProperties;
 import com.mdds.util.JsonHelper;
 import dto.ResultDTO;
 import dto.TaskStatus;
@@ -43,10 +43,7 @@ class TestMain {
           .getOrDefault(
               "MDDS_SERVER_WEB_APPLICATION_LOCATION",
               new File(MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION).getAbsolutePath());
-  private static final int REDIS_SERVER_PORT =
-      Integer.parseInt(
-          System.getenv()
-              .getOrDefault("REDIS_SERVER_PORT", String.valueOf(RedisProperties.DEFAULT_PORT)));
+  private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
 
   @BeforeAll

@@ -7,7 +7,7 @@ package dto;
 
 /** Represents Task statuses. */
 public enum TaskStatus {
-  IN_PROGRES,
+  IN_PROGRESS,
   DONE,
   ERROR
 }

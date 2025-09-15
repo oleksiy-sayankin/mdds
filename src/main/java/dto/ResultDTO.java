@@ -5,10 +5,14 @@
 package dto;
 
 import java.time.Instant;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /** Data Transfer Object for the result of the Executor's work. */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class ResultDTO {
   String taskId;
   Instant dateTimeTaskCreated;

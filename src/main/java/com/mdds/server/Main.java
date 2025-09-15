@@ -57,6 +57,8 @@ public class Main {
     ctx.addServletMappingDecoded("/health", "healthServlet");
     Tomcat.addServlet(ctx, "resultServlet", new ResultServlet());
     ctx.addServletMappingDecoded("/result/*", "resultServlet");
+    Tomcat.addServlet(ctx, "solveServlet", new SolveServlet());
+    ctx.addServletMappingDecoded("/solve", "solveServlet");
 
     tomcat.start();
     LOGGER.info("Server started at http://{}:{}", host.getName(), port);

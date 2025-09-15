@@ -4,6 +4,9 @@
  */
 package com.mdds.server;
 
+import com.mdds.queue.Queue;
+import com.mdds.queue.QueueFactory;
+import com.mdds.queue.rabbitmq.RabbitMqHelper;
 import com.mdds.storage.DataStorage;
 import com.mdds.storage.DataStorageFactory;
 import com.mdds.storage.redis.RedisHelper;
@@ -18,6 +21,7 @@ import jakarta.servlet.annotation.WebListener;
 @WebListener
 public class AppContextListener implements ServletContextListener {
   public static final String ATTR_DATA_STORAGE = "DATA_STORAGE";
+  public static final String ATTR_TASK_QUEUE = "TASK_QUEUE";
 
   @Override
   public void contextInitialized(ServletContextEvent sce) {
@@ -29,6 +33,13 @@ public class AppContextListener implements ServletContextListener {
     var dataStorage =
         DataStorageFactory.createRedis(RedisHelper.readFromResources(redisProperties));
     ctx.setAttribute(ATTR_DATA_STORAGE, dataStorage);
+
+    var rabbitMqProperties = ctx.getInitParameter("rabbitmq.properties");
+    if (rabbitMqProperties == null) {
+      rabbitMqProperties = "rabbitmq.properties";
+    }
+    var queue = QueueFactory.createRabbitMq(RabbitMqHelper.readFromResources(rabbitMqProperties));
+    ctx.setAttribute(ATTR_TASK_QUEUE, queue);
   }
 
   @Override
@@ -37,6 +48,10 @@ public class AppContextListener implements ServletContextListener {
     var dataStorage = (DataStorage) ctx.getAttribute(ATTR_DATA_STORAGE);
     if (dataStorage != null) {
       dataStorage.close();
+    }
+    var queue = (Queue) ctx.getAttribute(ATTR_TASK_QUEUE);
+    if (queue != null) {
+      queue.close();
     }
   }
 }

@@ -6,6 +6,7 @@ package com.mdds.storage;
 
 import static com.mdds.storage.redis.RedisProperties.DEFAULT_HOST;
 import static com.mdds.storage.redis.RedisProperties.DEFAULT_PORT;
+import static com.mdds.util.CustomHelper.findFreePort;
 
 import com.mdds.storage.redis.RedisProperties;
 import dto.ResultDTO;
@@ -19,10 +20,7 @@ import org.junit.jupiter.api.Test;
 import redis.embedded.RedisServer;
 
 class TestDataStorageFactory {
-  private static final int REDIS_SERVER_PORT =
-      Integer.parseInt(
-          System.getenv()
-              .getOrDefault("REDIS_SERVER_PORT", String.valueOf(RedisProperties.DEFAULT_PORT)));
+  private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
 
   @BeforeAll

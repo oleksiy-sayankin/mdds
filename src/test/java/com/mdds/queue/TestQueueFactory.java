@@ -5,6 +5,7 @@
 package com.mdds.queue;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
+import static dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -84,7 +85,7 @@ class TestQueueFactory {
     expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
@@ -102,7 +103,7 @@ class TestQueueFactory {
     expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
@@ -120,7 +121,7 @@ class TestQueueFactory {
     expectedTask.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
@@ -150,7 +151,7 @@ class TestQueueFactory {
     expectedTask.setMatrix(new double[][] {{55.3, 8.4}, {5.5, 7.6}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
     var properties = new RabbitMqProperties(host, port, user, password);
@@ -181,7 +182,7 @@ class TestQueueFactory {
     expectedTask.setMatrix(new double[][] {{23.3, 147.44}, {5.5, 7.7}});
     expectedTask.setId(taskId);
     expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod("test_solving_method");
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
