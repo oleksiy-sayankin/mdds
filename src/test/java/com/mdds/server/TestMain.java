@@ -18,9 +18,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.*;
 import java.time.Instant;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
@@ -28,8 +26,13 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 import redis.embedded.RedisServer;
 
+@Testcontainers
 class TestMain {
   private static Tomcat tomcat;
   private static final String MDDS_SERVER_HOST =
@@ -46,10 +49,23 @@ class TestMain {
   private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
 
+  @Container
+  private static final RabbitMQContainer rabbitMq =
+      new RabbitMQContainer("rabbitmq:3.12-management")
+          .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
+          .withExposedPorts(5672, 15672);
+
   @BeforeAll
   static void startServer() throws LifecycleException, IOException {
     redisServer = new RedisServer(REDIS_SERVER_PORT);
     redisServer.start();
+    System.setProperty("redis.host", "localhost");
+    System.setProperty("redis.port", String.valueOf(REDIS_SERVER_PORT));
+    System.setProperty("rabbitmq.host", rabbitMq.getHost());
+    System.setProperty("rabbitmq.port", String.valueOf(rabbitMq.getAmqpPort()));
+    System.setProperty("rabbitmq.user", rabbitMq.getAdminUsername());
+    System.setProperty("rabbitmq.password", rabbitMq.getAdminPassword());
+
     tomcat = Main.start(MDDS_SERVER_HOST, 0, MDDS_SERVER_WEB_APPLICATION_LOCATION);
     mddsServerPort = tomcat.getConnector().getLocalPort();
   }
@@ -67,7 +83,7 @@ class TestMain {
 
   @Test
   void testRootReturnsIndexHtml() throws Exception {
-    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + String.valueOf(mddsServerPort));
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort);
     var url = uri.toURL();
     var connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");

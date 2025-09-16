@@ -6,10 +6,10 @@ package com.mdds.server;
 
 import com.mdds.queue.Queue;
 import com.mdds.queue.QueueFactory;
-import com.mdds.queue.rabbitmq.RabbitMqHelper;
+import com.mdds.queue.rabbitmq.RabbitMqConf;
 import com.mdds.storage.DataStorage;
 import com.mdds.storage.DataStorageFactory;
-import com.mdds.storage.redis.RedisHelper;
+import com.mdds.storage.redis.RedisConf;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
@@ -26,19 +26,14 @@ public class AppContextListener implements ServletContextListener {
   @Override
   public void contextInitialized(ServletContextEvent sce) {
     var ctx = sce.getServletContext();
-    var redisProperties = ctx.getInitParameter("redis.properties"); // optional
-    if (redisProperties == null) {
-      redisProperties = "redis.properties";
-    }
-    var dataStorage =
-        DataStorageFactory.createRedis(RedisHelper.readFromResources(redisProperties));
+    var redisProperties = ctx.getInitParameter("redis.properties");
+    var redisConf = RedisConf.fromEnvOrProperties(redisProperties);
+    var dataStorage = DataStorageFactory.createRedis(redisConf);
     ctx.setAttribute(ATTR_DATA_STORAGE, dataStorage);
 
     var rabbitMqProperties = ctx.getInitParameter("rabbitmq.properties");
-    if (rabbitMqProperties == null) {
-      rabbitMqProperties = "rabbitmq.properties";
-    }
-    var queue = QueueFactory.createRabbitMq(RabbitMqHelper.readFromResources(rabbitMqProperties));
+    var rabbitMqConf = RabbitMqConf.fromEnvOrProperties(rabbitMqProperties);
+    var queue = QueueFactory.createRabbitMq(rabbitMqConf);
     ctx.setAttribute(ATTR_TASK_QUEUE, queue);
   }
 

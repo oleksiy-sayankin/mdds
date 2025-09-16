@@ -172,7 +172,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    var properties = new RabbitMqProperties(host, port, user, password);
+    var properties = new RabbitMqConf(host, port, user, password);
     try (var queue = new RabbitMqQueue(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       var actualTask = new AtomicReference<>();

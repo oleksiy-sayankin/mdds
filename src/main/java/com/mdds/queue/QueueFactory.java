@@ -4,7 +4,7 @@
  */
 package com.mdds.queue;
 
-import com.mdds.queue.rabbitmq.RabbitMqProperties;
+import com.mdds.queue.rabbitmq.RabbitMqConf;
 import com.mdds.queue.rabbitmq.RabbitMqQueue;
 
 /** Basic factory for all queues. */
@@ -15,7 +15,7 @@ public final class QueueFactory {
     return new RabbitMqQueue(host, port, user, password);
   }
 
-  public static Queue createRabbitMq(RabbitMqProperties properties) {
-    return new RabbitMqQueue(properties);
+  public static Queue createRabbitMq(RabbitMqConf conf) {
+    return new RabbitMqQueue(conf);
   }
 }

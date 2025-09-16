@@ -17,8 +17,8 @@ public class RedisDataStorage implements DataStorage {
   private UnifiedJedis jedis;
   private static final Logger LOGGER = LoggerFactory.getLogger(RedisDataStorage.class);
 
-  public RedisDataStorage(RedisProperties properties) {
-    connect(properties.host(), properties.port());
+  public RedisDataStorage(RedisConf conf) {
+    connect(conf.host(), conf.port());
   }
 
   public RedisDataStorage(String host, int port) {

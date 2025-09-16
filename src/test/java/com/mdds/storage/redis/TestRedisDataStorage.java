@@ -4,7 +4,7 @@
  */
 package com.mdds.storage.redis;
 
-import static com.mdds.storage.redis.RedisProperties.DEFAULT_HOST;
+import static com.mdds.storage.redis.RedisConf.DEFAULT_HOST;
 import static com.mdds.util.CustomHelper.findFreePort;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -45,8 +45,7 @@ class TestRedisDataStorage {
     result.setTaskStatus(TaskStatus.DONE);
     result.setSolution(new double[] {9.3, 6.278, 6.783, 3.874});
     result.setErrorMessage("");
-    try (var dataStorage =
-        new RedisDataStorage(new RedisProperties(DEFAULT_HOST, REDIS_SERVER_PORT))) {
+    try (var dataStorage = new RedisDataStorage(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, result));
     }
   }

@@ -19,7 +19,7 @@ class TestRedisHelper {
 
   @Test
   void testReadFromResources() {
-    var expectedRedisProperties = new RedisProperties("localhost", 6379);
+    var expectedRedisProperties = new RedisConf("localhost", 6379);
     var actualRedisProperties = readFromResources("redis.properties");
     Assertions.assertEquals(expectedRedisProperties, actualRedisProperties);
   }

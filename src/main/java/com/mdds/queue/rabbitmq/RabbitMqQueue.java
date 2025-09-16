@@ -22,8 +22,8 @@ public class RabbitMqQueue implements Queue {
   private Channel channel;
   private Connection connection;
 
-  public RabbitMqQueue(RabbitMqProperties properties) {
-    connect(properties.host(), properties.port(), properties.user(), properties.password());
+  public RabbitMqQueue(RabbitMqConf conf) {
+    connect(conf.host(), conf.port(), conf.user(), conf.password());
   }
 
   public RabbitMqQueue(String host, int port, String user, String password) {

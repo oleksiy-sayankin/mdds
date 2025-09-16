@@ -19,7 +19,7 @@ public final class RedisHelper {
    * @param redisProperties *.properties file inside *.jar file which is in classpath.
    * @return record with connection parameters
    */
-  public static RedisProperties readFromResources(String redisProperties) {
+  public static RedisConf readFromResources(String redisProperties) {
     var properties = new Properties();
     try (var input = RabbitMqHelper.class.getClassLoader().getResourceAsStream(redisProperties)) {
       if (input == null) {
@@ -31,13 +31,12 @@ public final class RedisHelper {
     }
     var host =
         System.getProperty(
-            "redis.host", properties.getProperty("redis.host", RedisProperties.DEFAULT_HOST));
+            "redis.host", properties.getProperty("redis.host", RedisConf.DEFAULT_HOST));
     int port =
         Integer.parseInt(
             System.getProperty(
                 "redis.port",
-                properties.getProperty(
-                    "redis.port", String.valueOf(RedisProperties.DEFAULT_PORT))));
-    return new RedisProperties(host, port);
+                properties.getProperty("redis.port", String.valueOf(RedisConf.DEFAULT_PORT))));
+    return new RedisConf(host, port);
   }
 }

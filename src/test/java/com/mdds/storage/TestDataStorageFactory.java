@@ -4,11 +4,10 @@
  */
 package com.mdds.storage;
 
-import static com.mdds.storage.redis.RedisProperties.DEFAULT_HOST;
-import static com.mdds.storage.redis.RedisProperties.DEFAULT_PORT;
+import static com.mdds.storage.redis.RedisConf.DEFAULT_HOST;
 import static com.mdds.util.CustomHelper.findFreePort;
 
-import com.mdds.storage.redis.RedisProperties;
+import com.mdds.storage.redis.RedisConf;
 import dto.ResultDTO;
 import dto.TaskStatus;
 import java.io.IOException;
@@ -47,7 +46,7 @@ class TestDataStorageFactory {
     result.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     result.setErrorMessage("");
     try (var dataStorage =
-        DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
+        DataStorageFactory.createRedis(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, result));
     }
   }
@@ -63,7 +62,7 @@ class TestDataStorageFactory {
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     expectedResult.setErrorMessage("");
     try (var dataStorage =
-        DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
+        DataStorageFactory.createRedis(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
       Assertions.assertEquals(
@@ -81,7 +80,7 @@ class TestDataStorageFactory {
     expectedResult.setTaskStatus(TaskStatus.DONE);
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     expectedResult.setErrorMessage("");
-    try (var dataStorage = DataStorageFactory.createRedis("localhost", 6379)) {
+    try (var dataStorage = DataStorageFactory.createRedis("localhost", REDIS_SERVER_PORT)) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
       Assertions.assertEquals(
@@ -92,7 +91,7 @@ class TestDataStorageFactory {
   @Test
   void testClose() {
     try (var dataStorage =
-        DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
+        DataStorageFactory.createRedis(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
       Assertions.assertDoesNotThrow(
           () -> {
             // Do nothing
@@ -103,7 +102,7 @@ class TestDataStorageFactory {
   @Test
   void testGetNull() {
     try (var dataStorage =
-        DataStorageFactory.createRedis(new RedisProperties(DEFAULT_HOST, DEFAULT_PORT))) {
+        DataStorageFactory.createRedis(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
       Assertions.assertDoesNotThrow(
           () -> Assertions.assertFalse(dataStorage.get("random key", ResultDTO.class).isPresent()));
     }

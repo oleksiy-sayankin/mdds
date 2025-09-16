@@ -4,8 +4,8 @@
  */
 package com.mdds.storage;
 
+import com.mdds.storage.redis.RedisConf;
 import com.mdds.storage.redis.RedisDataStorage;
-import com.mdds.storage.redis.RedisProperties;
 
 /** Factory class for data storages. */
 public final class DataStorageFactory {
@@ -28,7 +28,7 @@ public final class DataStorageFactory {
    * @param properties connection properties.
    * @return Connected Redis Data storage.
    */
-  public static DataStorage createRedis(RedisProperties properties) {
+  public static DataStorage createRedis(RedisConf properties) {
     return new RedisDataStorage(properties);
   }
 }

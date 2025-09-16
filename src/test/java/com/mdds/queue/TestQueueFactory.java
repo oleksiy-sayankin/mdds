@@ -9,8 +9,8 @@ import static dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.mdds.queue.rabbitmq.RabbitMqConf;
 import com.mdds.queue.rabbitmq.RabbitMqConnectionException;
-import com.mdds.queue.rabbitmq.RabbitMqProperties;
 import dto.TaskDTO;
 import java.time.Duration;
 import java.time.Instant;
@@ -154,7 +154,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    var properties = new RabbitMqProperties(host, port, user, password);
+    var properties = new RabbitMqConf(host, port, user, password);
     try (var queue = QueueFactory.createRabbitMq(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       var actualTask = new AtomicReference<>();

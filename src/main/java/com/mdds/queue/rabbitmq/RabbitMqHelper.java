@@ -4,7 +4,7 @@
  */
 package com.mdds.queue.rabbitmq;
 
-import static com.mdds.queue.rabbitmq.RabbitMqProperties.*;
+import static com.mdds.queue.rabbitmq.RabbitMqConf.*;
 
 import com.rabbitmq.client.AMQP;
 import java.io.IOException;
@@ -32,7 +32,7 @@ public final class RabbitMqHelper {
    * @param rabbitMqProperties *.properties file inside *.jar file which is in classpath.
    * @return record with connection parameters
    */
-  public static RabbitMqProperties readFromResources(String rabbitMqProperties) {
+  public static RabbitMqConf readFromResources(String rabbitMqProperties) {
     var properties = new Properties();
     try (var input =
         RabbitMqHelper.class.getClassLoader().getResourceAsStream(rabbitMqProperties)) {
@@ -57,7 +57,7 @@ public final class RabbitMqHelper {
         System.getProperty(
             "rabbitmq.user.password",
             properties.getProperty(
-                "rabbitmq.user.password", new String(RabbitMqProperties.DEFAULT_PASSWORD)));
-    return new RabbitMqProperties(host, port, user, password);
+                "rabbitmq.user.password", new String(RabbitMqConf.DEFAULT_PASSWORD)));
+    return new RabbitMqConf(host, port, user, password);
   }
 }
