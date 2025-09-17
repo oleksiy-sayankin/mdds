@@ -59,6 +59,7 @@ public class Main {
     ctx.addServletMappingDecoded("/result/*", "resultServlet");
     Tomcat.addServlet(ctx, "solveServlet", new SolveServlet());
     ctx.addServletMappingDecoded("/solve", "solveServlet");
+    ctx.setAllowCasualMultipartParsing(true);
 
     tomcat.start();
     LOGGER.info("Server started at http://{}:{}", host.getName(), port);
