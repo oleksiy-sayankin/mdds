@@ -18,12 +18,16 @@ public enum SlaeSolver {
     this.name = name;
   }
 
+  public String getName() {
+    return name;
+  }
+
   public static boolean isValid(String method) {
     if (method == null) {
       return false;
     }
     for (var slaeSolver : SlaeSolver.values()) {
-      if (slaeSolver.name().equals(method)) {
+      if (slaeSolver.getName().equals(method)) {
         return true;
       }
     }
