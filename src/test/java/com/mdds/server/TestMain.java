@@ -6,6 +6,7 @@ package com.mdds.server;
 
 import static com.mdds.server.Main.*;
 import static com.mdds.util.CustomHelper.findFreePort;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,10 +15,7 @@ import com.mdds.storage.redis.RedisHelper;
 import com.mdds.util.JsonHelper;
 import dto.ResultDTO;
 import dto.TaskStatus;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.*;
 import java.time.Instant;
 import org.apache.catalina.LifecycleException;
@@ -146,5 +144,58 @@ class TestMain {
     var body = sb.toString();
     var actualResult = JsonHelper.fromJson(body, ResultDTO.class);
     assertEquals(expectedResult, actualResult);
+  }
+
+  @Test
+  void testSolve() throws Exception {
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/solve");
+    var url = uri.toURL();
+
+    String boundary = "----TestBoundary";
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    connection.setDoOutput(true);
+    connection.setRequestMethod("POST");
+    connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+    try (var output = connection.getOutputStream()) {
+      var writer = new PrintWriter(new OutputStreamWriter(output, UTF_8), true);
+
+      // add slaeSolvingMethod
+      writer.append("--").append(boundary).append("\r\n");
+      writer.append("Content-Disposition: form-data; name=\"slaeSolvingMethod\"\r\n\r\n");
+      writer.append("numpy_exact_solver").append("\r\n");
+      writer.flush();
+
+      // add matrix
+      writer.append("--").append(boundary).append("\r\n");
+      writer.append("Content-Disposition: form-data; name=\"matrix\"; filename=\"matrix.csv\"\r\n");
+      writer.append("Content-Type: text/csv\r\n\r\n");
+      writer.flush();
+      output.write("1.3,2.4,3.1\n4.77,5.2321,6.32\n7.23,8.43,9.4343\n".getBytes(UTF_8));
+      output.write("\r\n".getBytes(UTF_8));
+      output.flush();
+
+      // put rhs
+      writer.append("--").append(boundary).append("\r\n");
+      writer.append("Content-Disposition: form-data; name=\"rhs\"; filename=\"rhs.csv\"\r\n");
+      writer.append("Content-Type: text/csv\r\n\r\n");
+      writer.flush();
+      output.write("1.3\n2.2\n3.7\n".getBytes(UTF_8));
+      output.write("\r\n".getBytes(UTF_8));
+      output.flush();
+
+      // finish the request
+      writer.append("--").append(boundary).append("--").append("\r\n");
+      writer.close();
+    }
+
+    // Check the answer
+    assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
+    assertEquals("application/json;charset=ISO-8859-1", connection.getContentType());
+
+    try (var reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+      var responseBody = reader.lines().reduce("", (a, b) -> a + b);
+      assertTrue(responseBody.contains("id"));
+    }
   }
 }
