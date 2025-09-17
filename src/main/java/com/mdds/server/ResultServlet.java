@@ -8,7 +8,6 @@ import static com.mdds.server.ServletHelper.writeJson;
 import static com.mdds.server.ServletHelper.writeNotFound;
 
 import dto.ResultDTO;
-import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,9 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Get result as document from key-value data storage. */
-@WebServlet(
-    name = "resultServlet",
-    urlPatterns = {"/result/*"})
 public class ResultServlet extends HttpServlet {
   private static final Logger LOGGER = LoggerFactory.getLogger(ResultServlet.class);
 

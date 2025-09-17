@@ -5,7 +5,6 @@
 package com.mdds.server;
 
 import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,9 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Root endpoint. Returns index.html only. */
-@WebServlet(
-    name = "rootServlet",
-    urlPatterns = {"/"})
 public class RootServlet extends HttpServlet {
   private static final Logger LOGGER = LoggerFactory.getLogger(RootServlet.class);
 

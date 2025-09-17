@@ -8,7 +8,6 @@ import static com.mdds.server.ServletHelper.*;
 
 import com.mdds.queue.Message;
 import dto.*;
-import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,9 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Servlet for solving system of linear algebraic equations. */
-@WebServlet(
-    name = "solveServlet",
-    urlPatterns = {"/solve"})
 public class SolveServlet extends HttpServlet {
   private static final Logger LOGGER = LoggerFactory.getLogger(SolveServlet.class);
   private static final String TASK_QUEUE_NAME = "task_queue";
