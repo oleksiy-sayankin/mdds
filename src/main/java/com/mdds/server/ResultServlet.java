@@ -4,15 +4,14 @@
  */
 package com.mdds.server;
 
-import static com.mdds.server.ServletHelper.writeJson;
-import static com.mdds.server.ServletHelper.writeNotFound;
-
 import dto.ResultDTO;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.mdds.server.ServletHelper.*;
 
 /** Get result as document from key-value data storage. */
 public class ResultServlet extends HttpServlet {
@@ -22,11 +21,11 @@ public class ResultServlet extends HttpServlet {
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
     LOGGER.info("Processing request in result servlet...");
     response.setContentType("application/json");
-    var taskId = ServletHelper.extractTaskId(request, response);
+    var taskId = extractTaskId(request, response);
     if (taskId.isEmpty()) {
       return;
     }
-    var storage = ServletHelper.getStorage(request, response);
+    var storage = extractDataStorage(request, response);
     if (storage.isEmpty()) {
       return;
     }

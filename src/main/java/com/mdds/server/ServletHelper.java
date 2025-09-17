@@ -28,28 +28,31 @@ public final class ServletHelper {
 
   private ServletHelper() {}
 
+  /**
+   * Gets Queue instance from the request.
+   *
+   * @param request Http request.
+   * @param response Http response.
+   * @return Queue instance.
+   */
   public static Optional<Queue> extractQueue(
       HttpServletRequest request, HttpServletResponse response) {
-    var ctx = request.getServletContext();
-    var taskQueue = (Queue) ctx.getAttribute(AppContextListener.ATTR_TASK_QUEUE);
-    if (taskQueue == null) {
-      sendError(response, SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
-      return Optional.empty();
-    }
-    return Optional.of(taskQueue);
+    return Optional.ofNullable(
+            (Queue) request.getServletContext().getAttribute(AppContextListener.ATTR_TASK_QUEUE))
+        .or(
+            () -> {
+              sendError(response, SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
+              return Optional.empty();
+            });
   }
 
-  public static Optional<DataStorage> extractDataStorage(
-      HttpServletRequest request, HttpServletResponse response) {
-    var ctx = request.getServletContext();
-    var storage = (DataStorage) ctx.getAttribute(AppContextListener.ATTR_DATA_STORAGE);
-    if (storage == null) {
-      sendError(response, SC_INTERNAL_SERVER_ERROR, "Service Data Storage is not initialized");
-      return Optional.empty();
-    }
-    return Optional.of(storage);
-  }
-
+  /**
+   * Extracts string containing solving method and converts it to enum variable.
+   *
+   * @param request Http request.
+   * @param response Http response.
+   * @return solving method.
+   */
   public static Optional<SlaeSolver> extractSolvingMethod(
       HttpServletRequest request, HttpServletResponse response) {
     var method = request.getParameter("slaeSolvingMethod");
@@ -75,6 +78,12 @@ public final class ServletHelper {
     }
   }
 
+  /**
+   * Write Json object to Http response.
+   *
+   * @param response Http response where to write data.
+   * @param result object to be written as Json.
+   */
   public static void writeJson(HttpServletResponse response, Object result) {
     try {
       response.getWriter().write(JsonHelper.toJson(result));
@@ -83,6 +92,13 @@ public final class ServletHelper {
     }
   }
 
+  /**
+   * Extracts matrix of the equation from the request.
+   *
+   * @param request Http request.
+   * @param response Http response.
+   * @return matrix from the request.
+   */
   public static Optional<double[][]> extractMatrix(
       HttpServletRequest request, HttpServletResponse response) {
     try {
@@ -101,6 +117,13 @@ public final class ServletHelper {
     }
   }
 
+  /**
+   * Extracts right hand side (rhs) vector of the equation from the request.
+   *
+   * @param request Http request.
+   * @param response Http response.
+   * @return right hand side vector from the request.
+   */
   public static Optional<double[]> extractRhs(
       HttpServletRequest request, HttpServletResponse response) {
     try {
@@ -118,6 +141,11 @@ public final class ServletHelper {
     }
   }
 
+  /**
+   * Writes error message that a task with a certain id does not exist.
+   *
+   * @param response Http response.
+   */
   public static void writeNotFound(HttpServletResponse response) {
     try {
       response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -127,7 +155,14 @@ public final class ServletHelper {
     }
   }
 
-  public static Optional<DataStorage> getStorage(
+  /**
+   * Gets DataStorage instance from the request.
+   *
+   * @param request Http request.
+   * @param response Http response.
+   * @return DataStorage instance.
+   */
+  public static Optional<DataStorage> extractDataStorage(
       HttpServletRequest request, HttpServletResponse response) {
     return Optional.ofNullable(
             (DataStorage)
@@ -140,6 +175,13 @@ public final class ServletHelper {
             });
   }
 
+  /**
+   * Extracts task id from the request.
+   *
+   * @param request Http request.
+   * @param response Http response.
+   * @return task id from the request.
+   */
   public static Optional<String> extractTaskId(
       HttpServletRequest request, HttpServletResponse response) {
     var path = request.getPathInfo();
