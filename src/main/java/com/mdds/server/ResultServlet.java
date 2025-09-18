@@ -4,14 +4,14 @@
  */
 package com.mdds.server;
 
+import static com.mdds.server.ServletHelper.*;
+
 import dto.ResultDTO;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static com.mdds.server.ServletHelper.*;
 
 /** Get result as document from key-value data storage. */
 public class ResultServlet extends HttpServlet {
