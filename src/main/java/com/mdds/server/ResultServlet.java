@@ -22,18 +22,15 @@ public class ResultServlet extends HttpServlet {
     LOGGER.info("Processing request in result servlet...");
     response.setContentType("application/json");
     var taskId = extractTaskId(request, response);
-    if (taskId.isEmpty()) {
-      return;
-    }
     var storage = extractDataStorage(request, response);
-    if (storage.isEmpty()) {
-      return;
-    }
-    var result = storage.get().get(taskId.get(), ResultDTO.class);
-    if (result.isEmpty()) {
-      writeNotFound(response);
-      return;
-    }
-    writeJson(response, result.get());
+
+    storage.ifPresent(
+        s ->
+            taskId.ifPresent(
+                t -> {
+                  var result = s.get(t, ResultDTO.class);
+                  result.ifPresentOrElse(
+                      r -> writeJson(response, r), () -> writeNotFound(response));
+                }));
   }
 }

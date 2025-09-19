@@ -39,13 +39,19 @@ public class SolveServlet extends HttpServlet {
     var taskId = UUID.randomUUID().toString();
     var now = Instant.now();
     // Put result to storage
-    var result = new ResultDTO(taskId, now, null, TaskStatus.IN_PROGRESS, null, null);
-    storage.get().put(taskId, result);
+    storage.ifPresent(
+        s -> s.put(taskId, new ResultDTO(taskId, now, null, TaskStatus.IN_PROGRESS, null, null)));
 
     // create TaskDTO and publish to queue
-    var task = new TaskDTO(taskId, now, matrix.get(), rhs.get(), method.get());
-    var message = new Message<>(task, Collections.emptyMap(), now);
-    queue.get().publish(TASK_QUEUE_NAME, message);
+    queue.ifPresent(
+        q ->
+            q.publish(
+                TASK_QUEUE_NAME,
+                new Message<>(
+                    new TaskDTO(
+                        taskId, now, matrix.orElseThrow(), rhs.orElseThrow(), method.orElseThrow()),
+                    Collections.emptyMap(),
+                    now)));
     response.setContentType("application/json");
     writeJson(response, new TaskIdResponseDTO(taskId));
   }

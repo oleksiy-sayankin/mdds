@@ -40,6 +40,7 @@ class TestResultServlet {
 
   @Test
   void testDoGetPathIsEmpty() throws IOException {
+    when(request.getServletContext()).thenReturn(servletContext);
     servlet.doGet(request, response);
     verify(response).setContentType("application/json");
     verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Path is empty");
@@ -48,6 +49,7 @@ class TestResultServlet {
   @Test
   void testDoGetNoTaskId() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/");
+    when(request.getServletContext()).thenReturn(servletContext);
     servlet.doGet(request, response);
     verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Task id missing");
   }
