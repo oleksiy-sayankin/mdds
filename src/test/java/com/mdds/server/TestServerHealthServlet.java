@@ -14,14 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(TestLoggerFactoryExtension.class)
-class TestHealthServlet {
-  private HealthServlet servlet;
+class TestServerHealthServlet {
+  private ServerHealthServlet servlet;
   private HttpServletRequest request;
   private HttpServletResponse response;
 
   @BeforeEach
   void setUp() {
-    servlet = new HealthServlet();
+    servlet = new ServerHealthServlet();
     request = mock(HttpServletRequest.class);
     response = mock(HttpServletResponse.class);
   }

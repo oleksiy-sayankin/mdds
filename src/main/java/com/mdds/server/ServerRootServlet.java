@@ -13,8 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Root endpoint. Returns index.html only. */
-public class RootServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(RootServlet.class);
+public class ServerRootServlet extends HttpServlet {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerRootServlet.class);
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {

@@ -19,15 +19,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(TestLoggerFactoryExtension.class)
-class TestRootServlet {
-  private RootServlet servlet;
+class TestServerRootServlet {
+  private ServerRootServlet servlet;
   private HttpServletRequest request;
   private HttpServletResponse response;
   private RequestDispatcher dispatcher;
 
   @BeforeEach
   void setUp() {
-    servlet = new RootServlet();
+    servlet = new ServerRootServlet();
     request = mock(HttpServletRequest.class);
     response = mock(HttpServletResponse.class);
     dispatcher = mock(RequestDispatcher.class);
@@ -50,7 +50,7 @@ class TestRootServlet {
 
   @Test
   void testDoGetHandlesException() throws Exception {
-    TestLogger logger = getTestLogger(RootServlet.class);
+    TestLogger logger = getTestLogger(ServerRootServlet.class);
     when(request.getRequestDispatcher("/index.html")).thenReturn(dispatcher);
     doThrow(new ServletException("Simulated error")).when(dispatcher).forward(request, response);
     servlet.doGet(request, response);

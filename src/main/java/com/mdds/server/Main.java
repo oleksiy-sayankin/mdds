@@ -51,14 +51,14 @@ public class Main {
     var ctx = tomcat.addWebapp(host, "", docBase);
     // Register listener and servlets programmatically
     ctx.addApplicationListener(AppContextListener.class.getName());
-    Tomcat.addServlet(ctx, "rootServlet", new RootServlet());
-    ctx.addServletMappingDecoded("/", "rootServlet");
-    Tomcat.addServlet(ctx, "healthServlet", new HealthServlet());
-    ctx.addServletMappingDecoded("/health", "healthServlet");
-    Tomcat.addServlet(ctx, "resultServlet", new ResultServlet());
-    ctx.addServletMappingDecoded("/result/*", "resultServlet");
-    Tomcat.addServlet(ctx, "solveServlet", new SolveServlet());
-    ctx.addServletMappingDecoded("/solve", "solveServlet");
+    Tomcat.addServlet(ctx, "serverRootServlet", new ServerRootServlet());
+    ctx.addServletMappingDecoded("/", "serverRootServlet");
+    Tomcat.addServlet(ctx, "serverHealthServlet", new ServerHealthServlet());
+    ctx.addServletMappingDecoded("/health", "serverHealthServlet");
+    Tomcat.addServlet(ctx, "serverResultServlet", new ServerResultServlet());
+    ctx.addServletMappingDecoded("/result/*", "serverResultServlet");
+    Tomcat.addServlet(ctx, "serverSolveServlet", new ServerSolveServlet());
+    ctx.addServletMappingDecoded("/solve", "serverSolveServlet");
     ctx.setAllowCasualMultipartParsing(true);
 
     tomcat.start();

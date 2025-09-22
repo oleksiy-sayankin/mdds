@@ -18,8 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Servlet for solving system of linear algebraic equations. */
-public class SolveServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SolveServlet.class);
+public class ServerSolveServlet extends HttpServlet {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerSolveServlet.class);
   private static final String TASK_QUEUE_NAME = "task_queue";
 
   @Override

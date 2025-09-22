@@ -20,8 +20,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class TestResultServlet {
-  private ResultServlet servlet;
+class TestServerResultServlet {
+  private ServerResultServlet servlet;
   private HttpServletRequest request;
   private HttpServletResponse response;
   private ServletContext servletContext;
@@ -30,7 +30,7 @@ class TestResultServlet {
 
   @BeforeEach
   void setUp() {
-    servlet = new ResultServlet();
+    servlet = new ServerResultServlet();
     request = mock(HttpServletRequest.class);
     response = mock(HttpServletResponse.class);
     servletContext = mock(ServletContext.class);

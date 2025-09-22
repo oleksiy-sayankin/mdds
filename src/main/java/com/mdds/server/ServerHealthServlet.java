@@ -11,8 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Health endpoint. Returns status ok. */
-public class HealthServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(HealthServlet.class);
+public class ServerHealthServlet extends HttpServlet {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerHealthServlet.class);
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {

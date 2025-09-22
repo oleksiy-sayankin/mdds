@@ -22,8 +22,8 @@ import java.io.PrintWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class TestSolveServlet {
-  private SolveServlet servlet;
+class TestServerSolveServlet {
+  private ServerSolveServlet servlet;
   private HttpServletRequest request;
   private HttpServletResponse response;
   private ServletContext servletContext;
@@ -32,7 +32,7 @@ class TestSolveServlet {
 
   @BeforeEach
   void setUp() {
-    servlet = new SolveServlet();
+    servlet = new ServerSolveServlet();
     request = mock(HttpServletRequest.class);
     response = mock(HttpServletResponse.class);
     servletContext = mock(ServletContext.class);

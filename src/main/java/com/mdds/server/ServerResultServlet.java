@@ -14,8 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Get result as document from key-value data storage. */
-public class ResultServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ResultServlet.class);
+public class ServerResultServlet extends HttpServlet {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ServerResultServlet.class);
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
