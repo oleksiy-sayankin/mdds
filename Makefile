@@ -316,6 +316,7 @@ check_license:
 		-not -name "*.gitignore" \
 		-not -name "*.json" \
 		-not -name "*.env" \
+		-not -name "*.iml" \
 		-not -name "__init__.py"); \
 	STATUS=0; \
 	for f in $$FILES; do \
