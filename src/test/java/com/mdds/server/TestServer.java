@@ -4,7 +4,7 @@
  */
 package com.mdds.server;
 
-import static com.mdds.server.Main.*;
+import static com.mdds.server.Server.*;
 import static com.mdds.util.CustomHelper.findFreePort;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,7 +31,7 @@ import org.testcontainers.utility.MountableFile;
 import redis.embedded.RedisServer;
 
 @Testcontainers
-class TestMain {
+class TestServer {
   private static Tomcat tomcat;
   private static final String MDDS_SERVER_HOST =
       System.getenv().getOrDefault("MDDS_SERVER_HOST", MDDS_SERVER_DEFAULT_HOST);
@@ -64,7 +64,7 @@ class TestMain {
     System.setProperty("rabbitmq.user", rabbitMq.getAdminUsername());
     System.setProperty("rabbitmq.password", rabbitMq.getAdminPassword());
 
-    tomcat = Main.start(MDDS_SERVER_HOST, 0, MDDS_SERVER_WEB_APPLICATION_LOCATION);
+    tomcat = Server.start(MDDS_SERVER_HOST, 0, MDDS_SERVER_WEB_APPLICATION_LOCATION);
     mddsServerPort = tomcat.getConnector().getLocalPort();
   }
 

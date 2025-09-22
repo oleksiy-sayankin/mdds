@@ -2,7 +2,7 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 """
-Main entry point
+Server entry point
 """
 import logging
 import uuid
@@ -86,7 +86,7 @@ def index():
     """
     Root endpoint.
 
-    :return: Main page index.html
+    :return: Server page index.html
     """
     return FileResponse(os.path.join(CLIENT_DIR, "index.html"))
 

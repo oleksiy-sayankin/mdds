@@ -205,7 +205,7 @@
           </descriptorRefs>
           <archive>
             <manifest>
-              <mainClass>com.mdds.server.Main</mainClass>
+              <mainClass>com.mdds.server.Server</mainClass>
             </manifest>
           </archive>
         </configuration>
