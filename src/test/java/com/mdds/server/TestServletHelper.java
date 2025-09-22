@@ -45,7 +45,7 @@ class TestServletHelper {
   @Test
   void testExtractQueueWhenQueueExists() {
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
     var actualQueue = extractQueue(request, response);
     actualQueue.ifPresent(q -> assertEquals(queue, q));
   }
@@ -61,7 +61,8 @@ class TestServletHelper {
   @Test
   void testExtractDataStorageWhenDataStorageExists() {
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     var actualDataStorage = extractDataStorage(request, response);
     actualDataStorage.ifPresent(ds -> assertEquals(dataStorage, ds));
   }

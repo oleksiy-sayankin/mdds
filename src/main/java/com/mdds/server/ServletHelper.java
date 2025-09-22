@@ -38,7 +38,8 @@ public final class ServletHelper {
   public static Optional<Queue> extractQueue(
       HttpServletRequest request, HttpServletResponse response) {
     return Optional.ofNullable(
-            (Queue) request.getServletContext().getAttribute(AppContextListener.ATTR_TASK_QUEUE))
+            (Queue)
+                request.getServletContext().getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE))
         .or(
             () -> {
               sendError(response, SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
@@ -166,7 +167,9 @@ public final class ServletHelper {
       HttpServletRequest request, HttpServletResponse response) {
     return Optional.ofNullable(
             (DataStorage)
-                request.getServletContext().getAttribute(AppContextListener.ATTR_DATA_STORAGE))
+                request
+                    .getServletContext()
+                    .getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
         .or(
             () -> {
               sendError(

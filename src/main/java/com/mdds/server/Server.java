@@ -50,7 +50,7 @@ public class Server {
 
     var ctx = tomcat.addWebapp(host, "", docBase);
     // Register listener and servlets programmatically
-    ctx.addApplicationListener(AppContextListener.class.getName());
+    ctx.addApplicationListener(ServerAppContextListener.class.getName());
     Tomcat.addServlet(ctx, "serverRootServlet", new ServerRootServlet());
     ctx.addServletMappingDecoded("/", "serverRootServlet");
     Tomcat.addServlet(ctx, "serverHealthServlet", new ServerHealthServlet());

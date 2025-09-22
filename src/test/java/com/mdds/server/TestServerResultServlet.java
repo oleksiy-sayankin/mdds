@@ -69,7 +69,8 @@ class TestServerResultServlet {
   void testDoGetNoResultForProvidedTaskId() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/test_task_id");
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     when(response.getWriter()).thenReturn(printWriter);
     servlet.doGet(request, response);
     verify(printWriter).write("{\"error\":\"no_result_for_provided_task_id\"}");
@@ -80,7 +81,8 @@ class TestServerResultServlet {
     var taskId = "test_task_id";
     when(request.getPathInfo()).thenReturn("/result/" + taskId);
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     when(response.getWriter()).thenReturn(printWriter);
 
     var expectedResult = new ResultDTO();

@@ -19,7 +19,7 @@ import jakarta.servlet.annotation.WebListener;
  * when context is destroyed.
  */
 @WebListener
-public class AppContextListener implements ServletContextListener {
+public class ServerAppContextListener implements ServletContextListener {
   public static final String ATTR_DATA_STORAGE = "DATA_STORAGE";
   public static final String ATTR_TASK_QUEUE = "TASK_QUEUE";
 

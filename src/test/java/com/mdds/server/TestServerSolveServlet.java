@@ -68,11 +68,12 @@ class TestServerSolveServlet {
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -96,11 +97,12 @@ class TestServerSolveServlet {
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -128,11 +130,12 @@ class TestServerSolveServlet {
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -165,11 +168,12 @@ class TestServerSolveServlet {
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -205,7 +209,8 @@ class TestServerSolveServlet {
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_DATA_STORAGE)).thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
+        .thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -241,7 +246,7 @@ class TestServerSolveServlet {
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(AppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
 
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
