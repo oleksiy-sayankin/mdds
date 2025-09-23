@@ -26,13 +26,11 @@ public class ServerAppContextListener implements ServletContextListener {
   @Override
   public void contextInitialized(ServletContextEvent sce) {
     var ctx = sce.getServletContext();
-    var redisProperties = ctx.getInitParameter("redis.properties");
-    var redisConf = RedisConf.fromEnvOrProperties(redisProperties);
+    var redisConf = RedisConf.fromEnvOrDefaultProperties();
     var dataStorage = DataStorageFactory.createRedis(redisConf);
     ctx.setAttribute(ATTR_DATA_STORAGE, dataStorage);
 
-    var rabbitMqProperties = ctx.getInitParameter("rabbitmq.properties");
-    var rabbitMqConf = RabbitMqConf.fromEnvOrProperties(rabbitMqProperties);
+    var rabbitMqConf = RabbitMqConf.fromEnvOrDefaultProperties();
     var queue = QueueFactory.createRabbitMq(rabbitMqConf);
     ctx.setAttribute(ATTR_TASK_QUEUE, queue);
   }

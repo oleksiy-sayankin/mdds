@@ -4,6 +4,8 @@
  */
 package com.mdds.queue.rabbitmq;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import static com.mdds.common.util.CommonHelper.readPropertiesOrEmpty;
 import static com.mdds.common.util.ConfigResolution.resolveInt;
 import static com.mdds.common.util.ConfigResolution.resolveString;
@@ -21,7 +23,9 @@ public record RabbitMqConf(String host, int port, String user, String password) 
   public static final int DEFAULT_PORT = 5672;
   public static final String DEFAULT_USER = "guest";
   public static final char[] DEFAULT_PASSWORD = new char[] {'g', 'u', 'e', 's', 't'};
+  public static final String RABBITMQ_DEFAULT_CONF_FILE_NAME = "rabbitmq.properties";
 
+  @VisibleForTesting
   public static RabbitMqConf fromEnvOrProperties(String fileName) {
     var props = readPropertiesOrEmpty(fileName);
     var host = resolveString("rabbitmq.host", "RABBITMQ_HOST", props, DEFAULT_HOST);
@@ -31,5 +35,9 @@ public record RabbitMqConf(String host, int port, String user, String password) 
         resolveString(
             "rabbitmq.password", "RABBITMQ_PASSWORD", props, new String(DEFAULT_PASSWORD));
     return new RabbitMqConf(host, port, user, password);
+  }
+
+  public static RabbitMqConf fromEnvOrDefaultProperties() {
+    return fromEnvOrProperties(RABBITMQ_DEFAULT_CONF_FILE_NAME);
   }
 }
