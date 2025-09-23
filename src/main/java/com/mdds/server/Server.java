@@ -4,7 +4,8 @@
  */
 package com.mdds.server;
 
-import java.io.File;
+import static com.mdds.server.ServerConf.fromEnvOrDefaultProperties;
+
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 import org.slf4j.Logger;
@@ -12,24 +13,11 @@ import org.slf4j.LoggerFactory;
 
 /** Start point for web server. */
 public class Server {
-  public static final String MDDS_SERVER_DEFAULT_HOST = "localhost";
-  public static final int MDDS_SERVER_DEFAULT_PORT = 8000;
-  public static final String MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION =
-      System.getProperty("user.dir") + File.separator + "mdds_client";
   private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
 
   public static void main(String[] args) throws LifecycleException {
-    var hostName = System.getenv().getOrDefault("MDDS_SERVER_HOST", MDDS_SERVER_DEFAULT_HOST);
-    var port =
-        Integer.parseInt(
-            System.getenv()
-                .getOrDefault("MDDS_SERVER_PORT", String.valueOf(MDDS_SERVER_DEFAULT_PORT)));
-    var webappDirLocation =
-        System.getenv()
-            .getOrDefault(
-                "MDDS_SERVER_WEB_APPLICATION_LOCATION",
-                MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION);
-    start(hostName, port, webappDirLocation).getServer().await();
+    var conf = fromEnvOrDefaultProperties();
+    start(conf.host(), conf.port(), conf.webappDirLocation()).getServer().await();
   }
 
   /**

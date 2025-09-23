@@ -4,14 +4,13 @@
  */
 package com.mdds.server;
 
-import static com.mdds.server.Server.*;
 import static com.mdds.util.CustomHelper.findFreePort;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mdds.storage.DataStorageFactory;
-import com.mdds.storage.redis.RedisHelper;
+import com.mdds.storage.redis.RedisConf;
 import com.mdds.util.JsonHelper;
 import dto.ResultDTO;
 import dto.TaskStatus;
@@ -33,17 +32,10 @@ import redis.embedded.RedisServer;
 @Testcontainers
 class TestServer {
   private static Tomcat tomcat;
-  private static final String MDDS_SERVER_HOST =
-      System.getenv().getOrDefault("MDDS_SERVER_HOST", MDDS_SERVER_DEFAULT_HOST);
-  private static int mddsServerPort =
-      Integer.parseInt(
-          System.getenv()
-              .getOrDefault("MDDS_SERVER_PORT", String.valueOf(MDDS_SERVER_DEFAULT_PORT)));
+  private static final String MDDS_SERVER_HOST = ServerConf.fromEnvOrDefaultProperties().host();
+  private static int mddsServerPort = ServerConf.fromEnvOrDefaultProperties().port();
   private static final String MDDS_SERVER_WEB_APPLICATION_LOCATION =
-      System.getenv()
-          .getOrDefault(
-              "MDDS_SERVER_WEB_APPLICATION_LOCATION",
-              new File(MDDS_SERVER_DEFAULT_WEB_APPLICATION_LOCATION).getAbsolutePath());
+      ServerConf.fromEnvOrDefaultProperties().webappDirLocation();
   private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
 
@@ -57,7 +49,7 @@ class TestServer {
   static void startServer() throws LifecycleException, IOException {
     redisServer = new RedisServer(REDIS_SERVER_PORT);
     redisServer.start();
-    System.setProperty("redis.host", "localhost");
+    System.setProperty("redis.host", RedisConf.DEFAULT_HOST);
     System.setProperty("redis.port", String.valueOf(REDIS_SERVER_PORT));
     System.setProperty("rabbitmq.host", rabbitMq.getHost());
     System.setProperty("rabbitmq.port", String.valueOf(rabbitMq.getAmqpPort()));
@@ -116,8 +108,7 @@ class TestServer {
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
 
     // We expect Redis service is up and running here
-    try (var storage =
-        DataStorageFactory.createRedis(RedisHelper.readFromResources("redis.properties"))) {
+    try (var storage = DataStorageFactory.createRedis(RedisConf.fromEnvOrDefaultProperties())) {
       storage.put(taskId, expectedResult);
       // Test that data is in data storage
       var actualResult = storage.get(taskId, ResultDTO.class);
