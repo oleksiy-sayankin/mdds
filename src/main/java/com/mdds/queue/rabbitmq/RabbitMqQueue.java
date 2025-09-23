@@ -12,6 +12,7 @@ import com.mdds.util.JsonHelper;
 import com.rabbitmq.client.*;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,17 @@ public class RabbitMqQueue implements Queue {
     connect(host, port, user, password);
   }
 
+  /**
+   * Converts Map to AMQP.BasicProperties.
+   *
+   * @param headers Map with parameters.
+   * @return Equivalent of the input map but as AMQP.BasicProperties
+   */
+  @VisibleForTesting
+  static AMQP.BasicProperties convertFrom(Map<String, Object> headers) {
+    return new AMQP.BasicProperties.Builder().headers(headers).build();
+  }
+
   @Override
   public <T> void publish(String queueName, Message<T> message) {
     declareQueue(queueName);
@@ -37,7 +49,7 @@ public class RabbitMqQueue implements Queue {
       channel.basicPublish(
           "",
           queueName,
-          RabbitMqHelper.convertFrom(message.headers()),
+          convertFrom(message.headers()),
           JsonHelper.toJson(message.payload()).getBytes());
     } catch (IOException e) {
       throw new RabbitMqConnectionException("Failed to publish to queue: " + queueName, e);

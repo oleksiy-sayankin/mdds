@@ -29,14 +29,10 @@ public final class RedisHelper {
     } catch (IOException e) {
       throw new RedisConnectionException("Could not load file " + redisProperties, e);
     }
-    var host =
-        System.getProperty(
-            "redis.host", properties.getProperty("redis.host", RedisConf.DEFAULT_HOST));
+    var host = properties.getProperty("redis.host", RedisConf.DEFAULT_HOST);
     int port =
         Integer.parseInt(
-            System.getProperty(
-                "redis.port",
-                properties.getProperty("redis.port", String.valueOf(RedisConf.DEFAULT_PORT))));
+            properties.getProperty("redis.port", String.valueOf(RedisConf.DEFAULT_PORT)));
     return new RedisConf(host, port);
   }
 }

@@ -6,24 +6,12 @@ package com.mdds.queue.rabbitmq;
 
 import static com.mdds.queue.rabbitmq.RabbitMqConf.*;
 
-import com.rabbitmq.client.AMQP;
 import java.io.IOException;
-import java.util.Map;
 import java.util.Properties;
 
 /** Utility method for RabbitMq. */
 public final class RabbitMqHelper {
   private RabbitMqHelper() {}
-
-  /**
-   * Converts Map to AMQP.BasicProperties.
-   *
-   * @param headers Map with parameters.
-   * @return Equivalent of the input map but as AMQP.BasicProperties
-   */
-  public static AMQP.BasicProperties convertFrom(Map<String, Object> headers) {
-    return new AMQP.BasicProperties.Builder().headers(headers).build();
-  }
 
   /**
    * Reads RabbitMq connection parameters from properties file in classpath. File is searched inside

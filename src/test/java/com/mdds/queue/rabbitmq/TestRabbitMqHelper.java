@@ -4,8 +4,8 @@
  */
 package com.mdds.queue.rabbitmq;
 
-import static com.mdds.queue.rabbitmq.RabbitMqHelper.convertFrom;
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
+import static com.mdds.queue.rabbitmq.RabbitMqQueue.convertFrom;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.rabbitmq.client.AMQP;
