@@ -56,7 +56,7 @@ public class ConfigResolution {
     try {
       return Integer.parseInt(v);
     } catch (NumberFormatException e) {
-      LOGGER.info("Error parsing {}", v, e);
+      LOGGER.warn("Error parsing {}", v, e);
       return defaultValue;
     }
   }

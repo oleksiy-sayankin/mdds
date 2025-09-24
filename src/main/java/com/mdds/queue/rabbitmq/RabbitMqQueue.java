@@ -59,6 +59,7 @@ public class RabbitMqQueue implements Queue {
   @Override
   public <T> Subscription subscribe(
       String queueName, Class<T> payloadType, MessageHandler<T> handler) {
+    declareQueue(queueName);
     String tag;
     DeliverCallback deliverCallback =
         (consumerTag, delivery) -> {

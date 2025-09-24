@@ -4,7 +4,7 @@
  */
 package com.mdds.server;
 
-import static com.mdds.server.ServerConf.fromEnvOrDefaultProperties;
+import static com.mdds.server.ServerConfFactory.fromEnvOrDefaultProperties;
 
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;

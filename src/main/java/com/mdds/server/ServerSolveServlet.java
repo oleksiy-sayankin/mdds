@@ -4,8 +4,10 @@
  */
 package com.mdds.server;
 
+import static com.mdds.common.AppConstants.TASK_QUEUE_NAME;
 import static com.mdds.server.ServletHelper.*;
 
+import com.mdds.common.AppConstantsFactory;
 import com.mdds.queue.Message;
 import dto.*;
 import jakarta.servlet.http.HttpServlet;
@@ -20,7 +22,6 @@ import org.slf4j.LoggerFactory;
 /** Servlet for solving system of linear algebraic equations. */
 public class ServerSolveServlet extends HttpServlet {
   private static final Logger LOGGER = LoggerFactory.getLogger(ServerSolveServlet.class);
-  private static final String TASK_QUEUE_NAME = "task_queue";
 
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response) {
@@ -46,7 +47,7 @@ public class ServerSolveServlet extends HttpServlet {
     queue.ifPresent(
         q ->
             q.publish(
-                TASK_QUEUE_NAME,
+                AppConstantsFactory.getString(TASK_QUEUE_NAME),
                 new Message<>(
                     new TaskDTO(
                         taskId, now, matrix.orElseThrow(), rhs.orElseThrow(), method.orElseThrow()),

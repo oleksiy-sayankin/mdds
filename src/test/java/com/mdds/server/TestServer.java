@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mdds.storage.DataStorageFactory;
-import com.mdds.storage.redis.RedisConf;
+import com.mdds.storage.redis.RedisConfFactory;
 import com.mdds.util.JsonHelper;
 import dto.ResultDTO;
 import dto.TaskStatus;
@@ -32,10 +32,11 @@ import redis.embedded.RedisServer;
 @Testcontainers
 class TestServer {
   private static Tomcat tomcat;
-  private static final String MDDS_SERVER_HOST = ServerConf.fromEnvOrDefaultProperties().host();
-  private static int mddsServerPort = ServerConf.fromEnvOrDefaultProperties().port();
+  private static final String MDDS_SERVER_HOST =
+      ServerConfFactory.fromEnvOrDefaultProperties().host();
+  private static final int MDDS_SERVER_PORT = findFreePort();
   private static final String MDDS_SERVER_WEB_APPLICATION_LOCATION =
-      ServerConf.fromEnvOrDefaultProperties().webappDirLocation();
+      ServerConfFactory.fromEnvOrDefaultProperties().webappDirLocation();
   private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
 
@@ -49,15 +50,14 @@ class TestServer {
   static void startServer() throws LifecycleException, IOException {
     redisServer = new RedisServer(REDIS_SERVER_PORT);
     redisServer.start();
-    System.setProperty("redis.host", RedisConf.DEFAULT_HOST);
+    System.setProperty("redis.host", "localhost");
     System.setProperty("redis.port", String.valueOf(REDIS_SERVER_PORT));
     System.setProperty("rabbitmq.host", rabbitMq.getHost());
     System.setProperty("rabbitmq.port", String.valueOf(rabbitMq.getAmqpPort()));
     System.setProperty("rabbitmq.user", rabbitMq.getAdminUsername());
     System.setProperty("rabbitmq.password", rabbitMq.getAdminPassword());
 
-    tomcat = Server.start(MDDS_SERVER_HOST, 0, MDDS_SERVER_WEB_APPLICATION_LOCATION);
-    mddsServerPort = tomcat.getConnector().getLocalPort();
+    tomcat = Server.start(MDDS_SERVER_HOST, MDDS_SERVER_PORT, MDDS_SERVER_WEB_APPLICATION_LOCATION);
   }
 
   @AfterAll
@@ -73,7 +73,7 @@ class TestServer {
 
   @Test
   void testRootReturnsIndexHtml() throws Exception {
-    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort);
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + MDDS_SERVER_PORT);
     var url = uri.toURL();
     var connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");
@@ -89,7 +89,7 @@ class TestServer {
 
   @Test
   void testHealthReturnsStatusOk() throws URISyntaxException, IOException {
-    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/health");
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + MDDS_SERVER_PORT + "/health");
     var url = uri.toURL();
     var connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");
@@ -108,7 +108,8 @@ class TestServer {
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
 
     // We expect Redis service is up and running here
-    try (var storage = DataStorageFactory.createRedis(RedisConf.fromEnvOrDefaultProperties())) {
+    try (var storage =
+        DataStorageFactory.createRedis(RedisConfFactory.fromEnvOrDefaultProperties())) {
       storage.put(taskId, expectedResult);
       // Test that data is in data storage
       var actualResult = storage.get(taskId, ResultDTO.class);
@@ -117,7 +118,7 @@ class TestServer {
     }
 
     // Request result using endpoint
-    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/result/" + taskId);
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + MDDS_SERVER_PORT + "/result/" + taskId);
     var url = uri.toURL();
     var connection = (HttpURLConnection) url.openConnection();
     connection.setRequestMethod("GET");
@@ -139,7 +140,7 @@ class TestServer {
 
   @Test
   void testSolve() throws Exception {
-    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + mddsServerPort + "/solve");
+    var uri = new URI("http://" + MDDS_SERVER_HOST + ":" + MDDS_SERVER_PORT + "/solve");
     var url = uri.toURL();
 
     String boundary = "----TestBoundary";

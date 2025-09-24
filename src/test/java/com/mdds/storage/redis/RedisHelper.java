@@ -12,6 +12,9 @@ import java.util.Properties;
 public final class RedisHelper {
   private RedisHelper() {}
 
+  private static final String DEFAULT_HOST = "localhost";
+  private static final int DEFAULT_PORT = 6379;
+
   /**
    * Reads Redis connection parameters from properties file in classpath. File is searched inside
    * *.jar archive in its root folder.
@@ -29,10 +32,8 @@ public final class RedisHelper {
     } catch (IOException e) {
       throw new RedisConnectionException("Could not load file " + redisProperties, e);
     }
-    var host = properties.getProperty("redis.host", RedisConf.DEFAULT_HOST);
-    int port =
-        Integer.parseInt(
-            properties.getProperty("redis.port", String.valueOf(RedisConf.DEFAULT_PORT)));
+    var host = properties.getProperty("redis.host", DEFAULT_HOST);
+    int port = Integer.parseInt(properties.getProperty("redis.port", String.valueOf(DEFAULT_PORT)));
     return new RedisConf(host, port);
   }
 }

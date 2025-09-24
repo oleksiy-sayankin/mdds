@@ -23,16 +23,17 @@ public final class CommonHelper {
    * @return instance of Properties class
    */
   public static Properties readPropertiesOrEmpty(String fileName) {
-    var properties = new Properties();
+    Properties properties;
     if (fileName == null || fileName.isBlank()) {
-      LOGGER.info("File name is null or blank");
+      LOGGER.debug("File name is null or blank");
       return new Properties();
     }
     try (var input = CommonHelper.class.getClassLoader().getResourceAsStream(fileName)) {
       if (input == null) {
-        LOGGER.info("{} not found in resources", fileName);
+        LOGGER.debug("{} not found in resources", fileName);
         return new Properties();
       }
+      properties = new Properties();
       properties.load(input);
     } catch (IOException e) {
       LOGGER.error("Could not load file {}", fileName, e);

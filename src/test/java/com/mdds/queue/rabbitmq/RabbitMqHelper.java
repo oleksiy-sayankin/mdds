@@ -4,14 +4,17 @@
  */
 package com.mdds.queue.rabbitmq;
 
-import static com.mdds.queue.rabbitmq.RabbitMqConf.*;
-
 import java.io.IOException;
 import java.util.Properties;
 
 /** Utility method for RabbitMq. */
 public final class RabbitMqHelper {
   private RabbitMqHelper() {}
+
+  private static final String DEFAULT_HOST = "localhost";
+  private static final int DEFAULT_PORT = 5672;
+  private static final String DEFAULT_USER = "guest";
+  private static final char[] DEFAULT_PASSWORD = {'g', 'u', 'e', 's', 't'};
 
   /**
    * Reads RabbitMq connection parameters from properties file in classpath. File is searched inside
@@ -44,8 +47,7 @@ public final class RabbitMqHelper {
     var password =
         System.getProperty(
             "rabbitmq.user.password",
-            properties.getProperty(
-                "rabbitmq.user.password", new String(RabbitMqConf.DEFAULT_PASSWORD)));
+            properties.getProperty("rabbitmq.user.password", new String(DEFAULT_PASSWORD)));
     return new RabbitMqConf(host, port, user, password);
   }
 }

@@ -4,7 +4,6 @@
  */
 package com.mdds.storage;
 
-import static com.mdds.storage.redis.RedisConf.DEFAULT_HOST;
 import static com.mdds.util.CustomHelper.findFreePort;
 
 import com.mdds.storage.redis.RedisConf;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import redis.embedded.RedisServer;
 
 class TestDataStorageFactory {
+  private static final String DEFAULT_HOST = "localhost";
   private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
 
