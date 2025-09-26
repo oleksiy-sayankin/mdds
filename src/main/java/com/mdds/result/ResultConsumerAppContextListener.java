@@ -8,10 +8,9 @@ import static com.mdds.common.AppConstants.RESULT_QUEUE_NAME;
 
 import com.mdds.common.AppConstantsFactory;
 import com.mdds.queue.*;
-import com.mdds.queue.rabbitmq.RabbitMqConfFactory;
+import com.mdds.queue.rabbitmq.RabbitMqQueueProvider;
 import com.mdds.storage.DataStorage;
-import com.mdds.storage.DataStorageFactory;
-import com.mdds.storage.redis.RedisConfFactory;
+import com.mdds.storage.redis.RedisStorageProvider;
 import dto.ResultDTO;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
@@ -29,12 +28,12 @@ public class ResultConsumerAppContextListener implements ServletContextListener 
   public void contextInitialized(ServletContextEvent sce) {
     var ctx = sce.getServletContext();
 
-    var redisConf = RedisConfFactory.fromEnvOrDefaultProperties();
-    var dataStorage = DataStorageFactory.createRedis(redisConf);
+    var storageProvider = new RedisStorageProvider();
+    var dataStorage = storageProvider.get();
     ctx.setAttribute(ATTR_DATA_STORAGE, dataStorage);
 
-    var rabbitMqConf = RabbitMqConfFactory.fromEnvOrDefaultProperties();
-    var queue = QueueFactory.createRabbitMq(rabbitMqConf);
+    var queueProvider = new RabbitMqQueueProvider();
+    var queue = queueProvider.get();
     var subscription =
         queue.subscribe(
             AppConstantsFactory.getString(RESULT_QUEUE_NAME),

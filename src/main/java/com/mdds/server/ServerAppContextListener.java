@@ -5,11 +5,9 @@
 package com.mdds.server;
 
 import com.mdds.queue.Queue;
-import com.mdds.queue.QueueFactory;
-import com.mdds.queue.rabbitmq.RabbitMqConfFactory;
+import com.mdds.queue.rabbitmq.RabbitMqQueueProvider;
 import com.mdds.storage.DataStorage;
-import com.mdds.storage.DataStorageFactory;
-import com.mdds.storage.redis.RedisConfFactory;
+import com.mdds.storage.redis.RedisStorageProvider;
 import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
@@ -26,12 +24,12 @@ public class ServerAppContextListener implements ServletContextListener {
   @Override
   public void contextInitialized(ServletContextEvent sce) {
     var ctx = sce.getServletContext();
-    var redisConf = RedisConfFactory.fromEnvOrDefaultProperties();
-    var dataStorage = DataStorageFactory.createRedis(redisConf);
+    var storageProvider = new RedisStorageProvider();
+    var dataStorage = storageProvider.get();
     ctx.setAttribute(ATTR_DATA_STORAGE, dataStorage);
 
-    var rabbitMqConf = RabbitMqConfFactory.fromEnvOrDefaultProperties();
-    var queue = QueueFactory.createRabbitMq(rabbitMqConf);
+    var queueProvider = new RabbitMqQueueProvider();
+    var queue = queueProvider.get();
     ctx.setAttribute(ATTR_TASK_QUEUE, queue);
   }
 
