@@ -169,21 +169,29 @@ reformat_xml:
 #
 sonar_scan:
 	$(call log_info,"Running SonarQube analysis...")
-	mvn clean verify sonar:sonar \
+	@mvn clean verify sonar:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
 	  -Dsonar.host.url=$(SONAR_HOST_URL) \
 	  -Dsonar.token=$(SONAR_TOKEN)
-
 	$(call log_info,"Checking SonarQube Quality Gate status...")
-	@sleep 5 # Wait for report is done by Soner Qube Server
+	@sleep 5 # Wait for report is done by Sonar Qube Server
+	$(call log_info,"Fetching total number of issues...");
+	@curl -s -u $(SONAR_TOKEN): \
+	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=INFO,MINOR,MAJOR,CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
+	    | jq -r '" - Total issues: " + (.total|tostring)'
+	$(call log_info,"Fetching list of issues...");
+	@curl -s -u $(SONAR_TOKEN): \
+    	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=INFO,MINOR,MAJOR,CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
+    	    | jq -r '.issues[] | "- " + .severity + " | " + .component + ":" + (.line|tostring) + " → " + .message';
+	$(call log_info,"Fetching additional metrics ...");
+	@curl -s -u $(SONAR_TOKEN): \
+      "$(SONAR_HOST_URL)/api/measures/component?component=$(SONAR_PROJECT_KEY)&metricKeys=coverage,duplicated_lines_density,security_hotspots" \
+      | jq -r '.component.measures[] | " - " + .metric + ": " + .value + "%"'
 	@STATUS=$$(curl -s -u $(SONAR_TOKEN): \
 	  "$(SONAR_HOST_URL)/api/qualitygates/project_status?projectKey=$(SONAR_PROJECT_KEY)" \
 	  | jq -r '.projectStatus.status'); \
 	if [ "$$STATUS" = "ERROR" ]; then \
-	  $(call log_error_sh, "Quality Gate failed! Listing critical issues:"); \
-	  curl -s -u $(SONAR_TOKEN): \
-	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
-	    | jq -r '.issues[] | "- " + .severity + " | " + .component + ":" + (.line|tostring) + " → " + .message'; \
+	  $(call log_error_sh, "Quality Gate failed!"); \
 	  exit 1; \
 	else \
 	  $(call log_done_sh,"Quality Gate passed: $$STATUS"); \
