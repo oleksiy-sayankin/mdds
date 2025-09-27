@@ -29,6 +29,7 @@ class TestServerSolveServlet {
   private ServletContext servletContext;
   private Queue queue;
   private DataStorage dataStorage;
+  private ServerService serverService;
 
   @BeforeEach
   void setUp() {
@@ -38,6 +39,7 @@ class TestServerSolveServlet {
     servletContext = mock(ServletContext.class);
     queue = mock(Queue.class);
     dataStorage = mock(DataStorage.class);
+    serverService = mock(ServerService.class);
   }
 
   @Test
@@ -63,17 +65,20 @@ class TestServerSolveServlet {
     when(partRhs.getInputStream()).thenReturn(isRhs);
     when(request.getPart("rhs")).thenReturn(partRhs);
 
+    // Prepare Server Service
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+
     // Prepare solving method
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(serverService.getQueue()).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -92,17 +97,20 @@ class TestServerSolveServlet {
     when(partRhs.getInputStream()).thenReturn(isRhs);
     when(request.getPart("rhs")).thenReturn(partRhs);
 
+    // Prepare Server Service
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+
     // Prepare solving method
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(serverService.getQueue()).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -125,17 +133,20 @@ class TestServerSolveServlet {
     when(partMatrix.getInputStream()).thenReturn(isMatrix);
     when(request.getPart("matrix")).thenReturn(partMatrix);
 
+    // Prepare Server Service
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+
     // Prepare solving method
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(serverService.getQueue()).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -166,14 +177,17 @@ class TestServerSolveServlet {
     when(partRhs.getInputStream()).thenReturn(isRhs);
     when(request.getPart("rhs")).thenReturn(partRhs);
 
+    // Prepare Server Service
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(serverService.getQueue()).thenReturn(queue);
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -204,13 +218,16 @@ class TestServerSolveServlet {
     when(partRhs.getInputStream()).thenReturn(isRhs);
     when(request.getPart("rhs")).thenReturn(partRhs);
 
+    // Prepare Server Service
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+
     // Prepare solving method
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
 
     // Prepare data storage
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
@@ -241,12 +258,16 @@ class TestServerSolveServlet {
     when(partRhs.getInputStream()).thenReturn(isRhs);
     when(request.getPart("rhs")).thenReturn(partRhs);
 
+    // Prepare Server Service
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+
     // Prepare solving method
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
 
     // Prepare queue
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(serverService.getQueue()).thenReturn(queue);
 
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);

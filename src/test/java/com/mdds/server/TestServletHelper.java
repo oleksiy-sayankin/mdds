@@ -32,6 +32,7 @@ class TestServletHelper {
   private ServletContext servletContext;
   private Queue queue;
   private DataStorage dataStorage;
+  private ServerService serverService;
 
   @BeforeEach
   void setUp() {
@@ -40,12 +41,15 @@ class TestServletHelper {
     servletContext = mock(ServletContext.class);
     queue = mock(Queue.class);
     dataStorage = mock(DataStorage.class);
+    serverService = mock(ServerService.class);
   }
 
   @Test
   void testExtractQueueWhenQueueExists() {
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_TASK_QUEUE)).thenReturn(queue);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+    when(serverService.getQueue()).thenReturn(queue);
     var actualQueue = extractQueue(request, response);
     actualQueue.ifPresent(q -> assertEquals(queue, q));
   }
@@ -53,6 +57,8 @@ class TestServletHelper {
   @Test
   void testExtractQueueWhenNoQueue() throws IOException {
     when(request.getServletContext()).thenReturn(servletContext);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
     var actualQueue = extractQueue(request, response);
     verify(response).sendError(SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
     assertTrue(actualQueue.isEmpty());
@@ -61,8 +67,9 @@ class TestServletHelper {
   @Test
   void testExtractDataStorageWhenDataStorageExists() {
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     var actualDataStorage = extractDataStorage(request, response);
     actualDataStorage.ifPresent(ds -> assertEquals(dataStorage, ds));
   }

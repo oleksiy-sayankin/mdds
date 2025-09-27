@@ -27,6 +27,7 @@ class TestServerResultServlet {
   private ServletContext servletContext;
   private PrintWriter printWriter;
   private DataStorage dataStorage;
+  private ServerService serverService;
 
   @BeforeEach
   void setUp() {
@@ -36,11 +37,14 @@ class TestServerResultServlet {
     servletContext = mock(ServletContext.class);
     printWriter = mock(PrintWriter.class);
     dataStorage = mock(DataStorage.class);
+    serverService = mock(ServerService.class);
   }
 
   @Test
   void testDoGetPathIsEmpty() throws IOException {
     when(request.getServletContext()).thenReturn(servletContext);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
     servlet.doGet(request, response);
     verify(response).setContentType("application/json");
     verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Path is empty");
@@ -50,6 +54,8 @@ class TestServerResultServlet {
   void testDoGetNoTaskId() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/");
     when(request.getServletContext()).thenReturn(servletContext);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
     servlet.doGet(request, response);
     verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Task id missing");
   }
@@ -58,6 +64,8 @@ class TestServerResultServlet {
   void testDoGetNoDataStorageInContext() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/test_task_id");
     when(request.getServletContext()).thenReturn(servletContext);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
     servlet.doGet(request, response);
     verify(response)
         .sendError(
@@ -69,8 +77,9 @@ class TestServerResultServlet {
   void testDoGetNoResultForProvidedTaskId() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/test_task_id");
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     when(response.getWriter()).thenReturn(printWriter);
     servlet.doGet(request, response);
     verify(printWriter).write("{\"error\":\"no_result_for_provided_task_id\"}");
@@ -81,8 +90,9 @@ class TestServerResultServlet {
     var taskId = "test_task_id";
     when(request.getPathInfo()).thenReturn("/result/" + taskId);
     when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_DATA_STORAGE))
-        .thenReturn(dataStorage);
+    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
+        .thenReturn(serverService);
+    when(serverService.getDataStorage()).thenReturn(dataStorage);
     when(response.getWriter()).thenReturn(printWriter);
 
     var expectedResult = new ResultDTO();
