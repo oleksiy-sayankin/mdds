@@ -8,6 +8,7 @@ import static com.mdds.common.util.CommonHelper.readPropertiesOrEmpty;
 import static com.mdds.common.util.ConfigResolution.resolveInt;
 
 import com.mdds.common.util.ConfigResolution;
+import jakarta.annotation.Nonnull;
 
 /** Factory for creating Application configurations. */
 public final class AppConstantsFactory {
@@ -21,7 +22,7 @@ public final class AppConstantsFactory {
    * @param constant key to get property value
    * @return property value as string.
    */
-  public static String getString(AppConstants constant) {
+  public static String getString(@Nonnull AppConstants constant) {
     return ConfigResolution.resolveString(
         constant.getKey(),
         convertPropertyToEnvName(constant.getKey()),
@@ -35,7 +36,7 @@ public final class AppConstantsFactory {
    * @param constant key to get property value
    * @return property value as integer.
    */
-  public static int getInt(AppConstants constant) {
+  public static int getInt(@Nonnull AppConstants constant) {
     return resolveInt(
         constant.getKey(),
         convertPropertyToEnvName(constant.getKey()),

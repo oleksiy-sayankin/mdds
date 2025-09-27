@@ -8,15 +8,9 @@ import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
 import static dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 
 import com.mdds.queue.*;
-import com.rabbitmq.client.Channel;
 import dto.TaskDTO;
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -87,17 +81,14 @@ class TestRabbitMqQueue {
   }
 
   @Test
-  void testPublishWithException() throws IOException {
-    var mockChannel = mock(Channel.class);
-    doThrow(new IOException("Simulated failure"))
-        .when(mockChannel)
-        .basicPublish(anyString(), anyString(), any(), any());
-    var message = new Message<>("payload", Map.of(), Instant.now());
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
-      queue.setChannel(mockChannel);
-      assertThrows(
-          RabbitMqConnectionException.class, () -> queue.publish(TASK_QUEUE_NAME, message));
-    }
+  void testWrongUserAndPassword() {
+    assertThrows(
+        RabbitMqConnectionException.class,
+        () -> {
+          try (var queue = new RabbitMqQueue(host, port, "wrong user", "wrong password")) {
+            // Do nothing.
+          }
+        });
   }
 
   @Test

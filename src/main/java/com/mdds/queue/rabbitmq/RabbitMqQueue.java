@@ -10,6 +10,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.mdds.queue.*;
 import com.mdds.util.JsonHelper;
 import com.rabbitmq.client.*;
+import jakarta.annotation.Nonnull;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
@@ -19,15 +20,21 @@ import lombok.extern.slf4j.Slf4j;
 /** Queue that delivers tasks to Executors. */
 @Slf4j
 public class RabbitMqQueue implements Queue {
-  private Channel channel;
-  private Connection connection;
+  private final @Nonnull Channel channel;
+  private final @Nonnull Connection connection;
 
-  public RabbitMqQueue(RabbitMqConf conf) {
-    connect(conf.host(), conf.port(), conf.user(), conf.password());
+  public RabbitMqQueue(@Nonnull RabbitMqConf conf) {
+    this(conf.host(), conf.port(), conf.user(), conf.password());
   }
 
-  public RabbitMqQueue(String host, int port, String user, String password) {
-    connect(host, port, user, password);
+  public RabbitMqQueue(@Nonnull String host, int port, String user, String password) {
+    var factory = createConnectionFactory(host, port, user, password);
+    try {
+      connection = factory.newConnection();
+      channel = connection.createChannel();
+    } catch (IOException | TimeoutException e) {
+      throw new RabbitMqConnectionException("Failed to create RabbitMq connection", e);
+    }
   }
 
   /**
@@ -37,12 +44,12 @@ public class RabbitMqQueue implements Queue {
    * @return Equivalent of the input map but as AMQP.BasicProperties
    */
   @VisibleForTesting
-  static AMQP.BasicProperties convertFrom(Map<String, Object> headers) {
+  static @Nonnull AMQP.BasicProperties convertFrom(@Nonnull Map<String, Object> headers) {
     return new AMQP.BasicProperties.Builder().headers(headers).build();
   }
 
   @Override
-  public <T> void publish(String queueName, Message<T> message) {
+  public <T> void publish(@Nonnull String queueName, @Nonnull Message<T> message) {
     declareQueue(queueName);
     try {
       channel.basicPublish(
@@ -56,8 +63,10 @@ public class RabbitMqQueue implements Queue {
   }
 
   @Override
-  public <T> Subscription subscribe(
-      String queueName, Class<T> payloadType, MessageHandler<T> handler) {
+  public <T> @Nonnull Subscription subscribe(
+      @Nonnull String queueName,
+      @Nonnull Class<T> payloadType,
+      @Nonnull MessageHandler<T> handler) {
     declareQueue(queueName);
     String tag;
     DeliverCallback deliverCallback =
@@ -118,7 +127,7 @@ public class RabbitMqQueue implements Queue {
   }
 
   @Override
-  public void deleteQueue(String queueName) {
+  public void deleteQueue(@Nonnull String queueName) {
     try {
       channel.queueDelete(queueName);
     } catch (IOException e) {
@@ -129,24 +138,19 @@ public class RabbitMqQueue implements Queue {
   @Override
   public void close() {
     try {
-      if (channel != null && channel.isOpen()) channel.close();
+      if (channel.isOpen()) channel.close();
     } catch (Exception e) {
       log.warn("Failed to close channel", e);
     } finally {
       try {
-        if (connection != null && connection.isOpen()) connection.close();
+        if (connection.isOpen()) connection.close();
       } catch (Exception e) {
         log.warn("Failed to close connection", e);
       }
     }
   }
 
-  @VisibleForTesting
-  void setChannel(Channel channel) {
-    this.channel = channel;
-  }
-
-  private void declareQueue(String queueName) {
+  private void declareQueue(@Nonnull String queueName) {
     // Declare a queue (idempotent - creates if it doesn't exist)
     try {
       channel.queueDeclare(queueName, false, false, false, null);
@@ -155,18 +159,13 @@ public class RabbitMqQueue implements Queue {
     }
   }
 
-  private void connect(String host, int port, String user, String password) {
+  private static @Nonnull ConnectionFactory createConnectionFactory(
+      @Nonnull String host, int port, String user, String password) {
     var factory = new ConnectionFactory();
     factory.setHost(host);
     factory.setPort(port);
     factory.setUsername(user);
     factory.setPassword(password);
-
-    try {
-      connection = factory.newConnection();
-      channel = connection.createChannel();
-    } catch (IOException | TimeoutException e) {
-      throw new RabbitMqConnectionException("Failed to create RabbitMq connection", e);
-    }
+    return factory;
   }
 }

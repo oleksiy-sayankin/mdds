@@ -4,6 +4,8 @@
  */
 package com.mdds.queue;
 
+import jakarta.annotation.Nonnull;
+
 /** Provides callback (Acknowledger) for handling queue messages. */
 @FunctionalInterface
 public interface MessageHandler<T> {
@@ -14,5 +16,5 @@ public interface MessageHandler<T> {
    * @param ack an interface that implements two methods: how to inform the queue that message is
    *     processed and how to reject message in case of error.
    */
-  void handle(Message<T> message, Acknowledger ack);
+  void handle(@Nonnull Message<T> message, @Nonnull Acknowledger ack);
 }

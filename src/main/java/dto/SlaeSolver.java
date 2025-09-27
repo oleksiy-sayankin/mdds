@@ -4,7 +4,11 @@
  */
 package dto;
 
+import jakarta.annotation.Nonnull;
+import lombok.Getter;
+
 /** List of methods that can be used for System of Linear Equation solving. */
+@Getter
 public enum SlaeSolver {
   NUMPY_EXACT_SOLVER("numpy_exact_solver"),
   NUNPY_LSTSQ_SOLVER("numpy_lstsq_solver"),
@@ -16,10 +20,6 @@ public enum SlaeSolver {
 
   SlaeSolver(String name) {
     this.name = name;
-  }
-
-  public String getName() {
-    return name;
   }
 
   public static boolean isValid(String method) {
@@ -34,7 +34,7 @@ public enum SlaeSolver {
     return false;
   }
 
-  public static SlaeSolver parse(String value) {
+  public static @Nonnull SlaeSolver parse(@Nonnull String value) {
     return switch (value) {
       case "numpy_exact_solver" -> NUMPY_EXACT_SOLVER;
       case "numpy_lstsq_solver" -> NUNPY_LSTSQ_SOLVER;

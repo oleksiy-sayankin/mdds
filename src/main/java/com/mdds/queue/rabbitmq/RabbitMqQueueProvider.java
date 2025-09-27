@@ -7,6 +7,7 @@ package com.mdds.queue.rabbitmq;
 import com.mdds.queue.Queue;
 import com.mdds.queue.QueueFactory;
 import com.mdds.queue.QueueProvider;
+import jakarta.annotation.Nonnull;
 
 /** Provider for RabbitMq. */
 public class RabbitMqQueueProvider implements QueueProvider {
@@ -16,7 +17,7 @@ public class RabbitMqQueueProvider implements QueueProvider {
    * @return instance of RabbitMq connection.
    */
   @Override
-  public Queue get() {
+  public @Nonnull Queue get() {
     return QueueFactory.createRabbitMq(RabbitMqConfFactory.fromEnvOrDefaultProperties());
   }
 }

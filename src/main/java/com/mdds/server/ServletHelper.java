@@ -15,6 +15,7 @@ import com.mdds.storage.DataStorage;
 import com.mdds.util.JsonHelper;
 import com.opencsv.exceptions.CsvException;
 import dto.SlaeSolver;
+import jakarta.annotation.Nonnull;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,7 +36,7 @@ public final class ServletHelper {
    * @return Queue instance.
    */
   public static Optional<Queue> extractQueue(
-      HttpServletRequest request, HttpServletResponse response) {
+      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
     return Optional.ofNullable(
             ((ServerService)
                     request
@@ -57,7 +58,7 @@ public final class ServletHelper {
    * @return solving method.
    */
   public static Optional<SlaeSolver> extractSolvingMethod(
-      HttpServletRequest request, HttpServletResponse response) {
+      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
     var method = request.getParameter("slaeSolvingMethod");
     if (!isValid(method)) {
       sendError(response, SC_BAD_REQUEST, "Invalid solving method: " + method);
@@ -73,7 +74,7 @@ public final class ServletHelper {
    * @param sc status code
    * @param message message for the staus code.
    */
-  public static void sendError(HttpServletResponse response, int sc, String message) {
+  public static void sendError(@Nonnull HttpServletResponse response, int sc, String message) {
     try {
       response.sendError(sc, message);
     } catch (IOException e) {
@@ -87,7 +88,7 @@ public final class ServletHelper {
    * @param response Http response where to write data.
    * @param result object to be written as Json.
    */
-  public static void writeJson(HttpServletResponse response, Object result) {
+  public static void writeJson(@Nonnull HttpServletResponse response, Object result) {
     try {
       response.getWriter().write(JsonHelper.toJson(result));
     } catch (IOException e) {
@@ -103,7 +104,7 @@ public final class ServletHelper {
    * @return matrix from the request.
    */
   public static Optional<double[][]> extractMatrix(
-      HttpServletRequest request, HttpServletResponse response) {
+      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
     try {
       var matrixPart = request.getPart("matrix");
       if (matrixPart == null) {
@@ -128,7 +129,7 @@ public final class ServletHelper {
    * @return right hand side vector from the request.
    */
   public static Optional<double[]> extractRhs(
-      HttpServletRequest request, HttpServletResponse response) {
+      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
     try {
       var rhsPart = request.getPart("rhs");
       if (rhsPart == null) {
@@ -149,7 +150,7 @@ public final class ServletHelper {
    *
    * @param response Http response.
    */
-  public static void writeNotFound(HttpServletResponse response) {
+  public static void writeNotFound(@Nonnull HttpServletResponse response) {
     try {
       response.setStatus(HttpServletResponse.SC_NOT_FOUND);
       response.getWriter().write("{\"error\":\"no_result_for_provided_task_id\"}");
@@ -166,7 +167,7 @@ public final class ServletHelper {
    * @return DataStorage instance.
    */
   public static Optional<DataStorage> extractDataStorage(
-      HttpServletRequest request, HttpServletResponse response) {
+      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
     return Optional.ofNullable(
             ((ServerService)
                     request
@@ -189,7 +190,7 @@ public final class ServletHelper {
    * @return task id from the request.
    */
   public static Optional<String> extractTaskId(
-      HttpServletRequest request, HttpServletResponse response) {
+      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
     var path = request.getPathInfo();
     if (path == null || path.isEmpty()) {
       sendError(response, SC_BAD_REQUEST, "Path is empty");

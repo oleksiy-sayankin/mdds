@@ -4,6 +4,7 @@
  */
 package com.mdds.queue;
 
+import jakarta.annotation.Nonnull;
 import java.time.Instant;
 import java.util.Map;
 
@@ -15,4 +16,5 @@ import java.util.Map;
  * @param timestamp date/time of creation
  * @param <T> type of payload
  */
-public record Message<T>(T payload, Map<String, Object> headers, Instant timestamp) {}
+public record Message<T>(
+    @Nonnull T payload, @Nonnull Map<String, Object> headers, @Nonnull Instant timestamp) {}

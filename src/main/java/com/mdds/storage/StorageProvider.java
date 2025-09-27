@@ -4,6 +4,8 @@
  */
 package com.mdds.storage;
 
+import jakarta.annotation.Nonnull;
+
 /** Basic interface for getting Data Storage instance. */
 public interface StorageProvider {
   /**
@@ -11,5 +13,6 @@ public interface StorageProvider {
    *
    * @return Data Storage instance.
    */
+  @Nonnull
   DataStorage get();
 }

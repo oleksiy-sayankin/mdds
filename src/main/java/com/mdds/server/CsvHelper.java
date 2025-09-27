@@ -6,6 +6,7 @@ package com.mdds.server;
 
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
+import jakarta.annotation.Nonnull;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,7 +23,7 @@ public final class CsvHelper {
    * @return array of double
    * @throws SolveServletException when exception raises during parsing a number.
    */
-  public static double[] convert(String[] numbers) throws SolveServletException {
+  public static double[] convert(@Nonnull String[] numbers) throws SolveServletException {
     var result = new double[numbers.length];
     var i = 0;
     for (var number : numbers) {
@@ -43,7 +44,7 @@ public final class CsvHelper {
    * @return matrix of double
    * @throws SolveServletException when exception raises during parsing a number.
    */
-  public static double[][] convert(String[][] matrix) throws SolveServletException {
+  public static double[][] convert(@Nonnull String[][] matrix) throws SolveServletException {
     var result = new double[matrix.length][];
     var i = 0;
     for (var row : matrix) {
@@ -70,7 +71,8 @@ public final class CsvHelper {
    * @throws IOException when can not read input stream.
    * @throws CsvException when can not parse csv data.
    */
-  public static String[] readCsvAsVector(InputStream inputStream) throws IOException, CsvException {
+  public static String[] readCsvAsVector(@Nonnull InputStream inputStream)
+      throws IOException, CsvException {
     try (var reader = new BufferedReader(new InputStreamReader(inputStream));
         var csvReader = new CSVReader(reader)) {
       var allData = csvReader.readAll();
@@ -92,7 +94,7 @@ public final class CsvHelper {
    * @throws IOException when can not read input stream.
    * @throws CsvException when can not parse csv data.
    */
-  public static String[][] readCsvAsMatrix(InputStream inputStream)
+  public static @Nonnull String[][] readCsvAsMatrix(@Nonnull InputStream inputStream)
       throws IOException, CsvException {
     try (var reader = new BufferedReader(new InputStreamReader(inputStream));
         var csvReader = new CSVReader(reader)) {

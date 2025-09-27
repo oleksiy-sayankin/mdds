@@ -6,6 +6,7 @@ package com.mdds.storage.redis;
 
 import com.mdds.storage.DataStorage;
 import com.mdds.util.JsonHelper;
+import jakarta.annotation.Nonnull;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import redis.clients.jedis.UnifiedJedis;
@@ -14,14 +15,30 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 /** Data storage that stores data in Redis key-value DB. */
 @Slf4j
 public class RedisDataStorage implements DataStorage {
-  private UnifiedJedis jedis;
+  private final @Nonnull UnifiedJedis jedis;
 
-  public RedisDataStorage(RedisConf conf) {
-    connect(conf.host(), conf.port());
+  public RedisDataStorage(@Nonnull RedisConf conf) {
+    this(conf.host(), conf.port());
   }
 
-  public RedisDataStorage(String host, int port) {
-    connect(host, port);
+  public RedisDataStorage(@Nonnull String host, int port) {
+    try {
+      jedis = new UnifiedJedis("redis://" + host + ":" + port);
+      var result = jedis.ping();
+      if ("PONG".equals(result)) {
+        log.info("Connected to Redis redis://{}:{}", host, port);
+      } else {
+        throw new RedisConnectionException(
+            "Redis connection redis://"
+                + host
+                + ":"
+                + port
+                + " failed with unexpected response: "
+                + result);
+      }
+    } catch (JedisConnectionException e) {
+      throw new RedisConnectionException("Failed to connect to redis://" + host + ":" + port, e);
+    }
   }
 
   @Override
@@ -40,28 +57,6 @@ public class RedisDataStorage implements DataStorage {
 
   @Override
   public void close() {
-    if (jedis != null) {
-      jedis.close();
-    }
-  }
-
-  private void connect(String host, int port) {
-    try {
-      jedis = new UnifiedJedis("redis://" + host + ":" + port);
-      var result = jedis.ping();
-      if ("PONG".equals(result)) {
-        log.info("Connected to Redis redis://{}:{}", host, port);
-      } else {
-        throw new RedisConnectionException(
-            "Redis connection redis://"
-                + host
-                + ":"
-                + port
-                + " failed with unexpected response: "
-                + result);
-      }
-    } catch (JedisConnectionException e) {
-      throw new RedisConnectionException("Failed to connect to redis://" + host + ":" + port, e);
-    }
+    jedis.close();
   }
 }

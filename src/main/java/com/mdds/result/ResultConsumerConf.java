@@ -4,6 +4,8 @@
  */
 package com.mdds.result;
 
+import jakarta.annotation.Nonnull;
+
 /**
  * Base class for Result Consumer configuration.
  *
@@ -11,4 +13,5 @@ package com.mdds.result;
  * @param port port where Result Consumer runs.
  * @param webappDirLocation web application directory location.
  */
-public record ResultConsumerConf(String host, int port, String webappDirLocation) {}
+public record ResultConsumerConf(
+    @Nonnull String host, int port, @Nonnull String webappDirLocation) {}

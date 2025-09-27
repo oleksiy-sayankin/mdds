@@ -5,6 +5,8 @@
 
 package com.mdds.queue;
 
+import jakarta.annotation.Nonnull;
+
 /** Common interface for Task Queue and Result Queue. */
 public interface Queue extends AutoCloseable {
   /**
@@ -14,7 +16,7 @@ public interface Queue extends AutoCloseable {
    * @param message what we want to publish
    * @param <T> what class type we use as payload in message.
    */
-  <T> void publish(String queueName, Message<T> message);
+  <T> void publish(@Nonnull String queueName, @Nonnull Message<T> message);
 
   /**
    * Subscribes to the queue and processes messages from the queue.
@@ -27,14 +29,15 @@ public interface Queue extends AutoCloseable {
    * @return subscription object. This object only can be closed after queue is not used anymore. We
    *     work with subscription object in a manner of try-with-resources.
    */
-  <T> Subscription subscribe(String queueName, Class<T> payloadType, MessageHandler<T> handler);
+  <T> @Nonnull Subscription subscribe(
+      @Nonnull String queueName, @Nonnull Class<T> payloadType, @Nonnull MessageHandler<T> handler);
 
   /**
    * Deletes queue.
    *
    * @param queueName queue to delete.
    */
-  void deleteQueue(String queueName);
+  void deleteQueue(@Nonnull String queueName);
 
   /** Closes Queue and releases connection if any. */
   @Override

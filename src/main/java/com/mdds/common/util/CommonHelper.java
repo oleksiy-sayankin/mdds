@@ -4,6 +4,7 @@
  */
 package com.mdds.common.util;
 
+import jakarta.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Properties;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,7 @@ public final class CommonHelper {
    * @param fileName file to read.
    * @return instance of Properties class
    */
-  public static Properties readPropertiesOrEmpty(String fileName) {
+  public static @Nonnull Properties readPropertiesOrEmpty(String fileName) {
     Properties properties;
     if (fileName == null || fileName.isBlank()) {
       log.debug("File name is null or blank");

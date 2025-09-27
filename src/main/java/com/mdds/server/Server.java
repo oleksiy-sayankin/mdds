@@ -6,6 +6,7 @@ package com.mdds.server;
 
 import static com.mdds.server.ServerConfFactory.fromEnvOrDefaultProperties;
 
+import jakarta.annotation.Nonnull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
@@ -28,7 +29,8 @@ public class Server {
    * @return minimal Apache Tomcat starter object.
    * @throws LifecycleException when we can not start Tomcat.
    */
-  public static Tomcat start(String hostName, int port, String docBase) throws LifecycleException {
+  public static @Nonnull Tomcat start(@Nonnull String hostName, int port, @Nonnull String docBase)
+      throws LifecycleException {
     var tomcat = new Tomcat();
     var host = tomcat.getHost(); // Get the default host
     host.setName(hostName);

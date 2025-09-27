@@ -7,6 +7,7 @@ package com.mdds.storage.redis;
 import com.mdds.storage.DataStorage;
 import com.mdds.storage.DataStorageFactory;
 import com.mdds.storage.StorageProvider;
+import jakarta.annotation.Nonnull;
 
 /** Provider for Redis Data Storage. */
 public class RedisStorageProvider implements StorageProvider {
@@ -16,7 +17,7 @@ public class RedisStorageProvider implements StorageProvider {
    * @return instance of Redis Data Storage connection.
    */
   @Override
-  public DataStorage get() {
+  public @Nonnull DataStorage get() {
     return DataStorageFactory.createRedis(RedisConfFactory.fromEnvOrDefaultProperties());
   }
 }

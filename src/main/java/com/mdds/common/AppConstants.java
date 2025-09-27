@@ -4,6 +4,7 @@
  */
 package com.mdds.common;
 
+import jakarta.annotation.Nonnull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -14,6 +15,6 @@ public enum AppConstants {
   TASK_QUEUE_NAME("mdds.task.queue.name", "mdds_task_queue"),
   RESULT_QUEUE_NAME("mdds.result.queue.name", "mdds_result_queue");
 
-  private final String key;
-  private final String defaultValue;
+  private final @Nonnull String key;
+  private final @Nonnull String defaultValue;
 }

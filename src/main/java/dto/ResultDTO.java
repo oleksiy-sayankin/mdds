@@ -4,6 +4,7 @@
  */
 package dto;
 
+import jakarta.annotation.Nonnull;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,7 +15,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ResultDTO {
-  String taskId;
+  @Nonnull String taskId;
   Instant dateTimeTaskCreated;
   Instant dateTimeTaskFinished;
   TaskStatus taskStatus;

@@ -4,10 +4,12 @@
  */
 package com.mdds.storage.redis;
 
+import jakarta.annotation.Nonnull;
+
 /**
  * Base class for Redis connection properties.
  *
  * @param host Redis host
  * @param port Redis port
  */
-public record RedisConf(String host, int port) {}
+public record RedisConf(@Nonnull String host, int port) {}

@@ -6,16 +6,18 @@ package com.mdds.queue;
 
 import com.mdds.queue.rabbitmq.RabbitMqConf;
 import com.mdds.queue.rabbitmq.RabbitMqQueue;
+import jakarta.annotation.Nonnull;
 
 /** Basic factory for all queues. */
 public final class QueueFactory {
   private QueueFactory() {}
 
-  public static Queue createRabbitMq(String host, int port, String user, String password) {
+  public static @Nonnull Queue createRabbitMq(
+      @Nonnull String host, int port, String user, String password) {
     return new RabbitMqQueue(host, port, user, password);
   }
 
-  public static Queue createRabbitMq(RabbitMqConf conf) {
+  public static @Nonnull Queue createRabbitMq(@Nonnull RabbitMqConf conf) {
     return new RabbitMqQueue(conf);
   }
 }

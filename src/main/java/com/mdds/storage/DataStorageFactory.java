@@ -6,6 +6,7 @@ package com.mdds.storage;
 
 import com.mdds.storage.redis.RedisConf;
 import com.mdds.storage.redis.RedisDataStorage;
+import jakarta.annotation.Nonnull;
 
 /** Factory class for data storages. */
 public final class DataStorageFactory {
@@ -18,7 +19,7 @@ public final class DataStorageFactory {
    * @param port Redis port.
    * @return Connected Redis Data storage.
    */
-  public static DataStorage createRedis(String host, int port) {
+  public static @Nonnull DataStorage createRedis(@Nonnull String host, int port) {
     return new RedisDataStorage(host, port);
   }
 
@@ -28,7 +29,7 @@ public final class DataStorageFactory {
    * @param properties connection properties.
    * @return Connected Redis Data storage.
    */
-  public static DataStorage createRedis(RedisConf properties) {
+  public static @Nonnull DataStorage createRedis(@Nonnull RedisConf properties) {
     return new RedisDataStorage(properties);
   }
 }

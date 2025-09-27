@@ -11,6 +11,7 @@ import com.mdds.queue.Queue;
 import com.mdds.queue.Subscription;
 import com.mdds.storage.DataStorage;
 import dto.ResultDTO;
+import jakarta.annotation.Nonnull;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -19,11 +20,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class ResultConsumerService implements AutoCloseable {
-  private final DataStorage dataStorage;
-  private final Queue queue;
-  private final Subscription subscription;
+  private final @Nonnull DataStorage dataStorage;
+  private final @Nonnull Queue queue;
+  private final @Nonnull Subscription subscription;
 
-  public ResultConsumerService(DataStorage dataStorage, Queue queue) {
+  public ResultConsumerService(@Nonnull DataStorage dataStorage, @Nonnull Queue queue) {
     this.dataStorage = dataStorage;
     this.queue = queue;
     this.subscription =
@@ -40,9 +41,9 @@ public class ResultConsumerService implements AutoCloseable {
 
   @Override
   public void close() {
-    if (subscription != null) subscription.close();
-    if (queue != null) queue.close();
-    if (dataStorage != null) dataStorage.close();
+    subscription.close();
+    queue.close();
+    dataStorage.close();
     log.info("ResultConsumerService shut down cleanly");
   }
 }

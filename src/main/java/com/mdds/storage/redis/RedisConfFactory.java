@@ -8,13 +8,15 @@ import static com.mdds.common.util.CommonHelper.readPropertiesOrEmpty;
 import static com.mdds.common.util.ConfigResolution.resolveInt;
 import static com.mdds.common.util.ConfigResolution.resolveString;
 
+import jakarta.annotation.Nonnull;
+
 /** Factory for creating Redis configurations. */
 public final class RedisConfFactory {
   private RedisConfFactory() {}
 
   public static final String FILE_NAME = "redis.properties";
 
-  public static RedisConf fromEnvOrDefaultProperties() {
+  public static @Nonnull RedisConf fromEnvOrDefaultProperties() {
     var props = readPropertiesOrEmpty(FILE_NAME);
     var host = resolveString("redis.host", "REDIS_HOST", props, "localhost");
     var port = resolveInt("redis.port", "REDIS_PORT", props, 6379);

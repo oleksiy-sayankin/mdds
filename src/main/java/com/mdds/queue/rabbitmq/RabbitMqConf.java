@@ -4,6 +4,8 @@
  */
 package com.mdds.queue.rabbitmq;
 
+import jakarta.annotation.Nonnull;
+
 /**
  * Base container for RabbitMq properties.
  *
@@ -12,4 +14,4 @@ package com.mdds.queue.rabbitmq;
  * @param user RabbitMq user.
  * @param password RabbitMq user password.
  */
-public record RabbitMqConf(String host, int port, String user, String password) {}
+public record RabbitMqConf(@Nonnull String host, int port, String user, String password) {}

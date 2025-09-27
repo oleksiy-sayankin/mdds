@@ -8,6 +8,7 @@ import static com.mdds.common.util.CommonHelper.readPropertiesOrEmpty;
 import static com.mdds.common.util.ConfigResolution.resolveInt;
 import static com.mdds.common.util.ConfigResolution.resolveString;
 
+import jakarta.annotation.Nonnull;
 import java.io.File;
 
 /** Factory for creating Server configurations. */
@@ -16,7 +17,7 @@ public final class ServerConfFactory {
 
   private static final String FILE_NAME = "server.properties";
 
-  public static ServerConf fromEnvOrDefaultProperties() {
+  public static @Nonnull ServerConf fromEnvOrDefaultProperties() {
     var props = readPropertiesOrEmpty(FILE_NAME);
     var host = resolveString("mdds.server.host", "MDDS_SERVER_HOST", props, "localhost");
     var port = resolveInt("mdds.server.port", "MDDS_SERVER_PORT", props, 8000);

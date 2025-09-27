@@ -8,6 +8,7 @@ import static com.mdds.common.util.CommonHelper.readPropertiesOrEmpty;
 import static com.mdds.common.util.ConfigResolution.resolveInt;
 import static com.mdds.common.util.ConfigResolution.resolveString;
 
+import jakarta.annotation.Nonnull;
 import java.io.File;
 
 /** Factory for creating Result Consumer configurations. */
@@ -16,7 +17,7 @@ public final class ResultConsumerConfFactory {
 
   private static final String FILE_NAME = "result.consumer.properties";
 
-  public static ResultConsumerConf fromEnvOrDefaultProperties() {
+  public static @Nonnull ResultConsumerConf fromEnvOrDefaultProperties() {
     var props = readPropertiesOrEmpty(FILE_NAME);
     var hostName =
         resolveString("mdds.result.consumer.host", "MDDS_RESULT_CONSUMER_HOST", props, "localhost");

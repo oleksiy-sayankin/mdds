@@ -7,6 +7,7 @@ package com.mdds.util;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import jakarta.annotation.Nonnull;
 
 /** Helper class to convert Data Transfer Object to JSON and vise versa. */
 public final class JsonHelper {
@@ -26,7 +27,7 @@ public final class JsonHelper {
     }
   }
 
-  public static <T> T fromJson(String json, Class<T> clazz) {
+  public static <T> T fromJson(String json, @Nonnull Class<T> clazz) {
     if (json == null) {
       return null;
     }

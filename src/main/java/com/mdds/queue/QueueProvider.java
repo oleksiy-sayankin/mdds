@@ -4,6 +4,8 @@
  */
 package com.mdds.queue;
 
+import jakarta.annotation.Nonnull;
+
 /** Basic interface for getting Queue instance. */
 public interface QueueProvider {
   /**
@@ -11,5 +13,6 @@ public interface QueueProvider {
    *
    * @return Queue instance
    */
+  @Nonnull
   Queue get();
 }
