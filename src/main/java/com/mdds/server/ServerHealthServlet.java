@@ -7,16 +7,15 @@ package com.mdds.server;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /** Health endpoint. Returns status ok. */
+@Slf4j
 public class ServerHealthServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServerHealthServlet.class);
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
     response.setStatus(HttpServletResponse.SC_OK);
-    LOGGER.info("Health check is ok");
+    log.info("Health check is ok");
   }
 }

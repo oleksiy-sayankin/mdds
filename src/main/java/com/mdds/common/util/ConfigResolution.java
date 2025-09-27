@@ -5,17 +5,15 @@
 package com.mdds.common.util;
 
 import java.util.Properties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Here we read string and integer configuration properties. Here is the read order: 1. Read from
  * Java system properties. If there is no value then 2. Read from environment variable. If there is
  * no value then 3. Read from Properties instance. If there is no value then 4. Use default value.
  */
+@Slf4j
 public class ConfigResolution {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ConfigResolution.class);
-
   private ConfigResolution() {}
 
   /**
@@ -56,7 +54,7 @@ public class ConfigResolution {
     try {
       return Integer.parseInt(v);
     } catch (NumberFormatException e) {
-      LOGGER.warn("Error parsing {}", v, e);
+      log.warn("Error parsing {}", v, e);
       return defaultValue;
     }
   }

@@ -10,16 +10,15 @@ import dto.ResultDTO;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /** Get result as document from key-value data storage. */
+@Slf4j
 public class ServerResultServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServerResultServlet.class);
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
-    LOGGER.info("Processing request in result servlet...");
+    log.info("Processing request in result servlet...");
     response.setContentType("application/json");
     var taskId = extractTaskId(request, response);
     var storage = extractDataStorage(request, response);

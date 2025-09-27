@@ -7,15 +7,14 @@ package com.mdds.storage.redis;
 import com.mdds.storage.DataStorage;
 import com.mdds.util.JsonHelper;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import redis.clients.jedis.UnifiedJedis;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
 /** Data storage that stores data in Redis key-value DB. */
+@Slf4j
 public class RedisDataStorage implements DataStorage {
   private UnifiedJedis jedis;
-  private static final Logger LOGGER = LoggerFactory.getLogger(RedisDataStorage.class);
 
   public RedisDataStorage(RedisConf conf) {
     connect(conf.host(), conf.port());
@@ -51,7 +50,7 @@ public class RedisDataStorage implements DataStorage {
       jedis = new UnifiedJedis("redis://" + host + ":" + port);
       var result = jedis.ping();
       if ("PONG".equals(result)) {
-        LOGGER.info("Connected to Redis redis://{}:{}", host, port);
+        log.info("Connected to Redis redis://{}:{}", host, port);
       } else {
         throw new RedisConnectionException(
             "Redis connection redis://"

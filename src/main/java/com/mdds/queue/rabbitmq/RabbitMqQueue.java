@@ -14,12 +14,11 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /** Queue that delivers tasks to Executors. */
+@Slf4j
 public class RabbitMqQueue implements Queue {
-  private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqQueue.class);
   private Channel channel;
   private Connection connection;
 
@@ -132,12 +131,12 @@ public class RabbitMqQueue implements Queue {
     try {
       if (channel != null && channel.isOpen()) channel.close();
     } catch (Exception e) {
-      LOGGER.warn("Failed to close channel", e);
+      log.warn("Failed to close channel", e);
     } finally {
       try {
         if (connection != null && connection.isOpen()) connection.close();
       } catch (Exception e) {
-        LOGGER.warn("Failed to close connection", e);
+        log.warn("Failed to close connection", e);
       }
     }
   }

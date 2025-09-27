@@ -9,12 +9,11 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /** Root endpoint. Returns index.html only. */
+@Slf4j
 public class ServerRootServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServerRootServlet.class);
 
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -23,17 +22,17 @@ public class ServerRootServlet extends HttpServlet {
       var dispatcher = request.getRequestDispatcher("/index.html");
       if (dispatcher == null) {
         response.sendError(HttpServletResponse.SC_NOT_FOUND, "index.html not found");
-        LOGGER.error("index.html not found");
+        log.error("index.html not found");
         return;
       }
       // Forward the request and response to index.html
       dispatcher.forward(request, response);
     } catch (ServletException | IOException e) {
-      LOGGER.error("Error processing root servlet", e);
+      log.error("Error processing root servlet", e);
       try {
         response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal server error");
       } catch (IOException ex) {
-        LOGGER.error("Error sending internal server error status", ex);
+        log.error("Error sending internal server error status", ex);
       }
     }
   }

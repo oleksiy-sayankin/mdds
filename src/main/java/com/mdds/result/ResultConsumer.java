@@ -4,14 +4,13 @@
  */
 package com.mdds.result;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Gets results from the Result Queue and puts it to storage. */
+@Slf4j
 public class ResultConsumer {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ResultConsumer.class);
 
   public static void main(String[] args) throws LifecycleException {
     var conf = ResultConsumerConfFactory.fromEnvOrDefaultProperties();
@@ -40,7 +39,7 @@ public class ResultConsumer {
     Tomcat.addServlet(ctx, "resultConsumerHealthServlet", new ResultConsumerHealthServlet());
     ctx.addServletMappingDecoded("/health", "resultConsumerHealthServlet");
     tomcat.start();
-    LOGGER.info("Result Consumer started at http://{}:{}", host.getName(), port);
+    log.info("Result Consumer started at http://{}:{}", host.getName(), port);
     return tomcat;
   }
 }

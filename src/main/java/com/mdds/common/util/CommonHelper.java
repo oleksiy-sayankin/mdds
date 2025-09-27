@@ -6,12 +6,11 @@ package com.mdds.common.util;
 
 import java.io.IOException;
 import java.util.Properties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /** Helper class with common utilities. */
+@Slf4j
 public final class CommonHelper {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CommonHelper.class);
 
   private CommonHelper() {}
 
@@ -25,18 +24,18 @@ public final class CommonHelper {
   public static Properties readPropertiesOrEmpty(String fileName) {
     Properties properties;
     if (fileName == null || fileName.isBlank()) {
-      LOGGER.debug("File name is null or blank");
+      log.debug("File name is null or blank");
       return new Properties();
     }
     try (var input = CommonHelper.class.getClassLoader().getResourceAsStream(fileName)) {
       if (input == null) {
-        LOGGER.debug("{} not found in resources", fileName);
+        log.debug("{} not found in resources", fileName);
         return new Properties();
       }
       properties = new Properties();
       properties.load(input);
     } catch (IOException e) {
-      LOGGER.error("Could not load file {}", fileName, e);
+      log.error("Could not load file {}", fileName, e);
       return new Properties();
     }
     return properties;

@@ -16,16 +16,15 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Stream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /** Servlet for solving system of linear algebraic equations. */
+@Slf4j
 public class ServerSolveServlet extends HttpServlet {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServerSolveServlet.class);
 
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-    LOGGER.info("Processing request in Solve Servlet...");
+    log.info("Processing request in Solve Servlet...");
     var matrix = extractMatrix(request, response);
     var method = extractSolvingMethod(request, response);
     var rhs = extractRhs(request, response);

@@ -6,14 +6,13 @@ package com.mdds.server;
 
 import static com.mdds.server.ServerConfFactory.fromEnvOrDefaultProperties;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Start point for web server. */
+@Slf4j
 public class Server {
-  private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
 
   public static void main(String[] args) throws LifecycleException {
     var conf = fromEnvOrDefaultProperties();
@@ -50,7 +49,7 @@ public class Server {
     ctx.setAllowCasualMultipartParsing(true);
 
     tomcat.start();
-    LOGGER.info("Server started at http://{}:{}", host.getName(), port);
+    log.info("Server started at http://{}:{}", host.getName(), port);
     return tomcat;
   }
 }

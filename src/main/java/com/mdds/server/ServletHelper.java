@@ -20,11 +20,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public final class ServletHelper {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ServletHelper.class);
 
   private ServletHelper() {}
 
@@ -78,7 +77,7 @@ public final class ServletHelper {
     try {
       response.sendError(sc, message);
     } catch (IOException e) {
-      LOGGER.error(message, e);
+      log.error(message, e);
     }
   }
 
@@ -92,7 +91,7 @@ public final class ServletHelper {
     try {
       response.getWriter().write(JsonHelper.toJson(result));
     } catch (IOException e) {
-      LOGGER.error("Error writing task id as JSON", e);
+      log.error("Error writing task id as JSON", e);
     }
   }
 
@@ -116,7 +115,7 @@ public final class ServletHelper {
       }
 
     } catch (IOException | ServletException | CsvException | SolveServletException e) {
-      LOGGER.error("Error parsing matrix in the request", e);
+      log.error("Error parsing matrix in the request", e);
       return Optional.empty();
     }
   }
@@ -140,7 +139,7 @@ public final class ServletHelper {
         return Optional.of(convert(readCsvAsVector(is)));
       }
     } catch (IOException | ServletException | CsvException | SolveServletException e) {
-      LOGGER.error("Error parsing right hand side in the request", e);
+      log.error("Error parsing right hand side in the request", e);
       return Optional.empty();
     }
   }
@@ -155,7 +154,7 @@ public final class ServletHelper {
       response.setStatus(HttpServletResponse.SC_NOT_FOUND);
       response.getWriter().write("{\"error\":\"no_result_for_provided_task_id\"}");
     } catch (IOException e) {
-      LOGGER.error("Error writing not-found response", e);
+      log.error("Error writing not-found response", e);
     }
   }
 
