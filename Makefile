@@ -97,9 +97,9 @@ reformat_js:
 #
 check_python_code_style:
 	$(call log_info,"Checking python code style...")
-	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES) --ignore=E501
-	ruff check $(PROJECT_ROOT) --fix --force-exclude $(VENV_DIR) --respect-gitignore
-	pylint $(PROJECT_ROOT) --ignore $(VENV_DIR) --errors-only
+	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*target* --ignore=E501
+	ruff check $(PROJECT_ROOT) --fix --force-exclude $(VENV_DIR) target --respect-gitignore
+	pylint $(PROJECT_ROOT) --ignore $(VENV_DIR),target --errors-only
 	$(call log_done,"Checking python code style completed.")
 
 #
@@ -310,7 +310,7 @@ check_license:
 	$(call log_info,"🔍 Checking license headers in source files...")
 	@FILES=$$(find . \
 		-type f \
-		-not -path "./node_modules/*" \
+		-not -path "./$(NODE_MODULES)/*" \
 		-not -path "./.idea/*" \
 		-not -path "*/__pycache__/*" \
 		-not -path "*/.pytest_cache/*" \

@@ -21,3 +21,5 @@ requests
 pika
 redis
 aioredis
+grpcio-tools
+protobuf

@@ -1,0 +1,32 @@
+/*
+ * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+ * Refer to the LICENSE file in the root directory for full license details.
+ */
+syntax = "proto3";
+
+package solver;
+
+option java_package = "com.mdds.grpc.solver";
+option java_multiple_files = true;
+
+// gRPC service for solving system of linear equations.
+service SolverService {
+  rpc Solve(SolveRequest) returns (SolveResponse);
+}
+
+// Request for solving SLAE
+message SolveRequest {
+  string method = 1;            // method name (e.g: "numpy_exact_solver")
+  repeated Row matrix = 2;      // matrix A
+  repeated double rhs = 3;      // right hand side b
+}
+
+// Matrix for SLAE as repeated row
+message Row {
+  repeated double values = 1;
+}
+
+// Solution
+message SolveResponse {
+  repeated double solution = 1; // solution of SLAE
+}

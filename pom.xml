@@ -17,6 +17,10 @@
     <mockito.version>5.19.0</mockito.version>
     <tomcat.version>11.0.11</tomcat.version>
     <testcontainers.version>1.21.3</testcontainers.version>
+    <grpc.version>1.75.0</grpc.version>
+    <protobuf-java.version>3.25.1</protobuf-java.version>
+    <protobuf.sources.root.dir>${project.basedir}/src/main/proto</protobuf.sources.root.dir>
+    <protobuf.output.dir>${project.build.directory}/generated-sources/protobuf</protobuf.output.dir>
   </properties>
   <dependencies>
     <dependency>
@@ -145,6 +149,21 @@
       <version>2.3.0</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-api</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-protobuf</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -222,6 +241,55 @@
             <goals>
               <goal>single</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>io.github.ascopes</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <version>3.9.1</version>
+        <configuration>
+          <sourceDirectories>${protobuf.sources.root.dir}</sourceDirectories>
+          <protocVersion>${protobuf-java.version}</protocVersion>
+          <outputDirectory>${protobuf.output.dir}</outputDirectory>
+          <binaryMavenPlugins>
+            <binaryMavenPlugin>
+              <groupId>io.grpc</groupId>
+              <artifactId>protoc-gen-grpc-java</artifactId>
+              <version>${grpc.version}</version>
+            </binaryMavenPlugin>
+          </binaryMavenPlugins>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.1</version>
+        <executions>
+          <execution>
+            <id>generate-python-grpc</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>python</executable>
+              <arguments>
+                <argument>-m</argument>
+                <argument>grpc_tools.protoc</argument>
+                <argument>-I${protobuf.sources.root.dir}</argument>
+                <argument>--python_out=${protobuf.output.dir}</argument>
+                <argument>--grpc_python_out=${protobuf.output.dir}</argument>
+                <argument>${protobuf.sources.root.dir}/solver.proto</argument>
+              </arguments>
+            </configuration>
           </execution>
         </executions>
       </plugin>
