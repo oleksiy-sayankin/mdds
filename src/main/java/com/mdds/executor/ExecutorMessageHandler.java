@@ -4,6 +4,7 @@
  */
 package com.mdds.executor;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.mdds.common.AppConstants;
 import com.mdds.common.AppConstantsFactory;
 import com.mdds.grpc.solver.Row;
@@ -37,6 +38,14 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
             .build();
     this.solverStub = SolverServiceGrpc.newBlockingStub(channel);
     this.resultQueue = resultQueue;
+  }
+
+  @VisibleForTesting
+  public ExecutorMessageHandler(
+      @Nonnull Queue resultQueue,
+      @Nonnull SolverServiceGrpc.SolverServiceBlockingStub solverStub) {
+    this.resultQueue = resultQueue;
+    this.solverStub = solverStub;
   }
 
   @Override
