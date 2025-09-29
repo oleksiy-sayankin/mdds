@@ -4,7 +4,7 @@
  */
 package com.mdds.executor;
 
-import static com.mdds.common.AppConstants.RESULT_QUEUE_NAME;
+import static com.mdds.common.AppConstants.TASK_QUEUE_NAME;
 
 import com.mdds.common.AppConstantsFactory;
 import com.mdds.queue.MessageHandler;
@@ -32,7 +32,7 @@ public class ExecutorService implements AutoCloseable {
     this.resultQueue = resultQueue;
     this.taskQueueSubscription =
         taskQueue.subscribe(
-            AppConstantsFactory.getString(RESULT_QUEUE_NAME), TaskDTO.class, messageHandler);
+            AppConstantsFactory.getString(TASK_QUEUE_NAME), TaskDTO.class, messageHandler);
   }
 
   @Override
