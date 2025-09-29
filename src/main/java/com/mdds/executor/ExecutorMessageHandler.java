@@ -42,8 +42,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
 
   @VisibleForTesting
   public ExecutorMessageHandler(
-      @Nonnull Queue resultQueue,
-      @Nonnull SolverServiceGrpc.SolverServiceBlockingStub solverStub) {
+      @Nonnull Queue resultQueue, @Nonnull SolverServiceGrpc.SolverServiceBlockingStub solverStub) {
     this.resultQueue = resultQueue;
     this.solverStub = solverStub;
   }
