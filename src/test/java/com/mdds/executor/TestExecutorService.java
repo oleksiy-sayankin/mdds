@@ -129,11 +129,10 @@ class TestExecutorService {
   @Test
   void testExecutorMessageHandlerWithMock() {
     // given
-    Queue resultQueue = mock(Queue.class);
-    SolverServiceGrpc.SolverServiceBlockingStub solverStub =
-        mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
+    Queue mockedResultQueue = mock(Queue.class);
+    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
 
-    when(solverStub.solve(any()))
+    when(mockedSolverStub.solve(any()))
         .thenReturn(
             SolveResponse.newBuilder()
                 .addSolution(1.371)
@@ -141,7 +140,7 @@ class TestExecutorService {
                 .addSolution(3.243)
                 .build());
 
-    ExecutorMessageHandler handler = new ExecutorMessageHandler(resultQueue, solverStub);
+    var handler = new ExecutorMessageHandler(mockedResultQueue, mockedSolverStub);
 
     // Prepare and put data to task queue
     var taskId = UUID.randomUUID().toString();
@@ -155,13 +154,13 @@ class TestExecutorService {
             },
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
-    Acknowledger ack = mock(Acknowledger.class);
+    var ack = mock(Acknowledger.class);
     var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
     // when
     handler.handle(taskMessage, ack);
 
     // then
-    verify(resultQueue).publish(anyString(), any());
+    verify(mockedResultQueue).publish(anyString(), any());
     verify(ack).ack();
   }
 }
