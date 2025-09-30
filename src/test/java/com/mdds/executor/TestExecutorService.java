@@ -68,38 +68,34 @@ class TestExecutorService {
 
   @Test
   void testExecutorService() {
-    var messageHandler = mock(ExecutorMessageHandler.class);
+    // Prepare and put data to task queue
+    var taskId = UUID.randomUUID().toString();
+    var startTime = Instant.now();
+    var task =
+        new TaskDTO(
+            taskId,
+            startTime,
+            new double[][] {
+              {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
+            },
+            new double[] {4.3, 3.23, 5.324},
+            SlaeSolver.NUMPY_EXACT_SOLVER);
+    var endTime = Instant.now();
+    var expectedResult =
+        new ResultDTO(
+            taskId, startTime, endTime, TaskStatus.DONE, new double[] {1.971, 3.213, 7.243}, "");
+
+    // Simulate that ExecutorMessageHandler solves the task
+    MessageHandler<TaskDTO> messageHandler =
+        (message, ack) -> {
+          var resultMessage = new Message<>(expectedResult, new HashMap<>(), Instant.now());
+          resultQueue.publish(
+              AppConstantsFactory.getString(AppConstants.RESULT_QUEUE_NAME), resultMessage);
+          ack.ack();
+        };
     try (var executorService = new ExecutorService(taskQueue, resultQueue, messageHandler)) {
-      // Prepare and put data to task queue
-      var taskId = UUID.randomUUID().toString();
-      var startTime = Instant.now();
-      var task =
-          new TaskDTO(
-              taskId,
-              startTime,
-              new double[][] {
-                {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
-              },
-              new double[] {4.3, 3.23, 5.324},
-              SlaeSolver.NUMPY_EXACT_SOLVER);
       var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
       taskQueue.publish(AppConstantsFactory.getString(AppConstants.TASK_QUEUE_NAME), taskMessage);
-
-      var endTime = Instant.now();
-      var expectedResult =
-          new ResultDTO(
-              taskId, startTime, endTime, TaskStatus.DONE, new double[] {1.971, 3.213, 7.243}, "");
-
-      // Simulate that ExecutorMessageHandler solves the task
-      doAnswer(
-              invocation -> {
-                var resultMessage = new Message<>(expectedResult, new HashMap<>(), Instant.now());
-                resultQueue.publish(
-                    AppConstantsFactory.getString(AppConstants.RESULT_QUEUE_NAME), resultMessage);
-                return null;
-              })
-          .when(messageHandler)
-          .handle(any(), any());
 
       Awaitility.await()
           .atMost(Duration.ofSeconds(2))
