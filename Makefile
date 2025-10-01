@@ -3,8 +3,12 @@
 
 PYTHON_ENV_HOME := ~/.venvs
 NODE_MODULES := node_modules
+PYTHON_GENERATED_SOURCES := python/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
+PYTHON_ROOT := $(PROJECT_ROOT)/python
+JS_ROOT := $(PROJECT_ROOT)/python/mdds_client
+JAVA_ROOT := $(PROJECT_ROOT)/java
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := oleksiysayankin
 MDDS_SERVER_PORT ?= 8000
@@ -89,7 +93,7 @@ push_image:
 #
 reformat_js:
 	$(call log_info,"Reformating JavaScript sources...")
-	prettier --write mdds_client/
+	prettier --write $(JS_ROOT)/
 	$(call log_done,"Reformating JavaScript sources completed.")
 
 #
@@ -97,9 +101,9 @@ reformat_js:
 #
 check_python_code_style:
 	$(call log_info,"Checking python code style...")
-	pycodestyle $(PROJECT_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*target* --ignore=E501
-	ruff check $(PROJECT_ROOT) --fix --force-exclude $(VENV_DIR) target --respect-gitignore
-	pylint $(PROJECT_ROOT) --ignore $(VENV_DIR),target --errors-only
+	pycodestyle $(PYTHON_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501
+	ruff check $(PYTHON_ROOT) --fix --force-exclude $(VENV_DIR) ./$(PYTHON_GENERATED_SOURCES)/ --respect-gitignore
+	pylint $(PYTHON_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking python code style completed.")
 
 #
@@ -107,7 +111,7 @@ check_python_code_style:
 #
 check_js_code_style:
 	$(call log_info,"Checking JavaScript code style...")
-	eslint mdds_client/ --debug --fix
+	eslint $(JS_ROOT) --debug --fix
 	$(call log_done,"Checking JavaScript code style completed.")
 
 #
@@ -115,7 +119,7 @@ check_js_code_style:
 #
 reformat_python:
 	$(call log_info,"Reformating python sources...")
-	black .  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
+	black $(PYTHON_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
 	$(call log_done,"Reformating python sources completed.")
 
 #
@@ -147,7 +151,7 @@ test_python:
 #
 reformat_java:
 	$(call log_info,"Reformatting Java sources...")
-	@find src -name "*.java" | xargs java -jar ~/google/google-java-format/google-java-format.jar --replace
+	@find $(JAVA_ROOT) -name "*.java" | xargs java -jar ~/google/google-java-format/google-java-format.jar --replace
 	$(call log_done,"Reformatting Java sources completed.")
 
 #
@@ -318,6 +322,7 @@ check_license:
 		-not -path "*/.git/*" \
 		-not -path "./logs/*" \
 		-not -path "./target/*" \
+		-not -path "*/$(PYTHON_GENERATED_SOURCES)/*" \
 		-not -name "*.csv" \
 		-not -name "*.ico" \
 		-not -name ".sonar_token" \

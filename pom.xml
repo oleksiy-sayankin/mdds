@@ -19,8 +19,9 @@
     <testcontainers.version>1.21.3</testcontainers.version>
     <grpc.version>1.75.0</grpc.version>
     <protobuf-java.version>3.25.1</protobuf-java.version>
-    <protobuf.sources.root.dir>${project.basedir}/src/main/proto</protobuf.sources.root.dir>
-    <protobuf.output.dir>${project.build.directory}/generated-sources/protobuf</protobuf.output.dir>
+    <protobuf.sources.root.dir>${project.basedir}/proto</protobuf.sources.root.dir>
+    <protobuf.java.output.dir>${project.build.directory}/generated-sources/protobuf</protobuf.java.output.dir>
+    <protobuf.python.output.dir>${project.basedir}/python/generated</protobuf.python.output.dir>
   </properties>
   <dependencies>
     <dependency>
@@ -171,6 +172,18 @@
     </dependency>
   </dependencies>
   <build>
+    <sourceDirectory>${project.basedir}/java/src/main/java</sourceDirectory>
+    <testSourceDirectory>${project.basedir}/java/src/test/java</testSourceDirectory>
+    <resources>
+      <resource>
+        <directory>${project.basedir}/java/src/main/resources</directory>
+      </resource>
+    </resources>
+    <testResources>
+      <testResource>
+        <directory>${project.basedir}/java/src/test/resources</directory>
+      </testResource>
+    </testResources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -256,7 +269,7 @@
         <configuration>
           <sourceDirectories>${protobuf.sources.root.dir}</sourceDirectories>
           <protocVersion>${protobuf-java.version}</protocVersion>
-          <outputDirectory>${protobuf.output.dir}</outputDirectory>
+          <outputDirectory>${protobuf.java.output.dir}</outputDirectory>
           <binaryMavenPlugins>
             <binaryMavenPlugin>
               <groupId>io.grpc</groupId>
@@ -290,8 +303,8 @@
                 <argument>-m</argument>
                 <argument>grpc_tools.protoc</argument>
                 <argument>-I${protobuf.sources.root.dir}</argument>
-                <argument>--python_out=${protobuf.output.dir}</argument>
-                <argument>--grpc_python_out=${protobuf.output.dir}</argument>
+                <argument>--python_out=${protobuf.python.output.dir}</argument>
+                <argument>--grpc_python_out=${protobuf.python.output.dir}</argument>
                 <argument>${protobuf.sources.root.dir}/solver.proto</argument>
               </arguments>
             </configuration>
