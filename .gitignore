@@ -8,4 +8,5 @@ tests/e2e/.env
 tests/e2e/output/
 .sonar_token
 target/
+python/generated
 *.iml

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<Configuration status="WARN">
+  <!-- Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.-->
+  <!-- Refer to the LICENSE file in the root directory for full license details.-->
+  <Appenders>
+    <Console name="Console" target="SYSTEM_OUT">
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+    </Console>
+    <File name="File" fileName="logs/application.log">
+      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+    </File>
+  </Appenders>
+  <Loggers>
+    <Root level="info">
+      <AppenderRef ref="Console"/>
+      <AppenderRef ref="File"/>
+    </Root>
+  </Loggers>
+</Configuration>

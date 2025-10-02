@@ -8,7 +8,7 @@ PROJECT_ROOT := .
 PROJECT_NAME := mdds
 PYTHON_ROOT := $(PROJECT_ROOT)/python
 JS_ROOT := $(PROJECT_ROOT)/python/mdds_client
-JAVA_ROOT := $(PROJECT_ROOT)/java
+JAVA_ROOT := $(PROJECT_ROOT)
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := oleksiysayankin
 MDDS_SERVER_PORT ?= 8000
@@ -162,7 +162,7 @@ reformat_xml:
 	@find . -type f -name "*.xml" \
 		-not -path "./$(NODE_MODULES)/*" \
 		-not -path "./.idea/*" \
-		-not -path "./target/*" | while read -r file; do \
+		-not -path "./*target/*" | while read -r file; do \
 		echo "   → $$file"; \
 		xmllint --format "$$file" --output "$$file"; \
 	done
@@ -321,7 +321,7 @@ check_license:
 		-not -path "*/.ruff_cache/*" \
 		-not -path "*/.git/*" \
 		-not -path "./logs/*" \
-		-not -path "./target/*" \
+		-not -path "./*target/*" \
 		-not -path "*/$(PYTHON_GENERATED_SOURCES)/*" \
 		-not -name "*.csv" \
 		-not -name "*.ico" \
