@@ -30,6 +30,7 @@
     <testcontainers.version>1.21.3</testcontainers.version>
     <grpc.version>1.75.0</grpc.version>
     <protobuf-java.version>3.25.1</protobuf-java.version>
+    <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
   </properties>
   <dependencies>
     <dependency>
