@@ -1,20 +1,48 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 """
-Entry point for running server with chosen solver
+Entry point for running gRPC server with chosen solver
 """
+import os
+import asyncio
+
 import uvicorn
-from mdds_server.config_loader import Config
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from server import Server
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(Server().run())
+    try:
+        yield
+    finally:
+        await Server().stop()
+
+
+app = FastAPI(
+    lifespan=lifespan,
+    title="gRPC service on Python",
+    description="Solves SLAE using gRPC on Python",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 if __name__ == "__main__":
-    config = Config()
-    host = config.get("server", "host", default="0.0.0.0")
-    port = config.get("server", "port", default=8000)
-    reload = config.get("server", "reload", default="true")
+    grpc_host = os.getenv("MDDS_EXECUTOR_GRPC_HOST", "localhost")
+    grpc_port = os.getenv("MDDS_EXECUTOR_GRPC_PORT", 50051)
 
     uvicorn.run(
-        "mdds_server.server:app",
-        host=host,
-        port=port,
-        reload=reload,
+        "main:app",
+        host=grpc_host,
+        port=grpc_port,
+        reload=True,
     )

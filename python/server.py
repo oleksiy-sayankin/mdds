@@ -1,0 +1,74 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+import os
+import logging
+from service import SolverService
+from generated import solver_pb2_grpc
+from grpc import aio
+from concurrent import futures
+
+logging.basicConfig(
+    filename="Server.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+
+class Server:
+    """
+    Singleton to create and strat gRPC Server.
+    Creates single instance of gRPC Server, that we can register and start.
+    """
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Creates and returns single instance of gRPC Server.
+        If instance exists, returns it. Otherwise, creates new instance.
+        """
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        """
+        Initializes gRPC Server, if not yet initialized.
+        Setups gRPC host and port, creates gRPC server and adds insecure port.
+        """
+        if not hasattr(self, "initialized"):
+            grpc_host = os.getenv("MDDS_EXECUTOR_GRPC_HOST", "localhost")
+            grpc_port = os.getenv("MDDS_EXECUTOR_GRPC_PORT", 50051)
+            self.SERVER_ADDRESS = f"{grpc_host}:{grpc_port}"
+            self.server = aio.server(futures.ThreadPoolExecutor(max_workers=10))
+            self.server.add_insecure_port(self.SERVER_ADDRESS)
+            self.initialized = True
+
+    def register(self) -> None:
+        """
+        Registers services in gRPC server.
+        Register SolverService in gRPC server.
+        """
+        solver_pb2_grpc.add_SolverServiceServicer_to_server(
+            SolverService(), self.server
+        )
+
+    async def run(self) -> None:
+        """
+        Runs gRPC server and waits for its termination.
+
+        Register services and starts gRPC server. Logs information about gRPC server start.
+        """
+        self.register()
+        await self.server.start()
+        logging.info(f"Solver gRPC server started on: {self.SERVER_ADDRESS}")
+        await self.server.wait_for_termination()
+
+    async def stop(self) -> None:
+        """
+        Stops gRPC server.
+
+        Stops gRPC server without grace period. Logs information about gRPC server stop.
+        """
+        logging.info("gRPC server is stopped")
+        await self.server.stop(grace=False)
