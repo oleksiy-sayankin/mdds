@@ -13,7 +13,7 @@
   <properties>
     <protobuf.sources.root.dir>${project.basedir}/../proto</protobuf.sources.root.dir>
     <protobuf.java.output.dir>${project.build.directory}/generated-sources/protobuf</protobuf.java.output.dir>
-    <protobuf.python.output.dir>${project.basedir}/../python/generated</protobuf.python.output.dir>
+    <protobuf.python.output.dir>${project.basedir}/../mdds_grpc_core/generated</protobuf.python.output.dir>
   </properties>
   <dependencies>
     <dependency>
