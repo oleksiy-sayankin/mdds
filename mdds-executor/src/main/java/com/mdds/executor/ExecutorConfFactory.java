@@ -22,8 +22,11 @@ public class ExecutorConfFactory {
     var host = resolveString("mdds.executor.host", "MDDS_EXECUTOR_HOST", props, "localhost");
     var port = resolveInt("mdds.executor.port", "MDDS_EXECUTOR_PORT", props, 35232);
     var grpcHost =
-        resolveString("mdds.executor.grpc.host", "MDDS_EXECUTOR_GRPC_HOST", props, "localhost");
-    var grpcPort = resolveInt("mdds.executor.grpc.port", "MDDS_EXECUTOR_GRPC_PORT", props, 50051);
+        resolveString(
+            "mdds.executor.grpc.server.host", "MDDS_EXECUTOR_GRPC_SERVER_HOST", props, "localhost");
+    var grpcPort =
+        resolveInt(
+            "mdds.executor.grpc.server.port", "MDDS_EXECUTOR_GRPC_SERVER_PORT", props, 50051);
     var webappDirLocation =
         resolveString(
             "mdds.executor.webapp.dir.location",
