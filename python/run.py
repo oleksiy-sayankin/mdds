@@ -1,7 +1,7 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 """
-Entry point for running gRPC server with chosen solver
+Entry point for running gRPC web server with chosen solver
 """
 import os
 import asyncio
@@ -10,16 +10,21 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from server import Server
+from grpcserver import GrpcServer
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+grpc_webclient_dir = os.path.join(os.path.dirname(__file__), "grpc_webclient")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    asyncio.create_task(Server().run())
+    """Here we start and stop gRPC Server"""
+    asyncio.create_task(GrpcServer().start())
     try:
         yield
     finally:
-        await Server().stop()
+        await GrpcServer().stop()
 
 
 app = FastAPI(
@@ -36,13 +41,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount(
+    "/static", StaticFiles(directory=grpc_webclient_dir, html=True), name="static"
+)
+
+
+@app.get("/")
+def index():
+    """
+    Root endpoint.
+
+    :return: gRPC web server page index.html
+    """
+    return FileResponse(os.path.join(grpc_webclient_dir, "index.html"))
+
+
+@app.get("/health")
+def health():
+    """
+    Health check for gRPC web server
+
+    :return: always returns ok as health status
+    """
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
-    grpc_host = os.getenv("MDDS_EXECUTOR_GRPC_HOST", "localhost")
-    grpc_port = os.getenv("MDDS_EXECUTOR_GRPC_PORT", 50051)
+    grpc_webserver_host = os.getenv("MDDS_EXECUTOR_GRPC_WEBSERVER_HOST", "localhost")
+    grpc_webserver_port = os.getenv("MDDS_EXECUTOR_GRPC_WEBSERVER_PORT", 40062)
 
     uvicorn.run(
         "run:app",
-        host=grpc_host,
-        port=grpc_port,
+        host=grpc_webserver_host,
+        port=grpc_webserver_port,
         reload=True,
     )

@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 
-class Server:
+class GrpcServer:
     """
     Singleton to create and strat gRPC Server.
     Creates single instance of gRPC Server, that we can register and start.
@@ -53,7 +53,7 @@ class Server:
             SolverService(), self.server
         )
 
-    async def run(self) -> None:
+    async def start(self) -> None:
         """
         Runs gRPC server and waits for its termination.
 
