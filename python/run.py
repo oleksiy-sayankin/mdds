@@ -41,7 +41,7 @@ if __name__ == "__main__":
     grpc_port = os.getenv("MDDS_EXECUTOR_GRPC_PORT", 50051)
 
     uvicorn.run(
-        "main:app",
+        "run:app",
         host=grpc_host,
         port=grpc_port,
         reload=True,
