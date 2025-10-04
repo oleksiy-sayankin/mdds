@@ -13,7 +13,7 @@
   <properties>
     <protobuf.sources.root.dir>${project.basedir}/../proto</protobuf.sources.root.dir>
     <protobuf.java.output.dir>${project.build.directory}/generated-sources/protobuf</protobuf.java.output.dir>
-    <protobuf.python.output.dir>${project.basedir}/../mdds_grpc_core/generated</protobuf.python.output.dir>
+    <protobuf.python.output.dir>${project.basedir}/../mdds_grpc_core/</protobuf.python.output.dir>
   </properties>
   <dependencies>
     <dependency>
@@ -97,7 +97,7 @@
                 <argument>--python_out=${protobuf.python.output.dir}</argument>
                 <argument>--pyi_out=${protobuf.python.output.dir}</argument>
                 <argument>--grpc_python_out=${protobuf.python.output.dir}</argument>
-                <argument>${protobuf.sources.root.dir}/solver.proto</argument>
+                <argument>${protobuf.sources.root.dir}/generated/solver.proto</argument>
               </arguments>
             </configuration>
           </execution>
@@ -111,7 +111,7 @@
           <excludeDefaultDirectories>true</excludeDefaultDirectories>
           <filesets>
             <fileset>
-              <directory>${protobuf.python.output.dir}</directory>
+              <directory>${protobuf.python.output.dir}/generated</directory>
               <includes>
                 <include>**/*</include>
               </includes>
