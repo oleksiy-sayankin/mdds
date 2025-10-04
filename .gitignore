@@ -2,6 +2,7 @@
 __pycache__
 mdds_env
 logs
+*.log
 node_modules
 package-lock.json
 tests/e2e/.env
