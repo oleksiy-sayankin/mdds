@@ -58,7 +58,7 @@ run_all: reformat_and_check_all test_and_run
 #
 # Reformat and check all code
 #
-reformat_and_check_all: check_license reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
+reformat_and_check_all: check_license build_jars reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
 
 #
 # Run tests and start server
