@@ -1,0 +1,13 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+[MASTER]
+
+[MESSAGES CONTROL]
+# Do not check out generated sources
+ignore-patterns=generated/*
+
+[TYPECHECK]
+# Skip type check for generated sources that is used in main files
+ignored-modules=google.protobuf
+generated-members=SerializeToString,FromString,SolveRequest,SolveResponse,Row,DESCRIPTOR
+
