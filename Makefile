@@ -119,7 +119,7 @@ check_js_code_style:
 #
 reformat_python:
 	$(call log_info,"Reformating python sources...")
-	black $(PYTHON_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES))/' --verbose
+	black $(PYTHON_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(PYTHON_GENERATED_SOURCES))/' --verbose
 	$(call log_done,"Reformating python sources completed.")
 
 #
