@@ -3,11 +3,11 @@
 
 PYTHON_ENV_HOME := ~/.venvs
 NODE_MODULES := node_modules
-PYTHON_GENERATED_SOURCES := python/generated
+PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
-PYTHON_ROOT := $(PROJECT_ROOT)/python
-JS_ROOT := $(PROJECT_ROOT)/python/mdds_client
+PYTHON_ROOT := $(PROJECT_ROOT)/mdds_grpc_core
+JS_ROOT := $(PROJECT_ROOT)/mdds_grpc_core/mdds_client
 JAVA_ROOT := $(PROJECT_ROOT)
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := oleksiysayankin
