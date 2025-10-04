@@ -324,6 +324,7 @@ check_license:
 		-not -path "./*target/*" \
 		-not -path "*/$(PYTHON_GENERATED_SOURCES)/*" \
 		-not -name "*.csv" \
+		-not -name "*.log" \
 		-not -name "*.ico" \
 		-not -name ".sonar_token" \
 		-not -name "*.gitignore" \
