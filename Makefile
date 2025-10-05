@@ -6,11 +6,14 @@ NODE_MODULES := node_modules
 PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
-PYTHON_ROOT := $(PROJECT_ROOT)/mdds_grpc_core
-JS_ROOT := $(PROJECT_ROOT)/mdds_grpc_core/mdds_client
+MDDS_GRPC_CORE := mdds_grpc_core
+PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_GRPC_CORE)
+JS_ROOT := $(PROJECT_ROOT)/$(MDDS_GRPC_CORE)/mdds_client
 JAVA_ROOT := $(PROJECT_ROOT)
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
-USER_NAME := oleksiysayankin
+USER_NAME := mddsproject
+DEPLOYMENT_DIR := deployment
+DEPLOYMENT_TEST_ROOT := $(PROJECT_ROOT)/$(DEPLOYMENT_DIR)/test
 MDDS_SERVER_PORT ?= 8000
 MDDS_SERVER_HOST ?= localhost
 E2E_HOME := tests/e2e
@@ -70,13 +73,31 @@ test_and_run: test_all run_server
 #
 test_all: test_python test_js test_java test_e2e
 
+#
+# Build Docker image for Java tests
+#
+build_java_test_docker_image:
+	$(call log_info,"Building Docker image for Java tests...")
+	cp -a $(PYTHON_ROOT) $(DEPLOYMENT_TEST_ROOT)
+	docker buildx build --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):test deployment/test
+	rm -Rf $(DEPLOYMENT_TEST_ROOT)/$(PYTHON_ROOT)
+	$(call log_done,"Building Docker image for Java tests completed.")
+
+#
+# Push Docker image for Java tests
+#
+push_java_test_docker_image:
+	$(call log_info,"Pushing Docker image for Java tests...")
+	docker push $(USER_NAME)/$(PROJECT_NAME):test
+	$(call log_done,"Pushing Docker image for Java tests completed.")
+
 
 #
 # Build Docker image
 #
 build_image:
 	$(call log_info,"Building Docker image...")
-	docker buildx build --no-cache --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
+	docker buildx build --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
 	$(call log_done,"Building Docker image completed.")
 
 
