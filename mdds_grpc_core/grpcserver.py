@@ -38,7 +38,7 @@ class GrpcServer:
         """
         if not hasattr(self, "initialized"):
             grpc_host = os.getenv("MDDS_EXECUTOR_GRPC_SERVER_HOST", "localhost")
-            grpc_port = os.getenv("MDDS_EXECUTOR_GRPC_SERVER_PORT", 50051)
+            grpc_port = int(os.getenv("MDDS_EXECUTOR_GRPC_SERVER_PORT", 50051))
             self.SERVER_ADDRESS = f"{grpc_host}:{grpc_port}"
             self.server = aio.server(futures.ThreadPoolExecutor(max_workers=10))
             self.server.add_insecure_port(self.SERVER_ADDRESS)
