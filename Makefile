@@ -74,6 +74,24 @@ test_and_run: test_all run_server
 test_all: test_python test_js test_java test_e2e
 
 #
+# Build base Docker that is use as root image for others
+#
+build_base_docker_image:
+	$(call log_info,"Building base Docker image...")
+	cp -a $(PYTHON_ROOT) $(DEPLOYMENT_TEST_ROOT)
+	docker buildx build --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):base deployment/base
+	rm -Rf $(DEPLOYMENT_TEST_ROOT)/$(PYTHON_ROOT)
+	$(call log_done,"Building base Docker image completed.")
+
+#
+# Push base Docker image
+#
+push_base_docker_image:
+	$(call log_info,"Pushing base Docker image...")
+	docker push $(USER_NAME)/$(PROJECT_NAME):base
+	$(call log_done,"Pushing base Docker image completed.")
+
+#
 # Build Docker image for Java tests
 #
 build_java_test_docker_image:
