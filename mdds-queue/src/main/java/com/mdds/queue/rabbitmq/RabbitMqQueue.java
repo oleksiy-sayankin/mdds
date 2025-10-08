@@ -139,6 +139,7 @@ public class RabbitMqQueue implements Queue {
   public void close() {
     try {
       if (channel.isOpen()) channel.close();
+      log.info("Closed queue channel {}", channel);
     } catch (Exception e) {
       log.warn("Failed to close channel", e);
     } finally {
