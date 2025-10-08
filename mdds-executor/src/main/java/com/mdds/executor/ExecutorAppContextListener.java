@@ -14,18 +14,24 @@ import jakarta.servlet.ServletContextListener;
  */
 public class ExecutorAppContextListener implements ServletContextListener {
   public static final String ATTR_EXECUTOR_SERVICE = "EXECUTOR_SERVICE";
+  public static final String ATTR_MESSAGE_HANDLER = "MESSAGE_HANDLER";
 
   @Override
   public void contextInitialized(ServletContextEvent sce) {
     var queue = new RabbitMqQueueProvider().get();
     var messageHandler = new ExecutorMessageHandler(queue);
-    sce.getServletContext()
-        .setAttribute(ATTR_EXECUTOR_SERVICE, new ExecutorService(queue, queue, messageHandler));
+    var ctx = sce.getServletContext();
+    ctx.setAttribute(ATTR_EXECUTOR_SERVICE, new ExecutorService(queue, queue, messageHandler));
+    ctx.setAttribute(ATTR_MESSAGE_HANDLER, messageHandler);
   }
 
   @Override
   public void contextDestroyed(ServletContextEvent sce) {
     var ctx = sce.getServletContext();
+    var handler = (ExecutorMessageHandler) ctx.getAttribute(ATTR_MESSAGE_HANDLER);
+    if (handler != null) {
+      handler.close();
+    }
     var service = (ExecutorService) ctx.getAttribute(ATTR_EXECUTOR_SERVICE);
     if (service != null) {
       service.close();
