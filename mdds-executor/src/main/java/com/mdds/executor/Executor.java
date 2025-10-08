@@ -17,7 +17,7 @@ import org.apache.catalina.startup.Tomcat;
 public class Executor {
   public static void main(String[] args) throws LifecycleException {
     var conf = ExecutorConfFactory.fromEnvOrDefaultProperties();
-    start(conf.host(), conf.port(), conf.webappDirLocation()).getServer().await();
+    start(conf.executorHost(), conf.executorPort(), conf.webappDirLocation()).getServer().await();
   }
 
   /**

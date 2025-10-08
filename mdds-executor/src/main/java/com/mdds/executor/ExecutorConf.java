@@ -9,13 +9,15 @@ import jakarta.annotation.Nonnull;
 /**
  * Base class for Executor configuration.
  *
- * @param host host where Executor runs.
- * @param port port where Executor runs.
+ * @param executorHost host where Executor runs.
+ * @param executorPort port where Executor runs.
+ * @param grpcServerHost host where gRPC Server runs.
+ * @param grpcServerPort port where gRPC Server runs.
  * @param webappDirLocation web application directory location.
  */
 public record ExecutorConf(
-    @Nonnull String host,
-    int port,
-    @Nonnull String grpcHost,
-    int grpcPort,
+    @Nonnull String executorHost,
+    int executorPort,
+    @Nonnull String grpcServerHost,
+    int grpcServerPort,
     @Nonnull String webappDirLocation) {}

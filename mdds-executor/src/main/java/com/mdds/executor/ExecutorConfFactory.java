@@ -19,12 +19,13 @@ public class ExecutorConfFactory {
 
   public static @Nonnull ExecutorConf fromEnvOrDefaultProperties() {
     var props = readPropertiesOrEmpty(FILE_NAME);
-    var host = resolveString("mdds.executor.host", "MDDS_EXECUTOR_HOST", props, "localhost");
-    var port = resolveInt("mdds.executor.port", "MDDS_EXECUTOR_PORT", props, 35232);
-    var grpcHost =
+    var executorHost =
+        resolveString("mdds.executor.host", "MDDS_EXECUTOR_HOST", props, "localhost");
+    var executorPort = resolveInt("mdds.executor.port", "MDDS_EXECUTOR_PORT", props, 35232);
+    var grpcServerHost =
         resolveString(
             "mdds.executor.grpc.server.host", "MDDS_EXECUTOR_GRPC_SERVER_HOST", props, "localhost");
-    var grpcPort =
+    var grpcServerPort =
         resolveInt(
             "mdds.executor.grpc.server.port", "MDDS_EXECUTOR_GRPC_SERVER_PORT", props, 50051);
     var webappDirLocation =
@@ -33,6 +34,7 @@ public class ExecutorConfFactory {
             "MDDS_EXECUTOR_WEBAPP_DIR_LOCATION",
             props,
             System.getProperty("user.dir") + File.separator + "mdds_executor");
-    return new ExecutorConf(host, port, grpcHost, grpcPort, webappDirLocation);
+    return new ExecutorConf(
+        executorHost, executorPort, grpcServerHost, grpcServerPort, webappDirLocation);
   }
 }
