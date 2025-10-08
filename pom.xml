@@ -31,6 +31,7 @@
     <grpc.version>1.75.0</grpc.version>
     <protobuf-java.version>3.25.1</protobuf-java.version>
     <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
+    <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
   </properties>
   <dependencies>
     <dependency>
@@ -181,6 +182,15 @@
     </dependency>
   </dependencies>
   <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${maven-surefire-plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -214,26 +224,6 @@
             </goals>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <classpathDependencyExcludes>
-            <!-- Here we fix this warning:
-
-                    SLF4J(W): Class path contains multiple SLF4J providers.
-                    SLF4J(W): Found provider [com.github.valfirst.slf4jtest.TestSLF4JServiceProvider@5f8edcc5]
-                    SLF4J(W): Found provider [org.apache.logging.slf4j.SLF4JServiceProvider@7b02881e]
-
-                    by excluding log4j-slf4j2-impl from class path during test run. We use slf4j-test
-                    to trace log event during tests and hence it conflicts with existing log4j-slf4j2-impl
-                    used for production logging.
-                    -->
-            <classpathDependencyExcludes>org.apache.logging.log4j:log4j-slf4j2-impl</classpathDependencyExcludes>
-          </classpathDependencyExcludes>
-        </configuration>
-        <version>3.5.3</version>
       </plugin>
     </plugins>
   </build>
