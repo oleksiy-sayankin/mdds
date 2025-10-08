@@ -21,6 +21,7 @@ import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.Queue;
 import com.mdds.queue.rabbitmq.RabbitMqQueueProvider;
+import io.grpc.ManagedChannel;
 import jakarta.annotation.Nonnull;
 import java.time.Duration;
 import java.time.Instant;
@@ -125,8 +126,9 @@ class TestExecutorService {
   @Test
   void testExecutorMessageHandlerWithMock() {
     // given
-    Queue mockedResultQueue = mock(Queue.class);
+    var mockedResultQueue = mock(Queue.class);
     var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
+    var mockedChanel = mock(ManagedChannel.class);
 
     when(mockedSolverStub.solve(any()))
         .thenReturn(
@@ -136,7 +138,7 @@ class TestExecutorService {
                 .addSolution(3.243)
                 .build());
 
-    var handler = new ExecutorMessageHandler(mockedResultQueue, mockedSolverStub);
+    var handler = new ExecutorMessageHandler(mockedResultQueue, mockedSolverStub, mockedChanel);
 
     // Prepare and put data to task queue
     var taskId = UUID.randomUUID().toString();
