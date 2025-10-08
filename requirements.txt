@@ -24,3 +24,5 @@ aioredis
 grpcio-tools
 protobuf
 grpcio
+grpcio-health-checking
+grpcio-reflection

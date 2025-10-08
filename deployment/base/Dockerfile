@@ -34,5 +34,7 @@ RUN pip install --no-cache-dir \
     aioredis \
     grpcio-tools \
     protobuf \
-    grpcio
+    grpcio \
+    grpcio-health-checking \
+    grpcio-reflection
 
