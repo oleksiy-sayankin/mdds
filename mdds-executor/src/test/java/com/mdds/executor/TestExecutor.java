@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
@@ -39,6 +40,8 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -191,6 +194,81 @@ class TestExecutor {
             });
 
     log.info("actualResult = {}", actualResultReference);
+    var delta = 0.000001;
+    var endTime = actualResultReference.get().getDateTimeTaskFinished();
+    var expectedResult =
+        new ResultDTO(
+            taskId,
+            startTime,
+            endTime,
+            TaskStatus.DONE,
+            new double[] {
+              -2.8019496130141808, -1.9729062026984527, 13.471272875276737, -7.439241424582051
+            },
+            "");
+    var actualResult = actualResultReference.get();
+    assertEquals(expectedResult.getTaskId(), actualResult.getTaskId());
+    assertEquals(expectedResult.getDateTimeTaskCreated(), actualResult.getDateTimeTaskCreated());
+    assertEquals(expectedResult.getTaskStatus(), actualResult.getTaskStatus());
+    assertArrayEquals(expectedResult.getSolution(), actualResult.getSolution(), delta);
+  }
+
+  private static Stream<SlaeSolver> solvers() {
+    return Stream.of(
+        SlaeSolver.NUMPY_EXACT_SOLVER,
+        SlaeSolver.NUMPY_PINV_SOLVER,
+        SlaeSolver.PETSC_SOLVER,
+        SlaeSolver.NUNPY_LSTSQ_SOLVER,
+        SlaeSolver.SCIPY_GMERS_SOLVER);
+  }
+
+  @ParameterizedTest
+  @MethodSource("solvers")
+  void testExecutorAllSolvers(SlaeSolver slaeSolver) {
+    // Prepare and put data to task queue
+    var taskId = UUID.randomUUID().toString();
+    var startTime = Instant.now();
+    var task =
+        new TaskDTO(
+            taskId,
+            startTime,
+            new double[][] {
+              {1.1, 2.2, 3.3, 4.4},
+              {51, 24.2, 33.3, 34.24},
+              {31.1, 232.2, 43.3, 4.4},
+              {62.1, 78.2, 92.3, 122.4}
+            },
+            new double[] {4.3, 3.23, 5.324, 4.553},
+            slaeSolver);
+
+    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+    taskQueue.publish(AppConstantsFactory.getString(AppConstants.TASK_QUEUE_NAME), taskMessage);
+
+    AtomicReference<ResultDTO> actualResultReference = new AtomicReference<>();
+
+    Awaitility.await()
+        .atMost(Duration.ofSeconds(2))
+        .until(
+            () -> {
+              var checkResultMessageHandler =
+                  new MessageHandler<ResultDTO>() {
+                    @Override
+                    public void handle(
+                        @Nonnull Message<ResultDTO> message, @Nonnull Acknowledger ack) {
+                      // Set the result here
+                      actualResultReference.set(message.payload());
+                    }
+                  };
+              try (var ignored =
+                  resultQueue.subscribe(
+                      AppConstantsFactory.getString(AppConstants.RESULT_QUEUE_NAME),
+                      ResultDTO.class,
+                      checkResultMessageHandler)) {
+                // Do nothing
+              }
+              return isAssigned(actualResultReference);
+            });
+
     var delta = 0.000001;
     var endTime = actualResultReference.get().getDateTimeTaskFinished();
     var expectedResult =
