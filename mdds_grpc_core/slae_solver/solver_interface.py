@@ -7,18 +7,17 @@ Common module with abstract interface
 from abc import ABC, abstractmethod
 from numpy.typing import NDArray
 
-"""
-Abstract interface for all linear system solvers.
-
-Implementations must accept:
-    - matrix: matrix of coefficients (2D, dense or sparse)
-    - rhs: right-hand side vector (1D or 2D column)
-and return:
-    - solution vector x (type depends on implementation: could be list, numpy array, etc.)
-"""
-
 
 class LinearSolverInterface(ABC):
+    """
+    Abstract interface for all linear system solvers.
+
+    Implementations must accept:
+        - matrix: matrix of coefficients (2D, dense or sparse)
+        - rhs: right-hand side vector (1D column)
+    and return:
+        - solution vector x (type depends on implementation: could be list, numpy array, etc.)
+    """
 
     @abstractmethod
     def solve(self, matrix: list[list[float]], rhs: list[float]) -> NDArray:
