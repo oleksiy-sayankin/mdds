@@ -5,7 +5,6 @@
 
 from slae_solver.solver_interface import LinearSolverInterface
 from scipy.sparse import csr_matrix
-from numpy.typing import NDArray
 
 
 class PetscSolver(LinearSolverInterface):
@@ -21,7 +20,7 @@ class PetscSolver(LinearSolverInterface):
         self.tol = tol
         self.maxiter = maxiter
 
-    def solve(self, matrix: list[list[float]], rhs: list[float]) -> NDArray:
+    def solve(self, matrix: list[list[float]], rhs: list[float]) -> list[float]:
         from numpy import array
 
         n = len(rhs)
