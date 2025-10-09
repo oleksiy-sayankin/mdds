@@ -30,6 +30,7 @@ RUN pip install --no-cache-dir \
     pytest \
     mpi4py \
     petsc \
+    scipy \
     petsc4py \
     aioredis \
     grpcio-tools \
