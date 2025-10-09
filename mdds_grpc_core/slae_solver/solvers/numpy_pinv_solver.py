@@ -5,12 +5,13 @@
 
 import numpy as np
 from slae_solver.solver_interface import LinearSolverInterface
+from numpy.typing import NDArray
 
 
 class NumpyPinvSolver(LinearSolverInterface):
     """Solve linear systems using pseudoinverse (numpy.linalg.pinv)."""
 
-    def solve(self, matrix, rhs):
+    def solve(self, matrix: list[list[float]], rhs: list[float]) -> NDArray:
         matrix_np = np.asarray(matrix, dtype=float)
         rhs_np = np.asarray(rhs, dtype=float)
         return np.dot(np.linalg.pinv(matrix_np), rhs_np)

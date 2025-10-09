@@ -5,7 +5,7 @@
 Common module with abstract interface
 """
 from abc import ABC, abstractmethod
-from typing import Any
+from numpy.typing import NDArray
 
 """
 Abstract interface for all linear system solvers.
@@ -21,6 +21,6 @@ and return:
 class LinearSolverInterface(ABC):
 
     @abstractmethod
-    def solve(self, matrix: list[list[float]], rhs: list[float]) -> Any:
+    def solve(self, matrix: list[list[float]], rhs: list[float]) -> NDArray:
         """Solve the linear system matrix * x = rhs and return the solution vector."""
         pass

@@ -6,6 +6,7 @@
 import numpy as np
 from scipy.sparse.linalg import gmres
 from slae_solver.solver_interface import LinearSolverInterface
+from numpy.typing import NDArray
 
 
 class ScipyGmresSolver(LinearSolverInterface):
@@ -15,7 +16,7 @@ class ScipyGmresSolver(LinearSolverInterface):
         self.tol = tol
         self.maxiter = maxiter
 
-    def solve(self, matrix, rhs):
+    def solve(self, matrix: list[list[float]], rhs: list[float]) -> NDArray:
         matrix_np = np.asarray(matrix, dtype=float)
         rhs_np = np.asarray(rhs, dtype=float)
         x, info = gmres(matrix_np, rhs_np, rtol=self.tol, maxiter=self.maxiter)
