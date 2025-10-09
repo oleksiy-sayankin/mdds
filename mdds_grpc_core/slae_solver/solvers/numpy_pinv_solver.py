@@ -10,7 +10,7 @@ from slae_solver.solver_interface import LinearSolverInterface
 class NumpyPinvSolver(LinearSolverInterface):
     """Solve linear systems using pseudoinverse (numpy.linalg.pinv)."""
 
-    def solve(self, A, b):
-        A = np.asarray(A, dtype=float)
-        b = np.asarray(b, dtype=float)
-        return np.dot(np.linalg.pinv(A), b)
+    def solve(self, matrix, rhs):
+        matrix_np = np.asarray(matrix, dtype=float)
+        rhs_np = np.asarray(rhs, dtype=float)
+        return np.dot(np.linalg.pinv(matrix_np), rhs_np)

@@ -10,8 +10,8 @@ from slae_solver.solver_interface import LinearSolverInterface
 class NumpyLstsqSolver(LinearSolverInterface):
     """Solve linear systems using least squares (numpy.linalg.lstsq)."""
 
-    def solve(self, A, b):
-        A = np.asarray(A, dtype=float)
-        b = np.asarray(b, dtype=float)
-        x, *_ = np.linalg.lstsq(A, b, rcond=None)
+    def solve(self, matrix, rhs):
+        matrix_np = np.asarray(matrix, dtype=float)
+        rhs_np = np.asarray(rhs, dtype=float)
+        x, *_ = np.linalg.lstsq(matrix_np, rhs_np, rcond=None)
         return x

@@ -11,8 +11,8 @@ from typing import Any
 Abstract interface for all linear system solvers.
 
 Implementations must accept:
-    - A: matrix of coefficients (2D, dense or sparse)
-    - b: right-hand side vector (1D or 2D column)
+    - matrix: matrix of coefficients (2D, dense or sparse)
+    - rhs: right-hand side vector (1D or 2D column)
 and return:
     - solution vector x (type depends on implementation: could be list, numpy array, etc.)
 """
@@ -21,6 +21,6 @@ and return:
 class LinearSolverInterface(ABC):
 
     @abstractmethod
-    def solve(self, A: Any, b: Any) -> Any:
-        """Solve the linear system A x = b and return the solution vector."""
+    def solve(self, matrix: list[list[float]], rhs: list[float]) -> Any:
+        """Solve the linear system matrix * x = rhs and return the solution vector."""
         pass

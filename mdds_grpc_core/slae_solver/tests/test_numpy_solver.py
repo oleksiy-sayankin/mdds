@@ -9,27 +9,27 @@ from slae_solver.solvers.numpy_pinv_solver import NumpyPinvSolver
 
 
 def test_exact_solver():
-    A = np.array([[3, 2], [1, 4]])
-    b = np.array([10, 8])
+    matrix = [[3, 2], [1, 4]]
+    rhs = [10, 8]
     solver = NumpyExactSolver()
-    x = solver.solve(A, b)
-    assert np.allclose(A @ x, b)
+    x = solver.solve(matrix, rhs)
+    assert np.allclose(np.array(matrix) @ x, np.array(rhs))
 
 
 def test_lstsq_solver():
-    A = np.array([[3, 2], [1, 4]])
-    b = np.array([10, 8])
+    matrix = [[3, 2], [1, 4]]
+    rhs = [10, 8]
     solver = NumpyLstsqSolver()
-    x = solver.solve(A, b)
-    assert np.allclose(A @ x, b)
+    x = solver.solve(matrix, rhs)
+    assert np.allclose(np.array(matrix) @ x, np.array(rhs))
 
 
 def test_pinv_solver():
-    A = np.array([[3, 2], [1, 4]])
-    b = np.array([10, 8])
+    matrix = [[3, 2], [1, 4]]
+    rhs = [10, 8]
     solver = NumpyPinvSolver()
-    x = solver.solve(A, b)
-    assert np.allclose(A @ x, b)
+    x = solver.solve(matrix, rhs)
+    assert np.allclose(np.array(matrix) @ x, np.array(rhs))
 
 
 if __name__ == "__main__":

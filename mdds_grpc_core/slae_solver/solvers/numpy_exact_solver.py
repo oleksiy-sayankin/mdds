@@ -10,7 +10,7 @@ from slae_solver.solver_interface import LinearSolverInterface
 class NumpyExactSolver(LinearSolverInterface):
     """Solve square linear systems exactly using numpy.linalg.solve."""
 
-    def solve(self, A, b):
-        A = np.asarray(A, dtype=float)
-        b = np.asarray(b, dtype=float)
-        return np.linalg.solve(A, b)
+    def solve(self, matrix, rhs):
+        matrix_np = np.asarray(matrix, dtype=float)
+        rhs_np = np.asarray(rhs, dtype=float)
+        return np.linalg.solve(matrix_np, rhs_np)

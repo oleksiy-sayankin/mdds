@@ -15,10 +15,10 @@ class ScipyGmresSolver(LinearSolverInterface):
         self.tol = tol
         self.maxiter = maxiter
 
-    def solve(self, A, b):
-        A_sparse = np.asarray(A, dtype=float)
-        b = np.asarray(b, dtype=float)
-        x, info = gmres(A_sparse, b, rtol=self.tol, maxiter=self.maxiter)
+    def solve(self, matrix, rhs):
+        matrix_np = np.asarray(matrix, dtype=float)
+        rhs_np = np.asarray(rhs, dtype=float)
+        x, info = gmres(matrix_np, rhs_np, rtol=self.tol, maxiter=self.maxiter)
         if info != 0:
             raise RuntimeError(f"GMRES did not converge, info={info}")
         return x

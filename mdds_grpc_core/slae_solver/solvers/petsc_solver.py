@@ -2,7 +2,6 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 """pets solver"""
-import numpy as np
 
 from slae_solver.solver_interface import LinearSolverInterface
 from scipy.sparse import csr_matrix
@@ -21,31 +20,32 @@ class PetscSolver(LinearSolverInterface):
         self.tol = tol
         self.maxiter = maxiter
 
-    def solve(self, A, b):
+    def solve(self, matrix, rhs):
         from numpy import array
 
-        n = len(b)
+        n = len(rhs)
         PETSc = self.PETSc
 
-        # Convert numpy array or list of list to csr_matrix
-        if isinstance(A, np.ndarray) or isinstance(A, list):
-            A = csr_matrix(A, dtype=float)
+        matrix_csr = csr_matrix(matrix, dtype=float)
 
         # Create PETSc matrix
         # pylint: disable=no-member
-        mat = PETSc.Mat().createAIJ(size=A.shape, csr=(A.indptr, A.indices, A.data))
+        matrix_petsc = PETSc.Mat().createAIJ(
+            size=matrix_csr.shape,
+            csr=(matrix_csr.indptr, matrix_csr.indices, matrix_csr.data),
+        )
 
         # Create PETSc vectors
-        rhs = PETSc.Vec().createSeq(n)
-        rhs.setValues(range(n), array(b, dtype=float))
+        rhs_petsc = PETSc.Vec().createSeq(n)
+        rhs_petsc.setValues(range(n), array(rhs, dtype=float))
 
-        x = PETSc.Vec().createSeq(n)
+        x_petsc = PETSc.Vec().createSeq(n)
 
         # Create solver
         ksp = PETSc.KSP().create()
         ksp.setType(self.ksp_type)
-        ksp.setOperators(mat)
+        ksp.setOperators(matrix_petsc)
         ksp.setTolerances(rtol=self.tol, max_it=self.maxiter)
-        ksp.solve(rhs, x)
+        ksp.solve(rhs_petsc, x_petsc)
 
-        return x.getArray()
+        return x_petsc.getArray()
