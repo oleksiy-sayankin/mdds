@@ -27,8 +27,8 @@ class PetscSolver(LinearSolverInterface):
         n = len(b)
         PETSc = self.PETSc
 
-        # Convert numpy array to csr_matrix
-        if isinstance(A, np.ndarray):
+        # Convert numpy array or list of list to csr_matrix
+        if isinstance(A, np.ndarray) or isinstance(A, list):
             A = csr_matrix(A, dtype=float)
 
         # Create PETSc matrix

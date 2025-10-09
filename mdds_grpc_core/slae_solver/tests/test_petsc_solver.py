@@ -28,5 +28,13 @@ def test_petsc_solver_with_numpy_array():
     assert np.allclose(A @ x, b, atol=1e-8)
 
 
+def test_petsc_solver_with_list_of_list():
+    matrix = [[4, 1], [1, 3]]
+    rhs = [1, 2]
+    solver = PetscSolver(ksp_type="cg", tol=1e-10, maxiter=50)
+    x = solver.solve(matrix, rhs)
+    assert np.allclose(np.array(matrix) @ x, np.array(rhs), atol=1e-8)
+
+
 if __name__ == "__main__":
     unittest.main()
