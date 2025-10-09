@@ -211,7 +211,7 @@ reformat_bash:
 #
 test_python:
 	$(call log_info,"Running Python unit tests...")
-	pytest -v
+	@pytest -v
 	$(call log_done,"Python tests completed.")
 
 #
@@ -296,7 +296,7 @@ build_jars:
 #
 test_js:
 	$(call log_info,"Running JavaScript unit tests...")
-	if ! npm test; then \
+	@if ! npm test; then \
 		$(call log_error_sh, "JS tests failed"); \
 		exit 1; \
 	fi
@@ -307,7 +307,7 @@ test_js:
 #
 run_server:
 	$(call log_info,"Starting web-server...")
-	python -m run
+	@python -m run
 	$(call log_done,"Starting web-server completed. Web-server is up!")
 
 #
@@ -335,13 +335,13 @@ wait_for_server:
 #
 test_e2e:
 	$(call log_info,"Starting up environment...")
-	echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
-	docker compose -f $(E2E_HOME)/docker-compose.yml up -d
-	$(MAKE) wait_for_server
+	@echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
+	@docker compose -f $(E2E_HOME)/docker-compose.yml up -d
+	@$(MAKE) wait_for_server
 	$(call log_info,"Running end to end tests...")
-	npm run test:e2e
+	@npm run test:e2e
 	$(call log_info,"Shutting down environment...")
-	docker compose -f $(E2E_HOME)/docker-compose.yml down
+	@docker compose -f $(E2E_HOME)/docker-compose.yml down
 	$(call log_done,"End to end tests completed.")
 
 #
