@@ -151,6 +151,11 @@ public class RabbitMqQueue implements Queue {
     }
   }
 
+  @Override
+  public String toString() {
+    return getClass().getName() + "[" + connection.getAddress() + ":" + connection.getPort() + "]";
+  }
+
   private void declareQueue(@Nonnull String queueName) {
     // Declare a queue (idempotent - creates if it doesn't exist)
     try {

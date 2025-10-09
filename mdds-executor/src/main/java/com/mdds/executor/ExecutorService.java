@@ -33,6 +33,8 @@ public class ExecutorService implements AutoCloseable {
     this.taskQueueSubscription =
         taskQueue.subscribe(
             AppConstantsFactory.getString(TASK_QUEUE_NAME), TaskDTO.class, messageHandler);
+    log.info(
+        "ExecutorService started with task queue = {}, result queue = {}", taskQueue, resultQueue);
   }
 
   @Override
