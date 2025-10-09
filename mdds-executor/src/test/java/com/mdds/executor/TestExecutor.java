@@ -5,8 +5,7 @@
 package com.mdds.executor;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.mdds.common.AppConstants;
 import com.mdds.common.AppConstantsFactory;
@@ -209,6 +208,70 @@ class TestExecutor {
     assertEquals(expectedResult.getDateTimeTaskCreated(), actualResult.getDateTimeTaskCreated());
     assertEquals(expectedResult.getTaskStatus(), actualResult.getTaskStatus());
     assertArrayEquals(expectedResult.getSolution(), actualResult.getSolution(), delta);
+  }
+
+  @Test
+  void testExecutorWithErrorInInputData() {
+    // Prepare and put data to task queue
+    var taskId = UUID.randomUUID().toString();
+    var startTime = Instant.now();
+    var task =
+        new TaskDTO(
+            taskId,
+            startTime,
+            new double[][] {
+              {
+                1.1, 2.2,
+              },
+              {51, 24.2, 34.24},
+              {31.1, 232.2, 43.3, 4.4},
+              {62.1, 78.2, 92.3, 122.4, 4.54}
+            },
+            new double[] {4.3, 3.23, 5.324, 4.553},
+            SlaeSolver.NUMPY_EXACT_SOLVER);
+
+    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+    taskQueue.publish(AppConstantsFactory.getString(AppConstants.TASK_QUEUE_NAME), taskMessage);
+
+    AtomicReference<ResultDTO> actualResultReference = new AtomicReference<>();
+
+    Awaitility.await()
+        .atMost(Duration.ofSeconds(2))
+        .until(
+            () -> {
+              var checkResultMessageHandler =
+                  new MessageHandler<ResultDTO>() {
+                    @Override
+                    public void handle(
+                        @Nonnull Message<ResultDTO> message, @Nonnull Acknowledger ack) {
+                      // Set the result here
+                      actualResultReference.set(message.payload());
+                    }
+                  };
+              try (var ignored =
+                  resultQueue.subscribe(
+                      AppConstantsFactory.getString(AppConstants.RESULT_QUEUE_NAME),
+                      ResultDTO.class,
+                      checkResultMessageHandler)) {
+                // Do nothing
+              }
+              return isAssigned(actualResultReference);
+            });
+
+    var delta = 0.000001;
+    var endTime = actualResultReference.get().getDateTimeTaskFinished();
+    var expectedResult =
+        new ResultDTO(taskId, startTime, endTime, TaskStatus.ERROR, new double[] {}, "");
+    var actualResult = actualResultReference.get();
+    assertEquals(expectedResult.getTaskId(), actualResult.getTaskId());
+    assertEquals(expectedResult.getDateTimeTaskCreated(), actualResult.getDateTimeTaskCreated());
+    assertEquals(expectedResult.getTaskStatus(), actualResult.getTaskStatus());
+    assertArrayEquals(expectedResult.getSolution(), actualResult.getSolution(), delta);
+    assertTrue(
+        actualResult
+            .getErrorMessage()
+            .contains(
+                "Unexpected <class 'ValueError'>: setting an array element with a sequence."));
   }
 
   private static boolean isAssigned(AtomicReference<ResultDTO> actualResult) {
