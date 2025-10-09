@@ -74,6 +74,35 @@ test_and_run: test_all run_server
 test_all: test_python test_js test_java test_e2e
 
 #
+# Run CVE scan for Java jars
+#
+scan_jars_for_cve:
+	$(call log_info,"Scanning jars for CVE...")
+
+	@mvn -Dmaven.jvm.args="--enable-native-access=ALL-UNNAMED --add-modules jdk.incubator.vector" \
+		org.owasp:dependency-check-maven:check \
+		-DoutputDirectory=target/dependency-check-report \
+		-q
+
+	@TOTAL_COUNT=$$(jq '[.dependencies[]?.vulnerabilities[]? ] | length' \
+    		target/dependency-check-report.json 2>/dev/null || echo 0);	\
+    $(call log_info_sh,"Total CVE count : $$TOTAL_COUNT")
+
+	$(call log_info,"Found CVEs:")
+	@jq -r '.dependencies[]?.vulnerabilities[]? | "ID: \(.name)\nSeverity: \(.severity)\nDescription: \(.description)\n---"' \
+		target/dependency-check-report.json || true
+
+	@CRIT_COUNT=$$(jq '[.dependencies[]?.vulnerabilities[]? | select((.severity | ascii_downcase) == "critical")] | length' \
+		target/dependency-check-report.json 2>/dev/null || echo 0); \
+	if [ "$$CRIT_COUNT" -gt 0 ]; then \
+		$(call log_error_sh, "Found $$CRIT_COUNT CRITICAL vulnerabilities! Failing build."); \
+		exit 1; \
+	else \
+		$(call log_info_sh,"No CRITICAL vulnerabilities found. Build passes."); \
+	fi
+	$(call log_done,"Scanning jars for CVE completed.")
+
+#
 # Build base Docker that is use as root image for others
 #
 build_base_docker_image:

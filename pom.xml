@@ -235,6 +235,17 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.owasp</groupId>
+        <artifactId>dependency-check-maven</artifactId>
+        <version>12.1.6</version>
+        <configuration>
+          <nvdApiKey>ece1bcd5-8ce7-41fd-8941-64e63abe6d34</nvdApiKey>
+          <formats>
+            <format>JSON</format>
+          </formats>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>
