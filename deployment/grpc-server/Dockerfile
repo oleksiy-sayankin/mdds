@@ -2,7 +2,7 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 # Use base image for project
-FROM mddsproject/mdds:base
+FROM mddsproject/common:0.1.0
 
 ENV APP_HOME=/opt/mdds
 ENV MDDS_GRPC_CORE=mdds_grpc_core
@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Create app directory
 RUN mkdir -p "$APP_HOME/$MDDS_GRPC_CORE"
-COPY "$MDDS_GRPC_CORE" "$APP_HOME/$MDDS_GRPC_CORE"
+COPY ./"$MDDS_GRPC_CORE" "$APP_HOME/$MDDS_GRPC_CORE"
 WORKDIR "$APP_HOME/$MDDS_GRPC_CORE"
 
 EXPOSE $MDDS_EXECUTOR_GRPC_SERVER_PORT

@@ -73,7 +73,7 @@ class TestExecutor {
 
   @Container
   private static final GenericContainer<?> grpcServer =
-      new GenericContainer<>(DockerImageName.parse("mddsproject/mdds:test"))
+      new GenericContainer<>(DockerImageName.parse("mddsproject/grpc-server:0.1.0"))
           .withWorkingDirectory(WORK_DIR)
           .withExposedPorts(GRPC_SERVER_PORT);
 

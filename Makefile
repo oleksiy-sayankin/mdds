@@ -6,6 +6,7 @@ NODE_MODULES := node_modules
 PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
+PROJECT_VERSION := 0.1.0
 MDDS_GRPC_CORE := mdds_grpc_core
 PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_GRPC_CORE)
 JS_ROOT := $(PROJECT_ROOT)/$(MDDS_GRPC_CORE)/mdds_client
@@ -103,58 +104,36 @@ scan_jars_for_cve:
 	$(call log_done,"Scanning jars for CVE completed.")
 
 #
-# Build base Docker that is use as root image for others
+# Build common Docker that is use as root image for others
 #
-build_base_docker_image:
-	$(call log_info,"Building base Docker image...")
-	cp -a $(PYTHON_ROOT) $(DEPLOYMENT_TEST_ROOT)
-	docker buildx build --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):base deployment/base
-	rm -Rf $(DEPLOYMENT_TEST_ROOT)/$(PYTHON_ROOT)
-	$(call log_done,"Building base Docker image completed.")
+build_common_docker_image:
+	$(call log_info,"Building common Docker image...")
+	docker buildx build -f deployment/common/Dockerfile --progress=plain --tag $(USER_NAME)/common:$(PROJECT_VERSION) deployment/common
+	$(call log_done,"Building common Docker image completed.")
 
 #
-# Push base Docker image
+# Push common Docker image
 #
-push_base_docker_image:
-	$(call log_info,"Pushing base Docker image...")
-	docker push $(USER_NAME)/$(PROJECT_NAME):base
-	$(call log_done,"Pushing base Docker image completed.")
+push_common_docker_image:
+	$(call log_info,"Pushing common Docker image...")
+	docker push $(USER_NAME)/common:$(PROJECT_VERSION)
+	$(call log_done,"Pushing common Docker image completed.")
 
 #
-# Build Docker image for Java tests
+# Build gRPC server Docker image for others
 #
-build_java_test_docker_image:
-	$(call log_info,"Building Docker image for Java tests...")
-	cp -a $(PYTHON_ROOT) $(DEPLOYMENT_TEST_ROOT)
-	docker buildx build --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):test deployment/test
-	rm -Rf $(DEPLOYMENT_TEST_ROOT)/$(PYTHON_ROOT)
-	$(call log_done,"Building Docker image for Java tests completed.")
+build_grpc_server_docker_image:
+	$(call log_info,"Building gRPC server Docker image...")
+	docker buildx build -f deployment/grpc-server/Dockerfile --progress=plain --tag $(USER_NAME)/grpc-server:$(PROJECT_VERSION) .
+	$(call log_done,"Building gRPC server Docker image completed.")
 
 #
-# Push Docker image for Java tests
+# Push gRPC server Docker image
 #
-push_java_test_docker_image:
-	$(call log_info,"Pushing Docker image for Java tests...")
-	docker push $(USER_NAME)/$(PROJECT_NAME):test
-	$(call log_done,"Pushing Docker image for Java tests completed.")
-
-
-#
-# Build Docker image
-#
-build_image:
-	$(call log_info,"Building Docker image...")
-	docker buildx build --progress=plain --tag $(USER_NAME)/$(PROJECT_NAME):latest deployment
-	$(call log_done,"Building Docker image completed.")
-
-
-#
-# Push Docker image
-#
-push_image:
-	$(call log_info,"Pushing Docker image...")
-	docker push $(USER_NAME)/$(PROJECT_NAME):latest
-	$(call log_done,"Pushing Docker image completed.")
+push_grpc_server_docker_image:
+	$(call log_info,"Pushing gRPC server Docker image...")
+	docker push $(USER_NAME)/grpc-server:$(PROJECT_VERSION)
+	$(call log_done,"Pushing gRPC server Docker image completed.")
 
 #
 # Reformat JavaScript files
