@@ -5,19 +5,16 @@
 FROM mddsproject/common:0.1.0
 
 ENV APP_HOME=/opt/mdds
-ENV MDDS_GRPC_CORE=mdds_grpc_core
-
-ENV MDDS_EXECUTOR_GRPC_SERVER_HOST=0.0.0.0
-ENV MDDS_EXECUTOR_GRPC_SERVER_PORT=50051
 
 # Set non-interactive mode for apt
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Create app directory
-RUN mkdir -p "$APP_HOME/$MDDS_GRPC_CORE"
-COPY ./"$MDDS_GRPC_CORE" "$APP_HOME/$MDDS_GRPC_CORE"
-WORKDIR "$APP_HOME/$MDDS_GRPC_CORE"
+RUN mkdir -p $APP_HOME/mdds_grpc_core
+COPY ./mdds_grpc_core $APP_HOME/mdds_grpc_core
+WORKDIR $APP_HOME/mdds_grpc_core
 
-EXPOSE $MDDS_EXECUTOR_GRPC_SERVER_PORT
+# Default gRPC server port
+EXPOSE 50051
 
 CMD ["python", "-m", "run"]

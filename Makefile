@@ -136,6 +136,57 @@ push_grpc_server_docker_image:
 	$(call log_done,"Pushing gRPC server Docker image completed.")
 
 #
+# Build Docker image for executor
+#
+build_executor_docker_image:
+	$(call log_info,"Building Docker image for executor...")
+	docker buildx build -f deployment/executor/Dockerfile --progress=plain --tag $(USER_NAME)/executor:$(PROJECT_VERSION) .
+	$(call log_done,"Building Docker image for executor completed.")
+
+
+#
+# Push executor Docker image
+#
+push_executor_docker_image:
+	$(call log_info,"Pushing executor Docker image...")
+	docker push $(USER_NAME)/executor:$(PROJECT_VERSION)
+	$(call log_done,"Pushing executor Docker image completed.")
+
+
+#
+# Build Docker image for web-server
+#
+build_web_server_docker_image:
+	$(call log_info,"Building Docker image for web-server...")
+	docker buildx build -f deployment/web-server/Dockerfile --progress=plain --tag $(USER_NAME)/web-server:$(PROJECT_VERSION) .
+	$(call log_done,"Building Docker image for web-server completed.")
+
+#
+# Push web-server Docker image
+#
+push_web_server_docker_image:
+	$(call log_info,"Pushing web-server Docker image...")
+	docker push $(USER_NAME)/web-server:$(PROJECT_VERSION)
+	$(call log_done,"Pushing web-server Docker image completed.")
+
+
+#
+# Build Docker image for result-consumer
+#
+build_result_consumer_docker_image:
+	$(call log_info,"Building Docker image for result-consumer...")
+	docker buildx build -f deployment/result-consumer/Dockerfile --progress=plain --tag $(USER_NAME)/result-consumer:$(PROJECT_VERSION) .
+	$(call log_done,"Building Docker image for result-consumer completed.")
+
+#
+# Push result-consumer Docker image
+#
+push_result_consumer_docker_image:
+	$(call log_info,"Pushing result-consumer Docker image...")
+	docker push $(USER_NAME)/result-consumer:$(PROJECT_VERSION)
+	$(call log_done,"Pushing result-consumer Docker image completed.")
+
+#
 # Reformat JavaScript files
 #
 reformat_js:

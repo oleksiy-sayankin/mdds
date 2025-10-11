@@ -2,7 +2,125 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 services:
-  mdds_server:
-    image: oleksiysayankin/mdds
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
     ports:
-      - "${MDDS_SERVER_PORT}:${MDDS_SERVER_PORT}"
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7.4
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  grpc-server:
+    image: mddsproject/grpc-server:0.1.0
+    container_name: grpc_server
+    environment:
+      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc_server
+      MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
+    ports:
+      - "50051:50051"
+    healthcheck:
+      test: [ "CMD", "grpc_health_probe", "-addr=grpc_server:50051" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  executor:
+    image: mddsproject/executor:0.1.0
+    container_name: executor
+    command: ["java", "-jar", "/opt/mdds/mdds-executor/mdds-executor.jar"]
+    depends_on:
+      grpc-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MDDS_EXECUTOR_HOST: executor
+      MDDS_EXECUTOR_PORT: 35232
+      MDDS_EXECUTOR_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-executor
+      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc_server
+      MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    ports:
+      - "35232:35232"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://executor:35232/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  web-server:
+    image: mddsproject/web-server:0.1.0
+    container_name: web_server
+    command: ["java", "-jar", "/opt/mdds/mdds-server/mdds-server.jar"]
+    depends_on:
+      executor:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MDDS_SERVER_HOST: web_server
+      MDDS_SERVER_PORT: 8000
+      MDDS_SERVER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-server
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://web_server:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  result-consumer:
+    image: mddsproject/result-consumer:0.1.0
+    container_name: result_consumer
+    command: ["java", "-jar", "/opt/mdds/mdds-result-consumer/mdds-result-consumer.jar"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MDDS_RESULT_CONSUMER_HOST: result_consumer
+      MDDS_RESULT_CONSUMER_PORT: 8863
+      MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-result-consumer
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8863:8863"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://result_consumer:8863/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

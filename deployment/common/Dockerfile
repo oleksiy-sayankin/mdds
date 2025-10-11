@@ -16,6 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential
 
+# Install grpc_health_probe binary
+ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.41/grpc_health_probe-linux-amd64 /usr/local/bin/grpc_health_probe
+RUN chmod +x /usr/local/bin/grpc_health_probe
+
 # Upgarde pip to latest
 RUN pip install --upgrade pip
 
