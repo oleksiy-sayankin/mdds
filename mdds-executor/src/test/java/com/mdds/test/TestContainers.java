@@ -73,6 +73,7 @@ class TestContainers {
           .withNetworkAliases(RABBITMQ_HOST)
           .withExposedPorts(RABBITMQ_PORT);
 
+  @SuppressWarnings("resource")
   @Container
   private static final GenericContainer<?> redis =
       new GenericContainer<>(DockerImageName.parse("redis:7.4"))
@@ -80,6 +81,7 @@ class TestContainers {
           .withNetworkAliases(REDIS_HOST)
           .withExposedPorts(REDIS_PORT);
 
+  @SuppressWarnings("resource")
   @Container
   private static final GenericContainer<?> grpcServer =
       new GenericContainer<>(DockerImageName.parse("mddsproject/grpc-server:0.1.0"))
@@ -90,6 +92,7 @@ class TestContainers {
           .withWorkingDirectory(GRPC_CORE_WORK_DIR)
           .withExposedPorts(GRPC_SERVER_PORT);
 
+  @SuppressWarnings("resource")
   @Container
   private static final GenericContainer<?> executor =
       new GenericContainer<>(DockerImageName.parse("mddsproject/executor:0.1.0"))
@@ -103,6 +106,7 @@ class TestContainers {
           .withEnv("RABBITMQ_PORT", String.valueOf(RABBITMQ_PORT))
           .withExposedPorts(MDDS_EXECUTOR_PORT);
 
+  @SuppressWarnings("resource")
   @Container
   private static final GenericContainer<?> webServer =
       new GenericContainer<>(DockerImageName.parse("mddsproject/web-server:0.1.0"))
@@ -116,6 +120,7 @@ class TestContainers {
           .withEnv("REDIS_PORT", String.valueOf(REDIS_PORT))
           .withExposedPorts(MDDS_WEB_SERVER_PORT);
 
+  @SuppressWarnings("resource")
   @Container
   private static final GenericContainer<?> resultConsumer =
       new GenericContainer<>(DockerImageName.parse("mddsproject/result-consumer:0.1.0"))
