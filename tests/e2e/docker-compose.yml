@@ -4,7 +4,7 @@
 services:
   rabbitmq:
     image: rabbitmq:3.13-management
-    container_name: rabbitmq
+    container_name: rabbitmq.mdds.com
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -19,7 +19,7 @@ services:
 
   redis:
     image: redis:7.4
-    container_name: redis
+    container_name: redis.mdds.com
     ports:
       - "6379:6379"
     healthcheck:
@@ -30,14 +30,14 @@ services:
 
   grpc-server:
     image: mddsproject/grpc-server:0.1.0
-    container_name: grpc_server
+    container_name: grpc.server.mdds.com
     environment:
-      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc_server
+      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc.server.mdds.com
       MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
     ports:
       - "50051:50051"
     healthcheck:
-      test: [ "CMD", "grpc_health_probe", "-addr=grpc_server:50051" ]
+      test: [ "CMD", "grpc_health_probe", "-addr=grpc.server.mdds.com:50051" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -45,7 +45,7 @@ services:
 
   executor:
     image: mddsproject/executor:0.1.0
-    container_name: executor
+    container_name: executor.mdds.com
     command: ["java", "-jar", "/opt/mdds/mdds-executor/mdds-executor.jar"]
     depends_on:
       grpc-server:
@@ -53,19 +53,19 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      MDDS_EXECUTOR_HOST: executor
+      MDDS_EXECUTOR_HOST: executor.mdds.com
       MDDS_EXECUTOR_PORT: 35232
       MDDS_EXECUTOR_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-executor
-      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc_server
+      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc.server.mdds.com
       MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
-      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: rabbitmq.mdds.com
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
     ports:
       - "35232:35232"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://executor:35232/health"]
+      test: ["CMD", "curl", "-f", "http://executor.mdds.com:35232/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,7 +73,7 @@ services:
 
   web-server:
     image: mddsproject/web-server:0.1.0
-    container_name: web_server
+    container_name: web.server.mdds.com
     command: ["java", "-jar", "/opt/mdds/mdds-server/mdds-server.jar"]
     depends_on:
       executor:
@@ -81,17 +81,17 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      MDDS_SERVER_HOST: web_server
+      MDDS_SERVER_HOST: web.server.mdds.com
       MDDS_SERVER_PORT: 8000
       MDDS_SERVER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-server
-      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: rabbitmq.mdds.com
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://web_server:8000/health"]
+      test: ["CMD", "curl", "-f", "http://web.server.mdds.com:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -99,7 +99,7 @@ services:
 
   result-consumer:
     image: mddsproject/result-consumer:0.1.0
-    container_name: result_consumer
+    container_name: result.consumer.mdds.com
     command: ["java", "-jar", "/opt/mdds/mdds-result-consumer/mdds-result-consumer.jar"]
     depends_on:
       redis:
@@ -107,19 +107,19 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      MDDS_RESULT_CONSUMER_HOST: result_consumer
+      MDDS_RESULT_CONSUMER_HOST: result.consumer.mdds.com
       MDDS_RESULT_CONSUMER_PORT: 8863
       MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-result-consumer
-      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_HOST: rabbitmq.mdds.com
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
-      REDIS_HOST: redis
+      REDIS_HOST: redis.mdds.com
       REDIS_PORT: 6379
     ports:
       - "8863:8863"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://result_consumer:8863/health"]
+      test: ["CMD", "curl", "-f", "http://result.consumer.mdds.com:8863/health"]
       interval: 30s
       timeout: 10s
       retries: 3
