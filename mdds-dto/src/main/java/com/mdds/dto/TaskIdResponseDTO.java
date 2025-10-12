@@ -7,10 +7,12 @@ package com.mdds.dto;
 import jakarta.annotation.Nonnull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /** Represents response of the server that certain task (with id) is submitted for processing. */
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 public class TaskIdResponseDTO {
   private @Nonnull String id;
 }
