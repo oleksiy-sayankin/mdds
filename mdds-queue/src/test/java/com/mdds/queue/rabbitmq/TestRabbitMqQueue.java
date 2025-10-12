@@ -54,10 +54,12 @@ class TestRabbitMqQueue {
     var randomPort = 89798;
     var randomUser = "random";
     var randomPassword = "random";
+    var timeOut = Duration.ofSeconds(1);
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (var queue = new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword)) {
+          try (var queue =
+              new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
             // Do nothing.
           }
         });
@@ -83,10 +85,11 @@ class TestRabbitMqQueue {
 
   @Test
   void testWrongUserAndPassword() {
+    var timeOut = Duration.ofSeconds(1);
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (var queue = new RabbitMqQueue(host, port, "wrong user", "wrong password")) {
+          try (var queue = new RabbitMqQueue(host, port, "wrong user", "wrong password", timeOut)) {
             // Do nothing.
           }
         });
@@ -94,11 +97,12 @@ class TestRabbitMqQueue {
 
   @Test
   void testNoConnectionToRabbitMq() {
+    var timeOut = Duration.ofSeconds(1);
     var properties = readFromResources("no.connection.rabbitmq.properties");
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (var queue = new RabbitMqQueue(properties)) {
+          try (var queue = new RabbitMqQueue(properties, timeOut)) {
             // Do nothing.
           }
         });

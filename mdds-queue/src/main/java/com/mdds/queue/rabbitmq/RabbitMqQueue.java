@@ -12,10 +12,14 @@ import com.mdds.queue.*;
 import com.rabbitmq.client.*;
 import jakarta.annotation.Nonnull;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
+import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 
 /** Queue that delivers tasks to Executors. */
 @Slf4j
@@ -27,12 +31,23 @@ public class RabbitMqQueue implements Queue {
     this(conf.host(), conf.port(), conf.user(), conf.password());
   }
 
+  public RabbitMqQueue(@Nonnull RabbitMqConf conf, Duration timeOut) {
+    this(conf.host(), conf.port(), conf.user(), conf.password(), timeOut);
+  }
+
   public RabbitMqQueue(@Nonnull String host, int port, String user, String password) {
+    this(host, port, user, password, Duration.ofSeconds(60));
+  }
+
+  public RabbitMqQueue(
+      @Nonnull String host, int port, String user, String password, Duration timeOut) {
     var factory = createConnectionFactory(host, port, user, password);
     try {
-      connection = factory.newConnection();
+      connection = createConnectionWithRetry(factory, host, port, timeOut);
+      log.info("Connected to RabbitMq {}", connection);
       channel = connection.createChannel();
-    } catch (IOException | TimeoutException e) {
+      log.info("Created RabbitMq channel {}", channel);
+    } catch (IOException e) {
       throw new RabbitMqConnectionException("Failed to create RabbitMq connection", e);
     }
   }
@@ -162,6 +177,40 @@ public class RabbitMqQueue implements Queue {
       channel.queueDeclare(queueName, false, false, false, null);
     } catch (IOException e) {
       throw new RabbitMqConnectionException("Failed to declare queue: " + queueName, e);
+    }
+  }
+
+  private static @Nonnull Connection createConnectionWithRetry(
+      ConnectionFactory factory, String host, int port, Duration timeOut) {
+    try {
+      return Objects.requireNonNull(
+          Awaitility.await()
+              .atMost(timeOut)
+              .pollInterval(Duration.ofSeconds(2))
+              .pollDelay(Duration.ZERO)
+              .ignoreExceptions()
+              .until(
+                  () -> {
+                    try {
+                      log.info("Connecting to rabbitmq://{}:{}...", host, port);
+                      var connection = factory.newConnection();
+                      if (connection.isOpen()) {
+                        log.info("Connected to RabbitMQ {}:{}", host, port);
+                        return connection;
+                      } else {
+                        log.warn("Connection not open yet, retrying...");
+                        connection.close();
+                        return null;
+                      }
+                    } catch (IOException | TimeoutException e) {
+                      log.warn("RabbitMQ not ready at {}:{}, retrying...", host, port);
+                      return null;
+                    }
+                  },
+                  connection -> connection != null && connection.isOpen()));
+    } catch (ConditionTimeoutException e) {
+      throw new RabbitMqConnectionException(
+          "Failed to connect to rabbitmq://" + host + ":" + port, e);
     }
   }
 

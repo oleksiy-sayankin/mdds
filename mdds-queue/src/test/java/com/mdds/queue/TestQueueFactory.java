@@ -54,11 +54,13 @@ class TestQueueFactory {
     var randomPort = 89798;
     var randomUser = "random";
     var randomPassword = "random";
+    var timeOut = Duration.ofSeconds(1);
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
           try (var queue =
-              QueueFactory.createRabbitMq(randomHost, randomPort, randomUser, randomPassword)) {
+              QueueFactory.createRabbitMq(
+                  randomHost, randomPort, randomUser, randomPassword, timeOut)) {
             // Do nothing.
           }
         });
@@ -67,10 +69,11 @@ class TestQueueFactory {
   @Test
   void testNoConnectionToRabbitMq() {
     var properties = readFromResources("no.connection.rabbitmq.properties");
+    var timeOut = Duration.ofSeconds(1);
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (var queue = QueueFactory.createRabbitMq(properties)) {
+          try (var queue = QueueFactory.createRabbitMq(properties, timeOut)) {
             // Do nothing.
           }
         });
