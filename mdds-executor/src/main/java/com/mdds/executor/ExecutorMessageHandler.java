@@ -140,14 +140,18 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   }
 
   private ManagedChannel buildGrpcChannel() {
-    return NettyChannelBuilder.forAddress(
-            ExecutorConfFactory.fromEnvOrDefaultProperties().grpcServerHost(),
-            ExecutorConfFactory.fromEnvOrDefaultProperties().grpcServerPort())
-        .usePlaintext()
-        .executor(threadExecutor)
-        .offloadExecutor(threadExecutor)
-        .channelType(NioSocketChannel.class)
-        .eventLoopGroup(eventLoopGroup)
-        .build();
+    var executorConf = ExecutorConfFactory.fromEnvOrDefaultProperties();
+    var grpcServerHost = executorConf.grpcServerHost();
+    var grpcServerPort = executorConf.grpcServerPort();
+    var grpcChannel =
+        NettyChannelBuilder.forAddress(grpcServerHost, grpcServerPort)
+            .usePlaintext()
+            .executor(threadExecutor)
+            .offloadExecutor(threadExecutor)
+            .channelType(NioSocketChannel.class)
+            .eventLoopGroup(eventLoopGroup)
+            .build();
+    log.info("Created gRPC channel for {}:{}", grpcServerHost, grpcServerPort);
+    return grpcChannel;
   }
 }
