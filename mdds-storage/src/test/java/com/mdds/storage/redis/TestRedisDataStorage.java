@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskStatus;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -70,7 +71,7 @@ class TestRedisDataStorage {
 
   @Test
   void testClose() {
-    try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
+    try (var ignore = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
       Assertions.assertDoesNotThrow(
           () -> {
             // Do nothing
@@ -82,10 +83,11 @@ class TestRedisDataStorage {
   void testNoConfFileExists() {
     var randomHost = "random.host";
     var randomPort = 89798;
+    var oneSecond = Duration.ofSeconds(1);
     assertThrows(
         RedisConnectionException.class,
         () -> {
-          try (var dataStorage = new RedisDataStorage(randomHost, randomPort)) {
+          try (var ignore = new RedisDataStorage(randomHost, randomPort, oneSecond)) {
             // Do nothing.
           }
         });
@@ -94,10 +96,11 @@ class TestRedisDataStorage {
   @Test
   void testWrongConfFile() {
     var properties = RedisHelper.readFromResources("no.connection.redis.properties");
+    var oneSecond = Duration.ofSeconds(1);
     assertThrows(
         RedisConnectionException.class,
         () -> {
-          try (var dataStorage = new RedisDataStorage(properties)) {
+          try (var ignore = new RedisDataStorage(properties, oneSecond)) {
             // Do nothing.
           }
         });
