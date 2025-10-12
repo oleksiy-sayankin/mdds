@@ -36,6 +36,7 @@ public class Executor {
     host.setName(hostName);
     tomcat.setPort(port);
     tomcat.getConnector(); // ensure connector created
+    tomcat.getEngine().setDefaultHost(hostName);
 
     var ctx = tomcat.addWebapp(host, "", docBase);
     // Register listener and servlets programmatically
