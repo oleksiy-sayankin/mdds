@@ -26,7 +26,7 @@ public final class ServerConfFactory {
             "mdds.server.webapp.dir.location",
             "MDDS_SERVER_WEBAPP_DIR_LOCATION",
             props,
-            System.getProperty("user.dir") + File.separator + "mdds_client");
+            System.getProperty("user.dir") + File.separator + "web-app");
 
     return new ServerConf(host, port, webappDir);
   }
