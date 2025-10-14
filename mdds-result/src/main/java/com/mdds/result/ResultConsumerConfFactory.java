@@ -27,7 +27,7 @@ public final class ResultConsumerConfFactory {
             "mdds.result.consumer.webapp.dir.location",
             "MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION",
             props,
-            System.getProperty("user.dir") + File.separator + "mdds_result_consumer");
+            System.getProperty("user.dir") + File.separator + "web-app");
     return new ResultConsumerConf(hostName, port, webappDirLocation);
   }
 }

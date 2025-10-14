@@ -444,6 +444,7 @@ check_license:
 		-not -name "*.ico" \
 		-not -name ".sonar_token" \
 		-not -name "*.gitignore" \
+		-not -name "*.gitkeep" \
 		-not -name "*.dockerignore" \
 		-not -name "*.json" \
 		-not -name "*.env" \

@@ -33,7 +33,7 @@ public class ExecutorConfFactory {
             "mdds.executor.webapp.dir.location",
             "MDDS_EXECUTOR_WEBAPP_DIR_LOCATION",
             props,
-            System.getProperty("user.dir") + File.separator + "mdds_executor");
+            System.getProperty("user.dir") + File.separator + "web-app");
     return new ExecutorConf(
         executorHost, executorPort, grpcServerHost, grpcServerPort, webappDirLocation);
   }
