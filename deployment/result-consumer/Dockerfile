@@ -2,21 +2,19 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 # Use base image for project
-FROM eclipse-temurin:21-jre
+FROM mddsproject/java-base:0.1.0
 
-ENV APP_HOME=/opt/mdds
-ENV MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION=$APP_HOME/mdds-result-consumer
-
-# Set non-interactive mode for apt
-ENV DEBIAN_FRONTEND=noninteractive
+ENV MDDS_RESULT_CONSUMER_HOME=$MDDS_HOME/mdds-result-consumer
+ENV MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION=$MDDS_RESULT_CONSUMER_HOME/web-app
+ENV MDDS_RESULT_CONSUMER_PORT=8863
 
 # Create app directory
-RUN mkdir -p $APP_HOME/mdds-result-consumer
-COPY ./mdds-result/target/mdds-result*jar-with-dependencies.jar $APP_HOME/mdds-result-consumer/mdds-result-consumer.jar
+RUN mkdir -p $MDDS_RESULT_CONSUMER_HOME
+RUN mkdir -p $MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION
 
-WORKDIR "$APP_HOME"
+COPY --chown=$MDDS_USER:$MDDS_GROUP ./mdds-result/target/mdds-result*jar-with-dependencies.jar $MDDS_RESULT_CONSUMER_HOME/mdds-result-consumer.jar
 
 # Default result-consumer port
-EXPOSE 8863
+EXPOSE $MDDS_RESULT_CONSUMER_PORT
 
 CMD ["java", "-jar", "/opt/mdds/mdds-result-consumer/mdds-result-consumer.jar"]

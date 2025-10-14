@@ -2,21 +2,18 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 # Use base image for project
-FROM eclipse-temurin:21-jre
+FROM mddsproject/java-base:0.1.0
 
-ENV APP_HOME=/opt/mdds
-ENV MDDS_EXECUTOR_WEBAPP_DIR_LOCATION=$APP_HOME/mdds-executor
-
-# Set non-interactive mode for apt
-ENV DEBIAN_FRONTEND=noninteractive
+ENV MDDS_EXECUTOR_HOME=$MDDS_HOME/mdds-executor
+ENV MDDS_EXECUTOR_WEBAPP_DIR_LOCATION=$MDDS_HOME/mdds-executor/web-app
+ENV MDDS_EXECUTOR_PORT=35232
 
 # Create app directory
-RUN mkdir -p $APP_HOME/mdds-executor
-COPY ./mdds-executor/target/mdds-executor*jar-with-dependencies.jar $APP_HOME/mdds-executor/mdds-executor.jar
-
-WORKDIR "$APP_HOME"
+RUN mkdir -p $MDDS_EXECUTOR_HOME
+RUN mkdir -p $MDDS_EXECUTOR_WEBAPP_DIR_LOCATION
+COPY --chown=$MDDS_USER:$MDDS_GROUP ./mdds-executor/target/mdds-executor*jar-with-dependencies.jar $MDDS_EXECUTOR_HOME/mdds-executor.jar
 
 # Default executor port
-EXPOSE 35232
+EXPOSE $MDDS_EXECUTOR_PORT
 
 CMD ["java", "-jar", "/opt/mdds/mdds-executor/mdds-executor.jar"]

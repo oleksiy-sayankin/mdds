@@ -104,21 +104,38 @@ scan_jars_for_cve:
 	fi
 	$(call log_done,"Scanning jars for CVE completed.")
 
-#
-# Build common Docker that is use as root image for others
-#
-build_common_docker_image:
-	$(call log_info,"Building common Docker image...")
-	docker buildx build -f deployment/common/Dockerfile --progress=plain --tag $(USER_NAME)/common:$(PROJECT_VERSION) deployment/common
-	$(call log_done,"Building common Docker image completed.")
 
 #
-# Push common Docker image
+# Build Docker image for all Java based containers
 #
-push_common_docker_image:
-	$(call log_info,"Pushing common Docker image...")
-	docker push $(USER_NAME)/common:$(PROJECT_VERSION)
-	$(call log_done,"Pushing common Docker image completed.")
+build_java_base_docker_image:
+	$(call log_info,"Building Java base Docker image...")
+	docker buildx build -f deployment/java-base/Dockerfile --progress=plain --tag $(USER_NAME)/java-base:$(PROJECT_VERSION) .
+	$(call log_done,"Building Java base Docker image completed.")
+
+#
+# Push Java base Docker image
+#
+push_java_base_docker_image:
+	$(call log_info,"Pushing Java base Docker image...")
+	docker push $(USER_NAME)/java-base:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Java base Docker image completed.")
+
+#
+# Build common Docker that is use as root image for Python images
+#
+build_python_base_docker_image:
+	$(call log_info,"Building Python base Docker image...")
+	docker buildx build -f deployment/python-base/Dockerfile --progress=plain --tag $(USER_NAME)/python-base:$(PROJECT_VERSION) .
+	$(call log_done,"Building Python base Docker image completed.")
+
+#
+# Push Python base Docker image
+#
+push_python_base_docker_image:
+	$(call log_info,"Pushing  Python base Docker image...")
+	docker push $(USER_NAME)/python-base:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Python base Docker image completed.")
 
 #
 # Build gRPC server Docker image for others
@@ -427,6 +444,7 @@ check_license:
 		-not -name "*.ico" \
 		-not -name ".sonar_token" \
 		-not -name "*.gitignore" \
+		-not -name "*.dockerignore" \
 		-not -name "*.json" \
 		-not -name "*.env" \
 		-not -name "*.iml" \

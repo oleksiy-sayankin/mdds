@@ -1,10 +1,18 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
-# Use minimal Python 3.12 image
+#
+# This base image for all Python based images
+#
 FROM python:3.12-slim
 
-ENV APP_HOME=/opt/mdds
+ENV MDDS_HOME=/opt/mdds
+ENV MDDS_USER=mdds
+ENV MDDS_GROUP=mdds
+ENV MDDS_USER_ID=1010
+ENV MDDS_GROUP_ID=1010
+RUN groupadd --gid $MDDS_GROUP_ID $MDDS_USER && \
+    useradd --uid $MDDS_USER_ID --gid $MDDS_GROUP_ID -m -s /bin/bash $MDDS_USER
 
 # Set non-interactive mode for apt
 ENV DEBIAN_FRONTEND=noninteractive
@@ -23,9 +31,6 @@ RUN chmod +x /usr/local/bin/grpc_health_probe
 # Upgarde pip to latest
 RUN pip install --upgrade pip
 
-# Create app directory
-WORKDIR "$APP_HOME"
-
 # Install Python dependencies
 RUN pip install --no-cache-dir \
     fastapi \
@@ -42,4 +47,7 @@ RUN pip install --no-cache-dir \
     grpcio \
     grpcio-health-checking \
     grpcio-reflection
+
+USER $MDDS_USER
+WORKDIR $MDDS_HOME
 
