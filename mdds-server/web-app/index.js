@@ -1,7 +1,6 @@
 // Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 // Refer to the LICENSE file in the root directory for full license details.
 
-
 document.addEventListener("DOMContentLoaded", function () {
   const solveBtn = document.getElementById("solveBtn");
   const downloadBtn = document.getElementById("downloadBtn");
@@ -29,7 +28,7 @@ export async function sendFiles() {
 
   console.log("matrixInput = " + matrixInput);
   console.log("rhsInput = " + rhsInput);
-  console.log("solverMethod = " + solverMethod);
+  console.log("slaeSolvingMethod = " + solverMethod);
 
   if (!matrixInput.files.length || !rhsInput.files.length) {
     alert("Please select both files.");
@@ -45,7 +44,7 @@ export async function sendFiles() {
   const formData = new FormData();
   formData.append("matrix", matrixFile);
   formData.append("rhs", rhsFile);
-  formData.append("method", solverMethod);
+  formData.append("slaeSolvingMethod", solverMethod);
 
   try {
     const response = await fetch("/solve", {
