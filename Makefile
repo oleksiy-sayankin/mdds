@@ -430,7 +430,7 @@ check_license:
 	$(call log_info,"🔍 Checking license headers in source files...")
 	@FILES=$$(find . \
 		-type f \
-		-not -path "./$(NODE_MODULES)/*" \
+		-not -path "*$(NODE_MODULES)*" \
 		-not -path "./.idea/*" \
 		-not -path "*/__pycache__/*" \
 		-not -path "*/.pytest_cache/*" \
