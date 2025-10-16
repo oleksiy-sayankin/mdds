@@ -6,19 +6,22 @@ package com.mdds.server;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskStatus;
 import com.mdds.storage.DataStorageFactory;
 import com.mdds.storage.redis.RedisConfFactory;
+import com.rabbitmq.client.ConnectionFactory;
 import java.io.*;
 import java.net.*;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.TimeoutException;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -50,6 +53,13 @@ class TestServer {
   static void startServer() throws LifecycleException, IOException {
     redisServer = new RedisServer(REDIS_SERVER_PORT);
     redisServer.start();
+
+    // Wait for RabbitMq is ready
+    Awaitility.await()
+        .atMost(Duration.ofSeconds(30))
+        .ignoreExceptions()
+        .until(TestServer::queueIsReady);
+
     System.setProperty("redis.host", "localhost");
     System.setProperty("redis.port", String.valueOf(REDIS_SERVER_PORT));
     System.setProperty("rabbitmq.host", rabbitMq.getHost());
@@ -189,5 +199,27 @@ class TestServer {
       var responseBody = reader.lines().reduce("", (a, b) -> a + b);
       assertTrue(responseBody.contains("id"));
     }
+  }
+
+  private static boolean queueIsReady() throws IOException, TimeoutException {
+    try (var connection =
+        createConnectionFactory(
+                rabbitMq.getHost(),
+                rabbitMq.getAmqpPort(),
+                rabbitMq.getAdminUsername(),
+                rabbitMq.getAdminPassword())
+            .newConnection()) {
+      return connection.isOpen();
+    }
+  }
+
+  private static ConnectionFactory createConnectionFactory(
+      String host, int port, String user, String password) {
+    var factory = new ConnectionFactory();
+    factory.setHost(host);
+    factory.setPort(port);
+    factory.setUsername(user);
+    factory.setPassword(password);
+    return factory;
   }
 }
