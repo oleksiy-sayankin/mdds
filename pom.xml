@@ -17,6 +17,7 @@
     <module>mdds-server</module>
     <module>mdds-storage</module>
     <module>mdds-dto</module>
+    <module>data-sources</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -32,6 +33,7 @@
     <protobuf-java.version>3.25.1</protobuf-java.version>
     <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
+    <software.amazon.awssdk.version>2.35.7</software.amazon.awssdk.version>
   </properties>
   <dependencies>
     <dependency>
@@ -183,6 +185,21 @@
       <groupId>io.grpc</groupId>
       <artifactId>grpc-services</artifactId>
       <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${software.amazon.awssdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>regions</artifactId>
+      <version>${software.amazon.awssdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>auth</artifactId>
+      <version>${software.amazon.awssdk.version}</version>
     </dependency>
   </dependencies>
   <build>

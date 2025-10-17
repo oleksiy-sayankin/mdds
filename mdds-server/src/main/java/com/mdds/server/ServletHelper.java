@@ -4,22 +4,26 @@
  */
 package com.mdds.server;
 
+import static com.mdds.common.util.CsvHelper.*;
 import static com.mdds.dto.SlaeSolver.isValid;
 import static com.mdds.dto.SlaeSolver.parse;
-import static com.mdds.server.CsvHelper.*;
+import static com.mdds.server.ServerAppContextListener.ATTR_SERVER_SERVICE;
 import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
-import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 
+import com.mdds.api.Processable;
 import com.mdds.common.util.JsonHelper;
+import com.mdds.data.source.DataSourceDescriptor;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
 import com.opencsv.exceptions.CsvException;
 import jakarta.annotation.Nonnull;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
@@ -31,40 +35,41 @@ public final class ServletHelper {
   /**
    * Gets Queue instance from the request.
    *
-   * @param request Http request.
-   * @param response Http response.
+   * @param servletContext Http request.
    * @return Queue instance.
    */
-  public static Optional<Queue> extractQueue(
-      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
-    return Optional.ofNullable(
-            ((ServerService)
-                    request
-                        .getServletContext()
-                        .getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
-                .getQueue())
-        .or(
-            () -> {
-              sendError(response, SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
-              return Optional.empty();
-            });
+  public static Processable<Queue> extractQueue(@Nonnull ServletContext servletContext) {
+    var service = servletContext.getAttribute(ATTR_SERVER_SERVICE);
+    if (service == null) {
+      return Processable.failure(ATTR_ERROR);
+    }
+    return Processable.of(((ServerService) service).getQueue());
   }
 
   /**
    * Extracts string containing solving method and converts it to enum variable.
    *
    * @param request Http request.
-   * @param response Http response.
    * @return solving method.
    */
-  public static Optional<SlaeSolver> extractSolvingMethod(
-      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
+  public static Processable<SlaeSolver> extractSolvingMethod(@Nonnull HttpServletRequest request) {
     var method = request.getParameter("slaeSolvingMethod");
     if (!isValid(method)) {
-      sendError(response, SC_BAD_REQUEST, "Invalid solving method: " + method);
-      return Optional.empty();
+      return Processable.failure("Invalid solving method: " + method);
     }
-    return Optional.of(parse(method));
+    return Processable.of(parse(method));
+  }
+
+  public static Processable<DataSourceDescriptor> extractDataSourceDescriptor(
+      @Nonnull HttpServletRequest request) {
+    var dataSourceType = request.getParameter("dataSourceType");
+    if (!DataSourceDescriptor.Type.isValid(dataSourceType)) {
+      return Processable.failure("Invalid data source type: " + dataSourceType);
+    }
+    var params = new HashMap<String, Object>();
+    params.put("request", request);
+    return Processable.of(
+        DataSourceDescriptor.of(DataSourceDescriptor.Type.parse(dataSourceType), params));
   }
 
   /**
@@ -162,45 +167,36 @@ public final class ServletHelper {
   /**
    * Gets DataStorage instance from the request.
    *
-   * @param request Http request.
-   * @param response Http response.
+   * @param servletContext Http request.
    * @return DataStorage instance.
    */
-  public static Optional<DataStorage> extractDataStorage(
-      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
-    return Optional.ofNullable(
-            ((ServerService)
-                    request
-                        .getServletContext()
-                        .getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
-                .getDataStorage())
-        .or(
-            () -> {
-              sendError(
-                  response, SC_INTERNAL_SERVER_ERROR, "Data Storage Service is not initialized");
-              return Optional.empty();
-            });
+  public static Processable<DataStorage> extractDataStorage(
+      @Nonnull ServletContext servletContext) {
+    var service = servletContext.getAttribute(ATTR_SERVER_SERVICE);
+    if (service == null) {
+      return Processable.failure(ATTR_ERROR);
+    }
+    return Processable.of(((ServerService) service).getDataStorage());
   }
 
   /**
    * Extracts task id from the request.
    *
    * @param request Http request.
-   * @param response Http response.
    * @return task id from the request.
    */
-  public static Optional<String> extractTaskId(
-      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
+  public static Processable<String> extractTaskId(@Nonnull HttpServletRequest request) {
     var path = request.getPathInfo();
     if (path == null || path.isEmpty()) {
-      sendError(response, SC_BAD_REQUEST, "Path is empty");
-      return Optional.empty();
+      return Processable.failure("Path is empty");
     }
     var taskId = path.startsWith("/") ? path.substring(path.lastIndexOf('/') + 1) : null;
     if (taskId == null || taskId.isEmpty()) {
-      sendError(response, SC_BAD_REQUEST, "Task id missing");
-      return Optional.empty();
+      return Processable.failure("Task id missing");
     }
-    return Optional.of(taskId);
+    return Processable.of(taskId);
   }
+
+  private static final String ATTR_ERROR =
+      "Servlet context attribute " + ATTR_SERVER_SERVICE + " is null.";
 }

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.*;
 
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
+import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,6 +20,7 @@ import jakarta.servlet.http.Part;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.Enumeration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +34,7 @@ class TestServerSolveServlet {
   private ServerService serverService;
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws ServletException {
     servlet = new ServerSolveServlet();
     request = mock(HttpServletRequest.class);
     response = mock(HttpServletResponse.class);
@@ -40,10 +42,36 @@ class TestServerSolveServlet {
     queue = mock(Queue.class);
     dataStorage = mock(DataStorage.class);
     serverService = mock(ServerService.class);
+
+    servlet.init(
+        new ServletConfig() {
+          @Override
+          public String getServletName() {
+            return "ServerSolveServlet";
+          }
+
+          @Override
+          public ServletContext getServletContext() {
+            return servletContext;
+          }
+
+          @Override
+          public String getInitParameter(String name) {
+            return "empty";
+          }
+
+          @Override
+          public Enumeration<String> getInitParameterNames() {
+            return null;
+          }
+        });
   }
 
   @Test
   void testDoPost() throws ServletException, IOException {
+    // Prepare data source type
+    when(request.getParameter("dataSourceType")).thenReturn("http_request");
+
     // Prepare matrix of SLAE
     var expectedMatrix =
         new String[][] {{"1.3", "2.2", "3.7"}, {"7.7", "2.1", "9.3"}, {"1.1", "4.8", "2.3"}};
@@ -89,6 +117,9 @@ class TestServerSolveServlet {
 
   @Test
   void testDoPostNoMatrix() throws ServletException, IOException {
+    // Prepare data source type
+    when(request.getParameter("dataSourceType")).thenReturn("http_request");
+
     // Prepare right hand side of SLAE
     var expectedRhs = new String[] {"1.3", "2.2", "3.7"};
     var isRhs =
@@ -120,6 +151,9 @@ class TestServerSolveServlet {
 
   @Test
   void testDoPostNoRhs() throws ServletException, IOException {
+    // Prepare data source type
+    when(request.getParameter("dataSourceType")).thenReturn("http_request");
+
     // Prepare matrix of SLAE
     var expectedMatrix =
         new String[][] {{"1.3", "2.2", "3.7"}, {"7.7", "2.1", "9.3"}, {"1.1", "4.8", "2.3"}};
@@ -156,6 +190,9 @@ class TestServerSolveServlet {
 
   @Test
   void testDoPostNoSolvingMethod() throws ServletException, IOException {
+    // Prepare data source type
+    when(request.getParameter("dataSourceType")).thenReturn("http_request");
+
     // Prepare matrix of SLAE
     var expectedMatrix =
         new String[][] {{"1.3", "2.2", "3.7"}, {"7.7", "2.1", "9.3"}, {"1.1", "4.8", "2.3"}};
@@ -196,7 +233,10 @@ class TestServerSolveServlet {
   }
 
   @Test
-  void testDoPostNoQueue() throws ServletException, IOException {
+  void testDoPostNoServletContextAttribute() throws ServletException, IOException {
+    // Prepare data source type
+    when(request.getParameter("dataSourceType")).thenReturn("http_request");
+
     // Prepare matrix of SLAE
     var expectedMatrix =
         new String[][] {{"1.3", "2.2", "3.7"}, {"7.7", "2.1", "9.3"}, {"1.1", "4.8", "2.3"}};
@@ -217,62 +257,18 @@ class TestServerSolveServlet {
     var partRhs = mock(Part.class);
     when(partRhs.getInputStream()).thenReturn(isRhs);
     when(request.getPart("rhs")).thenReturn(partRhs);
-
-    // Prepare Server Service
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
-        .thenReturn(serverService);
-
-    // Prepare solving method
-    when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
-
-    // Prepare data storage
-    when(request.getServletContext()).thenReturn(servletContext);
-    when(serverService.getDataStorage()).thenReturn(dataStorage);
-    var printWriter = mock(PrintWriter.class);
-    when(response.getWriter()).thenReturn(printWriter);
-    doNothing().when(printWriter).write(anyString());
-    servlet.doPost(request, response);
-    verify(response).sendError(SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
-  }
-
-  @Test
-  void testDoPostNoDataStorage() throws ServletException, IOException {
-    // Prepare matrix of SLAE
-    var expectedMatrix =
-        new String[][] {{"1.3", "2.2", "3.7"}, {"7.7", "2.1", "9.3"}, {"1.1", "4.8", "2.3"}};
-    var sb = new StringBuilder();
-    for (var row : expectedMatrix) {
-      sb.append(String.join(",", row));
-      sb.append(System.lineSeparator());
-    }
-    var isMatrix = new ByteArrayInputStream(sb.toString().getBytes(UTF_8));
-    var partMatrix = mock(Part.class);
-    when(partMatrix.getInputStream()).thenReturn(isMatrix);
-    when(request.getPart("matrix")).thenReturn(partMatrix);
-
-    // Prepare right hand side of SLAE
-    var expectedRhs = new String[] {"1.3", "2.2", "3.7"};
-    var isRhs =
-        new ByteArrayInputStream(String.join(System.lineSeparator(), expectedRhs).getBytes(UTF_8));
-    var partRhs = mock(Part.class);
-    when(partRhs.getInputStream()).thenReturn(isRhs);
-    when(request.getPart("rhs")).thenReturn(partRhs);
-
-    // Prepare Server Service
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
-        .thenReturn(serverService);
 
     // Prepare solving method
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
 
     // Prepare queue
-    when(request.getServletContext()).thenReturn(servletContext);
     when(serverService.getQueue()).thenReturn(queue);
 
     var printWriter = mock(PrintWriter.class);
     when(response.getWriter()).thenReturn(printWriter);
     doNothing().when(printWriter).write(anyString());
     servlet.doPost(request, response);
-    verify(response).sendError(SC_INTERNAL_SERVER_ERROR, "Data Storage Service is not initialized");
+    verify(response)
+        .sendError(SC_INTERNAL_SERVER_ERROR, "Servlet context attribute SERVER_SERVICE is null.");
   }
 }

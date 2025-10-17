@@ -10,12 +10,15 @@ import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskStatus;
 import com.mdds.storage.DataStorage;
+import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.Instant;
+import java.util.Enumeration;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +33,7 @@ class TestServerResultServlet {
   private ServerService serverService;
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws ServletException {
     servlet = new ServerResultServlet();
     request = mock(HttpServletRequest.class);
     response = mock(HttpServletResponse.class);
@@ -38,6 +41,29 @@ class TestServerResultServlet {
     printWriter = mock(PrintWriter.class);
     dataStorage = mock(DataStorage.class);
     serverService = mock(ServerService.class);
+
+    servlet.init(
+        new ServletConfig() {
+          @Override
+          public String getServletName() {
+            return "ServerResultServlet";
+          }
+
+          @Override
+          public ServletContext getServletContext() {
+            return servletContext;
+          }
+
+          @Override
+          public String getInitParameter(String name) {
+            return "empty";
+          }
+
+          @Override
+          public Enumeration<String> getInitParameterNames() {
+            return null;
+          }
+        });
   }
 
   @Test
@@ -63,14 +89,11 @@ class TestServerResultServlet {
   @Test
   void testDoGetNoDataStorageInContext() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/test_task_id");
-    when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
-        .thenReturn(serverService);
     servlet.doGet(request, response);
     verify(response)
         .sendError(
             HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-            "Data Storage Service is not initialized");
+            "Servlet context attribute SERVER_SERVICE is null.");
   }
 
   @Test

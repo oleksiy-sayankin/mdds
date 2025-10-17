@@ -5,10 +5,9 @@
 package com.mdds.server;
 
 import static com.github.valfirst.slf4jtest.TestLoggerFactory.getTestLogger;
-import static com.mdds.server.CsvHelper.convert;
+import static com.mdds.common.util.CsvHelper.convert;
 import static com.mdds.server.ServletHelper.*;
 import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
-import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -46,56 +45,53 @@ class TestServletHelper {
 
   @Test
   void testExtractQueueWhenQueueExists() {
-    when(request.getServletContext()).thenReturn(servletContext);
     when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
         .thenReturn(serverService);
     when(serverService.getQueue()).thenReturn(queue);
-    var actualQueue = extractQueue(request, response);
+    var actualQueue = extractQueue(servletContext);
     actualQueue.ifPresent(q -> assertEquals(queue, q));
   }
 
   @Test
-  void testExtractQueueWhenNoQueue() throws IOException {
-    when(request.getServletContext()).thenReturn(servletContext);
-    when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
-        .thenReturn(serverService);
-    var actualQueue = extractQueue(request, response);
-    verify(response).sendError(SC_INTERNAL_SERVER_ERROR, "Service Queue is not initialized");
-    assertTrue(actualQueue.isEmpty());
+  void testExtractQueueWhenNoQueue() {
+    var actualQueue = extractQueue(servletContext);
+    assertTrue(actualQueue.isFailure());
+    assertEquals(
+        "Servlet context attribute SERVER_SERVICE is null.", actualQueue.getErrorMessage());
   }
 
   @Test
   void testExtractDataStorageWhenDataStorageExists() {
-    when(request.getServletContext()).thenReturn(servletContext);
     when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
         .thenReturn(serverService);
     when(serverService.getDataStorage()).thenReturn(dataStorage);
-    var actualDataStorage = extractDataStorage(request, response);
+    var actualDataStorage = extractDataStorage(servletContext);
     actualDataStorage.ifPresent(ds -> assertEquals(dataStorage, ds));
   }
 
   @Test
   void testExtractSolvingMethodWhenMethodExists() {
     when(request.getParameter("slaeSolvingMethod")).thenReturn("numpy_exact_solver");
-    var actualSolvingMethod = extractSolvingMethod(request, response);
+    var actualSolvingMethod = extractSolvingMethod(request);
     actualSolvingMethod.ifPresent(asm -> assertEquals(SlaeSolver.NUMPY_EXACT_SOLVER, asm));
   }
 
   @Test
-  void testExtractSolvingMethodWhenWrongMethod() throws IOException {
+  void testExtractSolvingMethodWhenWrongMethod() {
     var solvingMethod = "wrong_solving_method";
     when(request.getParameter("slaeSolvingMethod")).thenReturn(solvingMethod);
-    var actualSolvingMethod = extractSolvingMethod(request, response);
-    verify(response).sendError(SC_BAD_REQUEST, "Invalid solving method: " + solvingMethod);
-    assertTrue(actualSolvingMethod.isEmpty());
+    var actualSolvingMethod = extractSolvingMethod(request);
+    assertTrue(actualSolvingMethod.isFailure());
+    assertEquals(
+        "Invalid solving method: wrong_solving_method", actualSolvingMethod.getErrorMessage());
   }
 
   @Test
-  void testExtractSolvingMethodWhenNullMethod() throws IOException {
+  void testExtractSolvingMethodWhenNullMethod() {
     when(request.getParameter("slaeSolvingMethod")).thenReturn(null);
-    var actualSolvingMethod = extractSolvingMethod(request, response);
-    verify(response).sendError(SC_BAD_REQUEST, "Invalid solving method: " + null);
-    assertTrue(actualSolvingMethod.isEmpty());
+    var actualSolvingMethod = extractSolvingMethod(request);
+    assertTrue(actualSolvingMethod.isFailure());
+    assertEquals("Invalid solving method: null", actualSolvingMethod.getErrorMessage());
   }
 
   @Test

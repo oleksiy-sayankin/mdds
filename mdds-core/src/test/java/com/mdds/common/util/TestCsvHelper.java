@@ -2,9 +2,9 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.server;
+package com.mdds.common.util;
 
-import static com.mdds.server.CsvHelper.*;
+import static com.mdds.common.util.CsvHelper.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,7 +25,7 @@ class TestCsvHelper {
   @Test
   void testConvertVectorException() {
     var numbers = new String[] {"2.3kjhkj", "43.654654", "346.8534"};
-    assertThrows(SolveServletException.class, () -> convert(numbers));
+    assertThrows(ParseException.class, () -> convert(numbers));
   }
 
   @Test
@@ -45,7 +45,7 @@ class TestCsvHelper {
         new String[][] {
           {"2.3kjhkj", "43.654654", "346.8534"}, {"5.8", "4.4", "7.5"}, {"1.2", "3.7", "9.8"}
         };
-    assertThrows(SolveServletException.class, () -> convert(numbers));
+    assertThrows(ParseException.class, () -> convert(numbers));
   }
 
   @Test

@@ -2,7 +2,7 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.server;
+package com.mdds.common.util;
 
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
@@ -21,16 +21,16 @@ public final class CsvHelper {
    *
    * @param numbers array of float numbers as string data.
    * @return array of double
-   * @throws SolveServletException when exception raises during parsing a number.
+   * @throws ParseException when exception raises during parsing a number.
    */
-  public static double[] convert(@Nonnull String[] numbers) throws SolveServletException {
+  public static double[] convert(@Nonnull String[] numbers) throws ParseException {
     var result = new double[numbers.length];
     var i = 0;
     for (var number : numbers) {
       try {
         result[i] = Double.parseDouble(number);
       } catch (NumberFormatException e) {
-        throw new SolveServletException("Can not convert to double: " + number, e);
+        throw new ParseException("Can not convert to double: " + number, e);
       }
       i++;
     }
@@ -42,9 +42,9 @@ public final class CsvHelper {
    *
    * @param matrix matrix of float numbers as string data.
    * @return matrix of double
-   * @throws SolveServletException when exception raises during parsing a number.
+   * @throws ParseException when exception raises during parsing a number.
    */
-  public static double[][] convert(@Nonnull String[][] matrix) throws SolveServletException {
+  public static double[][] convert(@Nonnull String[][] matrix) throws ParseException {
     var result = new double[matrix.length][];
     var i = 0;
     for (var row : matrix) {
@@ -54,7 +54,7 @@ public final class CsvHelper {
         try {
           result[i][j] = Double.parseDouble(number);
         } catch (NumberFormatException e) {
-          throw new SolveServletException("Can not convert to double: " + number, e);
+          throw new ParseException("Can not convert to double: " + number, e);
         }
         j++;
       }

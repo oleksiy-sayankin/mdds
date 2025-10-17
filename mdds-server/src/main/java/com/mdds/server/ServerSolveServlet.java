@@ -6,8 +6,11 @@ package com.mdds.server;
 
 import static com.mdds.common.AppConstants.TASK_QUEUE_NAME;
 import static com.mdds.server.ServletHelper.*;
+import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
+import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 
 import com.mdds.common.AppConstantsFactory;
+import com.mdds.data.source.DataSourceProviderFactory;
 import com.mdds.dto.*;
 import com.mdds.queue.Message;
 import jakarta.servlet.http.HttpServlet;
@@ -15,7 +18,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 
 /** Servlet for solving system of linear algebraic equations. */
@@ -25,13 +27,41 @@ public class ServerSolveServlet extends HttpServlet {
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response) {
     log.info("Processing request in Solve Servlet...");
-    var matrix = extractMatrix(request, response);
-    var method = extractSolvingMethod(request, response);
-    var rhs = extractRhs(request, response);
-    var storage = extractDataStorage(request, response);
-    var queue = extractQueue(request, response);
-
-    if (Stream.of(matrix, method, rhs, storage, queue).anyMatch(Optional::isEmpty)) {
+    var dataSourceDescriptor = extractDataSourceDescriptor(request);
+    if (dataSourceDescriptor.isFailure()) {
+      sendError(response, SC_BAD_REQUEST, dataSourceDescriptor.getErrorMessage());
+      return;
+    }
+    var slaeDataSourceProvider =
+        DataSourceProviderFactory.fromDescriptor(dataSourceDescriptor.get());
+    if (slaeDataSourceProvider.isFailure()) {
+      sendError(response, SC_BAD_REQUEST, slaeDataSourceProvider.getErrorMessage());
+      return;
+    }
+    var matrix = slaeDataSourceProvider.get().loadMatrix();
+    if (matrix.isFailure()) {
+      sendError(response, SC_BAD_REQUEST, matrix.getErrorMessage());
+      return;
+    }
+    var rhs = slaeDataSourceProvider.get().loadRhs();
+    if (rhs.isFailure()) {
+      sendError(response, SC_BAD_REQUEST, rhs.getErrorMessage());
+      return;
+    }
+    var method = extractSolvingMethod(request);
+    if (method.isFailure()) {
+      sendError(response, SC_BAD_REQUEST, method.getErrorMessage());
+      return;
+    }
+    var servletContext = getServletContext();
+    var storage = extractDataStorage(servletContext);
+    if (storage.isFailure()) {
+      sendError(response, SC_INTERNAL_SERVER_ERROR, storage.getErrorMessage());
+      return;
+    }
+    var queue = extractQueue(servletContext);
+    if (queue.isFailure()) {
+      sendError(response, SC_INTERNAL_SERVER_ERROR, queue.getErrorMessage());
       return;
     }
 
@@ -48,8 +78,7 @@ public class ServerSolveServlet extends HttpServlet {
             q.publish(
                 AppConstantsFactory.getString(TASK_QUEUE_NAME),
                 new Message<>(
-                    new TaskDTO(
-                        taskId, now, matrix.orElseThrow(), rhs.orElseThrow(), method.orElseThrow()),
+                    new TaskDTO(taskId, now, matrix.get(), rhs.get(), method.get()),
                     Collections.emptyMap(),
                     now)));
     response.setContentType("application/json");

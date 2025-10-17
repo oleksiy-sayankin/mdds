@@ -162,6 +162,12 @@ class TestServer {
     try (var output = connection.getOutputStream()) {
       var writer = new PrintWriter(new OutputStreamWriter(output, UTF_8), true);
 
+      // add data source type
+      writer.append("--").append(boundary).append("\r\n");
+      writer.append("Content-Disposition: form-data; name=\"dataSourceType\"\r\n\r\n");
+      writer.append("http_request").append("\r\n");
+      writer.flush();
+
       // add slaeSolvingMethod
       writer.append("--").append(boundary).append("\r\n");
       writer.append("Content-Disposition: form-data; name=\"slaeSolvingMethod\"\r\n\r\n");
