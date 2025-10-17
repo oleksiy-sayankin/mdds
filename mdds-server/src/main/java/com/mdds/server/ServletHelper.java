@@ -8,7 +8,6 @@ import static com.mdds.common.util.CsvHelper.*;
 import static com.mdds.dto.SlaeSolver.isValid;
 import static com.mdds.dto.SlaeSolver.parse;
 import static com.mdds.server.ServerAppContextListener.ATTR_SERVER_SERVICE;
-import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 
 import com.mdds.api.Processable;
 import com.mdds.common.util.JsonHelper;
@@ -16,15 +15,12 @@ import com.mdds.data.source.DataSourceDescriptor;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
-import com.opencsv.exceptions.CsvException;
 import jakarta.annotation.Nonnull;
 import jakarta.servlet.ServletContext;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -98,55 +94,6 @@ public final class ServletHelper {
       response.getWriter().write(JsonHelper.toJson(result));
     } catch (IOException e) {
       log.error("Error writing task id as JSON", e);
-    }
-  }
-
-  /**
-   * Extracts matrix of the equation from the request.
-   *
-   * @param request Http request.
-   * @param response Http response.
-   * @return matrix from the request.
-   */
-  public static Optional<double[][]> extractMatrix(
-      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
-    try {
-      var matrixPart = request.getPart("matrix");
-      if (matrixPart == null) {
-        sendError(response, SC_BAD_REQUEST, "Missing matrix in request");
-        return Optional.empty();
-      }
-      try (var is = matrixPart.getInputStream()) {
-        return Optional.of(convert(readCsvAsMatrix(is)));
-      }
-
-    } catch (IOException | ServletException | CsvException | SolveServletException e) {
-      log.error("Error parsing matrix in the request", e);
-      return Optional.empty();
-    }
-  }
-
-  /**
-   * Extracts right hand side (rhs) vector of the equation from the request.
-   *
-   * @param request Http request.
-   * @param response Http response.
-   * @return right hand side vector from the request.
-   */
-  public static Optional<double[]> extractRhs(
-      @Nonnull HttpServletRequest request, @Nonnull HttpServletResponse response) {
-    try {
-      var rhsPart = request.getPart("rhs");
-      if (rhsPart == null) {
-        sendError(response, SC_BAD_REQUEST, "Missing right hand side in request");
-        return Optional.empty();
-      }
-      try (var is = rhsPart.getInputStream()) {
-        return Optional.of(convert(readCsvAsVector(is)));
-      }
-    } catch (IOException | ServletException | CsvException | SolveServletException e) {
-      log.error("Error parsing right hand side in the request", e);
-      return Optional.empty();
     }
   }
 
