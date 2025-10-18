@@ -21,25 +21,16 @@ public class ServerResultServlet extends HttpServlet {
   @Override
   protected void doGet(HttpServletRequest request, HttpServletResponse response) {
     log.info("Processing request in result servlet...");
-    response.setContentType("application/json");
-    var taskId = extractTaskId(request);
-    if (taskId.isFailure()) {
-      sendError(response, SC_BAD_REQUEST, taskId.getErrorMessage());
-      return;
+    try {
+      var taskId = unwrapOrSendError(response, SC_BAD_REQUEST, extractTaskId(request));
+      var storage =
+          unwrapOrSendError(
+              response, SC_INTERNAL_SERVER_ERROR, extractDataStorage(getServletContext()));
+      var result = storage.get(taskId, ResultDTO.class);
+      response.setContentType("application/json");
+      result.ifPresentOrElse(r -> writeJson(response, r), () -> writeNotFound(response));
+    } catch (EarlyExitException ignore) {
+      // Exit if there is at least one error in unwrapping data
     }
-    var storage = extractDataStorage(getServletContext());
-    if (storage.isFailure()) {
-      sendError(response, SC_INTERNAL_SERVER_ERROR, storage.getErrorMessage());
-      return;
-    }
-
-    storage.ifPresent(
-        s ->
-            taskId.ifPresent(
-                t -> {
-                  var result = s.get(t, ResultDTO.class);
-                  result.ifPresentOrElse(
-                      r -> writeJson(response, r), () -> writeNotFound(response));
-                }));
   }
 }

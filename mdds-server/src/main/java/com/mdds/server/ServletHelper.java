@@ -4,7 +4,6 @@
  */
 package com.mdds.server;
 
-import static com.mdds.common.util.CsvHelper.*;
 import static com.mdds.dto.SlaeSolver.isValid;
 import static com.mdds.dto.SlaeSolver.parse;
 import static com.mdds.server.ServerAppContextListener.ATTR_SERVER_SERVICE;
@@ -56,7 +55,7 @@ public final class ServletHelper {
     return Processable.of(parse(method));
   }
 
-  public static Processable<DataSourceDescriptor> extractDataSourceDescriptor(
+  public static Processable<DataSourceDescriptor> extractDescriptor(
       @Nonnull HttpServletRequest request) {
     var dataSourceType = request.getParameter("dataSourceType");
     if (!DataSourceDescriptor.Type.isValid(dataSourceType)) {
@@ -142,6 +141,28 @@ public final class ServletHelper {
       return Processable.failure("Task id missing");
     }
     return Processable.of(taskId);
+  }
+
+  /** Stub exception to perform early exit from set of operations. */
+  public static class EarlyExitException extends RuntimeException {}
+
+  /**
+   * Here we either return result from <i>Processable</i> wrapper or if we have no tesult, we send
+   * error message to http servlet response instance.
+   *
+   * @param response http servlet response instance where to send error message.
+   * @param statusCode statis code to send
+   * @param result <i>Processable</i> wrapper which may contain the result or error description.
+   * @return unwrapped data from <i>Processable</i> wrapper.
+   * @param <T> type of data that <i>Processable</i> wraps.
+   */
+  public static <T> T unwrapOrSendError(
+      HttpServletResponse response, int statusCode, Processable<T> result) {
+    if (result.isFailure()) {
+      sendError(response, statusCode, result.getErrorMessage());
+      throw new EarlyExitException();
+    }
+    return result.get();
   }
 
   private static final String ATTR_ERROR =

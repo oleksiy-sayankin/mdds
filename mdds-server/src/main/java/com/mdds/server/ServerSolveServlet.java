@@ -5,12 +5,12 @@
 package com.mdds.server;
 
 import static com.mdds.common.AppConstants.TASK_QUEUE_NAME;
+import static com.mdds.data.source.DataSourceProviderFactory.fromDescriptor;
 import static com.mdds.server.ServletHelper.*;
 import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static jakarta.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 
 import com.mdds.common.AppConstantsFactory;
-import com.mdds.data.source.DataSourceProviderFactory;
 import com.mdds.dto.*;
 import com.mdds.queue.Message;
 import jakarta.servlet.http.HttpServlet;
@@ -27,61 +27,33 @@ public class ServerSolveServlet extends HttpServlet {
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response) {
     log.info("Processing request in Solve Servlet...");
-    var dataSourceDescriptor = extractDataSourceDescriptor(request);
-    if (dataSourceDescriptor.isFailure()) {
-      sendError(response, SC_BAD_REQUEST, dataSourceDescriptor.getErrorMessage());
-      return;
-    }
-    var slaeDataSourceProvider =
-        DataSourceProviderFactory.fromDescriptor(dataSourceDescriptor.get());
-    if (slaeDataSourceProvider.isFailure()) {
-      sendError(response, SC_BAD_REQUEST, slaeDataSourceProvider.getErrorMessage());
-      return;
-    }
-    var matrix = slaeDataSourceProvider.get().loadMatrix();
-    if (matrix.isFailure()) {
-      sendError(response, SC_BAD_REQUEST, matrix.getErrorMessage());
-      return;
-    }
-    var rhs = slaeDataSourceProvider.get().loadRhs();
-    if (rhs.isFailure()) {
-      sendError(response, SC_BAD_REQUEST, rhs.getErrorMessage());
-      return;
-    }
-    var method = extractSolvingMethod(request);
-    if (method.isFailure()) {
-      sendError(response, SC_BAD_REQUEST, method.getErrorMessage());
-      return;
-    }
-    var servletContext = getServletContext();
-    var storage = extractDataStorage(servletContext);
-    if (storage.isFailure()) {
-      sendError(response, SC_INTERNAL_SERVER_ERROR, storage.getErrorMessage());
-      return;
-    }
-    var queue = extractQueue(servletContext);
-    if (queue.isFailure()) {
-      sendError(response, SC_INTERNAL_SERVER_ERROR, queue.getErrorMessage());
-      return;
-    }
+    try {
+      var descriptor = unwrapOrSendError(response, SC_BAD_REQUEST, extractDescriptor(request));
+      var provider = unwrapOrSendError(response, SC_BAD_REQUEST, fromDescriptor(descriptor));
+      var matrix = unwrapOrSendError(response, SC_BAD_REQUEST, provider.loadMatrix());
+      var rhs = unwrapOrSendError(response, SC_BAD_REQUEST, provider.loadRhs());
+      var method = unwrapOrSendError(response, SC_BAD_REQUEST, extractSolvingMethod(request));
+      var storage =
+          unwrapOrSendError(
+              response, SC_INTERNAL_SERVER_ERROR, extractDataStorage(getServletContext()));
+      var queue =
+          unwrapOrSendError(response, SC_INTERNAL_SERVER_ERROR, extractQueue(getServletContext()));
 
-    // store initial result
-    var taskId = UUID.randomUUID().toString();
-    var now = Instant.now();
-    // Put result to storage
-    storage.ifPresent(
-        s -> s.put(taskId, new ResultDTO(taskId, now, null, TaskStatus.IN_PROGRESS, null, null)));
+      // store initial result
+      var taskId = UUID.randomUUID().toString();
+      var now = Instant.now();
+      // Put result to storage
+      storage.put(taskId, new ResultDTO(taskId, now, null, TaskStatus.IN_PROGRESS, null, null));
 
-    // create TaskDTO and publish to queue
-    queue.ifPresent(
-        q ->
-            q.publish(
-                AppConstantsFactory.getString(TASK_QUEUE_NAME),
-                new Message<>(
-                    new TaskDTO(taskId, now, matrix.get(), rhs.get(), method.get()),
-                    Collections.emptyMap(),
-                    now)));
-    response.setContentType("application/json");
-    writeJson(response, new TaskIdResponseDTO(taskId));
+      // create TaskDTO and publish to queue
+      queue.publish(
+          AppConstantsFactory.getString(TASK_QUEUE_NAME),
+          new Message<>(
+              new TaskDTO(taskId, now, matrix, rhs, method), Collections.emptyMap(), now));
+      response.setContentType("application/json");
+      writeJson(response, new TaskIdResponseDTO(taskId));
+    } catch (EarlyExitException ignored) {
+      // Exit if there is at least one error in unwrapping data
+    }
   }
 }
