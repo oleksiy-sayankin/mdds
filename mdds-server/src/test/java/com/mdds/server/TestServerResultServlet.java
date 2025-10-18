@@ -68,18 +68,15 @@ class TestServerResultServlet {
 
   @Test
   void testDoGetPathIsEmpty() throws IOException {
-    when(request.getServletContext()).thenReturn(servletContext);
     when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
         .thenReturn(serverService);
     servlet.doGet(request, response);
-    verify(response).setContentType("application/json");
     verify(response).sendError(HttpServletResponse.SC_BAD_REQUEST, "Path is empty");
   }
 
   @Test
   void testDoGetNoTaskId() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/");
-    when(request.getServletContext()).thenReturn(servletContext);
     when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
         .thenReturn(serverService);
     servlet.doGet(request, response);
@@ -99,7 +96,6 @@ class TestServerResultServlet {
   @Test
   void testDoGetNoResultForProvidedTaskId() throws IOException {
     when(request.getPathInfo()).thenReturn("/result/test_task_id");
-    when(request.getServletContext()).thenReturn(servletContext);
     when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
         .thenReturn(serverService);
     when(serverService.getDataStorage()).thenReturn(dataStorage);
@@ -112,7 +108,6 @@ class TestServerResultServlet {
   void testDoGetDataIsInDataStorage() throws IOException {
     var taskId = "test_task_id";
     when(request.getPathInfo()).thenReturn("/result/" + taskId);
-    when(request.getServletContext()).thenReturn(servletContext);
     when(servletContext.getAttribute(ServerAppContextListener.ATTR_SERVER_SERVICE))
         .thenReturn(serverService);
     when(serverService.getDataStorage()).thenReturn(dataStorage);
