@@ -62,9 +62,11 @@ public final class ServletHelper {
       return Processable.failure("Invalid data source type: " + dataSourceType);
     }
     var params = new HashMap<String, Object>();
-    params.put("request", request);
-    return Processable.of(
-        DataSourceDescriptor.of(DataSourceDescriptor.Type.parse(dataSourceType), params));
+    var type = DataSourceDescriptor.Type.parse(dataSourceType);
+    if (DataSourceDescriptor.Type.HTTP_REQUEST.equals(type)) {
+      params.put("request", request);
+    }
+    return Processable.of(DataSourceDescriptor.of(type, params));
   }
 
   /**
