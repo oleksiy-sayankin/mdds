@@ -6,9 +6,9 @@ package com.mdds.data.source.provider.mysql;
 
 import com.mdds.api.Processable;
 import com.mdds.common.util.JsonHelper;
+import jakarta.annotation.Nonnull;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /** Helper class to get data from MySql database. */
@@ -21,15 +21,12 @@ public final class MySqlHelper {
    * @param mySqlConfig configuration class for connecting to MqSql Db.
    * @return array of double values wrapped into <i>Processable</i> wrapper.
    */
-  public static Processable<double[][]> extractMatrix(MySqlConfig mySqlConfig) {
+  public static @Nonnull Processable<double[][]> extractMatrix(@Nonnull MySqlConfig mySqlConfig) {
     try {
       return Processable.of(
           JsonHelper.fromJson(
-              MySqlHelper.getRawMatrixDataFrom(
-                  MySqlHelper.requestData(
-                      MySqlHelper.getConnection(mySqlConfig),
-                      MySqlHelper.buildMatrixQuery(mySqlConfig)),
-                  mySqlConfig),
+              requestMatrixData(
+                  getConnection(mySqlConfig), buildMatrixQuery(mySqlConfig), mySqlConfig),
               double[][].class));
     } catch (SQLException | NoDataFoundException e) {
       return Processable.failure("Error loading matrix from Db", e);
@@ -42,15 +39,11 @@ public final class MySqlHelper {
    * @param mySqlConfig configuration class for connecting to MqSql Db.
    * @return array of double values wrapped into <i>Processable</i> wrapper.
    */
-  public static Processable<double[]> extractRhs(MySqlConfig mySqlConfig) {
+  public static @Nonnull Processable<double[]> extractRhs(@Nonnull MySqlConfig mySqlConfig) {
     try {
       return Processable.of(
           JsonHelper.fromJson(
-              MySqlHelper.getRawRhsDataFrom(
-                  MySqlHelper.requestData(
-                      MySqlHelper.getConnection(mySqlConfig),
-                      MySqlHelper.buildRhsQuery(mySqlConfig)),
-                  mySqlConfig),
+              requestRhsData(getConnection(mySqlConfig), buildRhsQuery(mySqlConfig), mySqlConfig),
               double[].class));
     } catch (SQLException | NoDataFoundException e) {
       return Processable.failure("Error loading right hand side from Db", e);
@@ -64,7 +57,7 @@ public final class MySqlHelper {
    * @return connection instance to MySql.
    * @throws SQLException when can not connect to MySql Database.
    */
-  public static Connection getConnection(MySqlConfig config) throws SQLException {
+  public static @Nonnull Connection getConnection(@Nonnull MySqlConfig config) throws SQLException {
     return DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
   }
 
@@ -74,7 +67,7 @@ public final class MySqlHelper {
    * @param config MySql connection configuration.
    * @return <i>String</i> query to select matrix from database.
    */
-  public static String buildMatrixQuery(MySqlConfig config) {
+  public static @Nonnull String buildMatrixQuery(@Nonnull MySqlConfig config) {
     return "SELECT "
         + config.getMatrixJsonFieldName()
         + " FROM "
@@ -82,9 +75,8 @@ public final class MySqlHelper {
         + "."
         + config.getMatrixTableName()
         + " WHERE "
-        + config.getMatrixJsonFieldName()
-        + " = "
-        + config.getMatrixPrimaryKeyFieldValue();
+        + config.getMatrixPrimaryKeyFieldName()
+        + " = ?";
   }
 
   /**
@@ -93,7 +85,7 @@ public final class MySqlHelper {
    * @param config MySql connection configuration.
    * @return <i>String</i> query to select right hand side vector from database.
    */
-  public static String buildRhsQuery(MySqlConfig config) {
+  public static @Nonnull String buildRhsQuery(@Nonnull MySqlConfig config) {
     return "SELECT "
         + config.getRhsJsonFieldName()
         + " FROM "
@@ -101,58 +93,51 @@ public final class MySqlHelper {
         + "."
         + config.getRhsTableName()
         + " WHERE "
-        + config.getRhsJsonFieldName()
-        + " = "
-        + config.getRhsPrimaryKeyFieldValue();
+        + config.getRhsPrimaryKeyFieldName()
+        + " = ?";
   }
 
   /**
-   * Executes query and returns result set of any query.
+   * Executes query and returns result set for right hand side vector query.
    *
    * @param connection connection to MySql Db.
    * @param query text of a query.
-   * @return result set of any query.
+   * @param config MySql configuration
+   * @return vector represented as Json in a <i>String</i> format.
    * @throws SQLException when can not execute a query.
    */
-  public static ResultSet requestData(Connection connection, String query) throws SQLException {
-    try (var statement = connection.createStatement()) {
-      return statement.executeQuery(query);
+  public static @Nonnull String requestRhsData(
+      @Nonnull Connection connection, @Nonnull String query, @Nonnull MySqlConfig config)
+      throws SQLException, NoDataFoundException {
+    try (var statement = connection.prepareStatement(query)) {
+      statement.setString(1, config.getRhsPrimaryKeyFieldValue());
+      var resultSet = statement.executeQuery();
+      if (resultSet.next()) {
+        return resultSet.getString(config.getRhsJsonFieldName());
+      }
+      throw new NoDataFoundException("No right hand side vector data found for " + config);
     }
   }
 
   /**
-   * Gets matrix as Json object that represented as <i>String</i>. We expect here that a matrix is
-   * stored as simple string in database.
+   * Executes query and returns result set for matrix query.
    *
-   * @param resultSet data selected from database.
-   * @param config configuration of connection to database.
+   * @param connection connection to MySql Db.
+   * @param query text of a query.
+   * @param config MySql configuration
    * @return matrix represented as Json in a <i>String</i> format.
-   * @throws SQLException when we can not execute sql query.
-   * @throws NoDataFoundException we throw it when there is no data in result set.
+   * @throws SQLException when can not execute a query.
    */
-  public static String getRawMatrixDataFrom(ResultSet resultSet, MySqlConfig config)
+  public static @Nonnull String requestMatrixData(
+      @Nonnull Connection connection, @Nonnull String query, @Nonnull MySqlConfig config)
       throws SQLException, NoDataFoundException {
-    if (resultSet.next()) {
-      return resultSet.getString(config.getMatrixJsonFieldName());
+    try (var statement = connection.prepareStatement(query)) {
+      statement.setString(1, config.getMatrixPrimaryKeyFieldValue());
+      var resultSet = statement.executeQuery();
+      if (resultSet.next()) {
+        return resultSet.getString(config.getMatrixJsonFieldName());
+      }
+      throw new NoDataFoundException("No matrix data found for " + config);
     }
-    throw new NoDataFoundException("No matrix data found for " + config);
-  }
-
-  /**
-   * Gets right hand side vector of SLAE as Json object that represented as <i>String</i>. We expect
-   * here that a vector is stored as simple string in database.
-   *
-   * @param resultSet data selected from database.
-   * @param config configuration of connection to database.
-   * @return vector represented as Json in a <i>String</i> format.
-   * @throws SQLException when we can not execute sql query.
-   * @throws NoDataFoundException we throw it when there is no data in result set.
-   */
-  public static String getRawRhsDataFrom(ResultSet resultSet, MySqlConfig config)
-      throws SQLException, NoDataFoundException {
-    if (resultSet.next()) {
-      return resultSet.getString(config.getMatrixJsonFieldName());
-    }
-    throw new NoDataFoundException("No right hand side data found for " + config);
   }
 }
