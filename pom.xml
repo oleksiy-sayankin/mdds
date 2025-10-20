@@ -202,9 +202,25 @@
       <version>${software.amazon.awssdk.version}</version>
     </dependency>
     <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${software.amazon.awssdk.version}</version>
+    </dependency>
+    <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
       <version>2.4.240</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.adobe.testing</groupId>
+      <artifactId>s3mock</artifactId>
+      <version>4.9.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.adobe.testing</groupId>
+      <artifactId>s3mock-testcontainers</artifactId>
+      <version>4.9.1</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -218,6 +234,8 @@
           <configuration>
             <classpathDependencyExcludes>
               <classpathDependencyExcludes>com.github.valfirst:slf4j-test</classpathDependencyExcludes>
+              <classpathDependencyExcludes>ch.qos.logback:logback-classic</classpathDependencyExcludes>
+              <classpathDependencyExcludes>org.apache.logging.log4j:log4j-to-slf4j</classpathDependencyExcludes>
             </classpathDependencyExcludes>
           </configuration>
         </plugin>
