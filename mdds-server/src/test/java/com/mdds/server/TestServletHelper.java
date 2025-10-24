@@ -10,6 +10,7 @@ import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.mdds.data.source.DataSourceDescriptor;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
@@ -105,5 +106,20 @@ class TestServletHelper {
     sendError(response, SC_BAD_REQUEST, message);
     verify(response).sendError(SC_BAD_REQUEST, message);
     assertTrue(logger.getLoggingEvents().stream().anyMatch(e -> e.getMessage().contains(message)));
+  }
+
+  @Test
+  void testExtractDescriptor() {
+    when(request.getParameter("dataSourceType")).thenReturn("http_request");
+    var actualDataSourceType = extractDescriptor(request);
+    actualDataSourceType.ifPresent(
+        adst -> assertEquals(DataSourceDescriptor.Type.HTTP_REQUEST, adst.getType()));
+  }
+
+  @Test
+  void testExtractDescriptorNoData() {
+    when(request.getParameter("dataSourceType")).thenReturn(null);
+    var actualDataSourceType = extractDescriptor(request);
+    assertTrue(actualDataSourceType.isFailure());
   }
 }
