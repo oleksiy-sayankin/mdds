@@ -45,6 +45,7 @@ export async function sendFiles() {
   formData.append("matrix", matrixFile);
   formData.append("rhs", rhsFile);
   formData.append("slaeSolvingMethod", solverMethod);
+  formData.append("dataSourceType", "http_request");
 
   try {
     const response = await fetch("/solve", {
