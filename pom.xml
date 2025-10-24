@@ -216,6 +216,7 @@
       <groupId>com.adobe.testing</groupId>
       <artifactId>s3mock</artifactId>
       <version>4.9.1</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.adobe.testing</groupId>
