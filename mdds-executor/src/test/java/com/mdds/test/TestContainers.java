@@ -224,6 +224,12 @@ class TestContainers {
       writer.append(slaeSolver.getName()).append("\r\n");
       writer.flush();
 
+      // add dataSourceType
+      writer.append("--").append(boundary).append("\r\n");
+      writer.append("Content-Disposition: form-data; name=\"dataSourceType\"\r\n\r\n");
+      writer.append("http_request").append("\r\n");
+      writer.flush();
+
       // add matrix
       writer.append("--").append(boundary).append("\r\n");
       writer.append("Content-Disposition: form-data; name=\"matrix\"; filename=\"matrix.csv\"\r\n");
