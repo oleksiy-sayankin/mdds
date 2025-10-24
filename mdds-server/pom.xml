@@ -79,6 +79,7 @@
                             redirected to slf4j-test logger.
                             -->
             <classpathDependencyExcludes>org.apache.logging.log4j:log4j-slf4j2-impl</classpathDependencyExcludes>
+            <classpathDependencyExcludes>ch.qos.logback:logback-classic</classpathDependencyExcludes>
           </classpathDependencyExcludes>
           <useSystemClassLoader>false</useSystemClassLoader>
         </configuration>
