@@ -20,6 +20,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -61,12 +62,62 @@ public final class ServletHelper {
     if (!DataSourceDescriptor.Type.isValid(dataSourceType)) {
       return Processable.failure("Invalid data source type: " + dataSourceType);
     }
-    var params = new HashMap<String, Object>();
     var type = DataSourceDescriptor.Type.parse(dataSourceType);
-    if (DataSourceDescriptor.Type.HTTP_REQUEST.equals(type)) {
-      params.put("request", request);
-    }
+    var params = fillInParamsFrom(type, request);
     return Processable.of(DataSourceDescriptor.of(type, params));
+  }
+
+  /**
+   * Reads parameters from Http servlet request depending on the datasource descriptor type.
+   *
+   * @param type datasource descriptor type.
+   * @param request Http servlet request with parameters.
+   * @return Map that contains parameters read from Http servlet request.
+   */
+  public static Map<String, Object> fillInParamsFrom(
+      @Nonnull DataSourceDescriptor.Type type, @Nonnull HttpServletRequest request) {
+    var params = new HashMap<String, Object>();
+    switch (type) {
+      case HTTP_REQUEST:
+        params.put("request", request);
+        return params;
+      case MYSQL:
+        params.put("mysql.url", request.getParameter("mysqlUrl"));
+        params.put("mysql.user", request.getParameter("mysqlUser"));
+        params.put("mysql.password", request.getParameter("mysqlPassword"));
+        params.put("mysql.db.name", request.getParameter("mysqlDbName"));
+        params.put("mysql.matrix.table.name", request.getParameter("mysqlMatrixTableName"));
+        params.put(
+            "mysql.matrix.json.field.name", request.getParameter("mysqlMatrixJsonFieldName"));
+        params.put(
+            "mysql.matrix.primary.key.field.name",
+            request.getParameter("mysqlMatrixPrimaryKeyFieldName"));
+        params.put(
+            "mysql.matrix.primary.key.field.value",
+            request.getParameter("mysqlMatrixPrimaryKeyFieldValue"));
+        params.put("mysql.rhs.table.name", request.getParameter("mysqlRhsTableName"));
+        params.put("mysql.rhs.json.field.name", request.getParameter("mysqlRhsJsonFieldName"));
+        params.put(
+            "mysql.rhs.primary.key.field.name",
+            request.getParameter("mysqlRhsPrimaryKeyFieldName"));
+        params.put(
+            "mysql.rhs.primary.key.field.value",
+            request.getParameter("mysqlRhsPrimaryKeyFieldValue"));
+        return params;
+      case S3:
+        params.put("aws.bucket.name", request.getParameter("awsBucketName"));
+        params.put("aws.use.endpoint.url", request.getParameter("awsUseEndPointUrl"));
+        params.put("aws.endpoint.url", request.getParameter("awsEndPointUrl"));
+        params.put("aws.region", request.getParameter("awsRegion"));
+        params.put("aws.access.key.id", request.getParameter("awsAccessKeyId"));
+        params.put("aws.secret.access.key", request.getParameter("awsSecretAccessKey"));
+        params.put("aws.matrix.key", request.getParameter("awsMatrixKey"));
+        params.put("aws.rhs.key", request.getParameter("awsRhsKey"));
+        params.put(
+            "aws.path.style.access.enabled", request.getParameter("awsPathStyleAccessEnabled"));
+        return params;
+    }
+    return params;
   }
 
   /**
