@@ -90,7 +90,7 @@ class TestS3Helper {
     params.put("aws.bucket.name", S_3_BUCKET);
     params.put("aws.use.endpoint.url", "true");
     params.put("aws.endpoint.url", "http://" + S_3_HOST + ":" + s3Port);
-    params.put("aws.region", S_3_REGION);
+    params.put("aws.region", S_3_REGION.id());
     params.put("aws.access.key.id", S_3_ACCESS_KEY_ID);
     params.put("aws.secret.access.key", S_3_SECRET_ACCESS_KEY);
     params.put("aws.matrix.key", MATRIX_KEY);
@@ -109,7 +109,7 @@ class TestS3Helper {
     params.put("aws.bucket.name", S_3_BUCKET);
     params.put("aws.use.endpoint.url", "true");
     params.put("aws.endpoint.url", "http://" + S_3_HOST + ":" + s3Port);
-    params.put("aws.region", S_3_REGION);
+    params.put("aws.region", S_3_REGION.id());
     params.put("aws.access.key.id", S_3_ACCESS_KEY_ID);
     params.put("aws.secret.access.key", S_3_SECRET_ACCESS_KEY);
     params.put("aws.matrix.key", MATRIX_KEY);

@@ -27,7 +27,7 @@ public class S3Config {
     this.secretAccessKey = (String) params.get("aws.secret.access.key");
     this.matrixKey = (String) params.get("aws.matrix.key");
     this.rhsKey = (String) params.get("aws.rhs.key");
-    this.awsRegion = (Region) params.get("aws.region");
+    this.awsRegion = Region.of((String) params.get("aws.region"));
     this.useEndpointUrl = Boolean.parseBoolean((String) params.get("aws.use.endpoint.url"));
     this.endpointUrl = (String) params.get("aws.endpoint.url");
     this.pathStyleAccessEnabled =
