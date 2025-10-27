@@ -63,7 +63,7 @@ run_all: reformat_and_check_all test_and_run
 #
 # Reformat and check all code
 #
-reformat_and_check_all: check_license build_jars reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
+reformat_and_check_all: check_license build_jars build_and_push_main_images reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
 
 #
 # Run tests and start server
@@ -204,6 +204,11 @@ push_result_consumer_docker_image:
 	docker push $(USER_NAME)/result-consumer:$(PROJECT_VERSION)
 	$(call log_done,"Pushing result-consumer Docker image completed.")
 
+
+#
+# Build and push main images. Here we do not build base Java and Python docker images since they are rarely changed.
+#
+build_and_push_main_images: build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
 #
 # Reformat JavaScript files
 #
