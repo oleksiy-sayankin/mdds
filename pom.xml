@@ -14,7 +14,7 @@
     <module>mdds-executor</module>
     <module>mdds-queue</module>
     <module>mdds-result</module>
-    <module>mdds-server</module>
+    <module>mdds-web-server</module>
     <module>mdds-storage</module>
     <module>mdds-dto</module>
     <module>mdds-data-sources</module>

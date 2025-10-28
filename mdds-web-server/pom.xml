@@ -9,7 +9,7 @@
     <version>1.0-SNAPSHOT</version>
   </parent>
   <name>MDDS Server Service</name>
-  <artifactId>mdds-server</artifactId>
+  <artifactId>mdds-web-server</artifactId>
   <dependencies>
     <dependency>
       <groupId>com.mdds</groupId>
