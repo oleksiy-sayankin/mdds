@@ -28,7 +28,7 @@
     </dependency>
     <dependency>
       <groupId>com.mdds</groupId>
-      <artifactId>data-sources</artifactId>
+      <artifactId>mdds-data-sources</artifactId>
       <version>1.0-SNAPSHOT</version>
       <scope>compile</scope>
     </dependency>

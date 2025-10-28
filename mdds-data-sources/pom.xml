@@ -8,7 +8,7 @@
     <artifactId>mdds</artifactId>
     <version>1.0-SNAPSHOT</version>
   </parent>
-  <artifactId>data-sources</artifactId>
+  <artifactId>mdds-data-sources</artifactId>
   <name>MDDS Data Sources</name>
   <dependencies>
     <dependency>
