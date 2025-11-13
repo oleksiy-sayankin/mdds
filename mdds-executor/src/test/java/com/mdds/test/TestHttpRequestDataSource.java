@@ -32,39 +32,23 @@ class TestHttpRequestDataSource extends BaseEnvironment {
   void testHttpRequest(SlaeSolver slaeSolver) throws Exception {
     var uri =
         new AtomicReference<>(
-            new URI(
-                "http://"
-                    + WEB_SERVER.getHost()
-                    + ":"
-                    + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT)
-                    + "/solve"));
+            new URI("http://" + getMddsWebServerHost() + ":" + getMddsWebServerPort() + "/solve"));
     var url = new AtomicReference<>(uri.get().toURL());
 
-    var boundary = "----TestBoundary";
     var connection = new AtomicReference<>((HttpURLConnection) url.get().openConnection());
     connection.get().setDoOutput(true);
     connection.get().setRequestMethod("POST");
     connection
         .get()
-        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + BOUNDARY);
 
     try (var output = connection.get().getOutputStream()) {
       var writer = new PrintWriter(new OutputStreamWriter(output, UTF_8), true);
-
-      // add slaeSolvingMethod
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"slaeSolvingMethod\"\r\n\r\n");
-      writer.append(slaeSolver.getName()).append("\r\n");
-      writer.flush();
-
-      // add dataSourceType
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"dataSourceType\"\r\n\r\n");
-      writer.append("http_request").append("\r\n");
-      writer.flush();
+      appendTo(writer, "slaeSolvingMethod", slaeSolver.getName());
+      appendTo(writer, "dataSourceType", "http_request");
 
       // add matrix
-      writer.append("--").append(boundary).append("\r\n");
+      writer.append("--").append(BOUNDARY).append("\r\n");
       writer.append("Content-Disposition: form-data; name=\"matrix\"; filename=\"matrix.csv\"\r\n");
       writer.append("Content-Type: text/csv\r\n\r\n");
       writer.flush();
@@ -73,7 +57,7 @@ class TestHttpRequestDataSource extends BaseEnvironment {
       output.flush();
 
       // put rhs
-      writer.append("--").append(boundary).append("\r\n");
+      writer.append("--").append(BOUNDARY).append("\r\n");
       writer.append("Content-Disposition: form-data; name=\"rhs\"; filename=\"rhs.csv\"\r\n");
       writer.append("Content-Type: text/csv\r\n\r\n");
       writer.flush();
@@ -82,7 +66,7 @@ class TestHttpRequestDataSource extends BaseEnvironment {
       output.flush();
 
       // finish the request
-      writer.append("--").append(boundary).append("--").append("\r\n");
+      writer.append("--").append(BOUNDARY).append("--").append("\r\n");
       writer.close();
     }
 
@@ -107,9 +91,9 @@ class TestHttpRequestDataSource extends BaseEnvironment {
               uri.set(
                   new URI(
                       "http://"
-                          + WEB_SERVER.getHost()
+                          + getMddsWebServerHost()
                           + ":"
-                          + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT)
+                          + getMddsWebServerPort()
                           + "/result/"
                           + id));
               url.set(uri.get().toURL());

@@ -61,114 +61,34 @@ class TestMySqlDataSource extends BaseEnvironment {
   void testHttpRequest(SlaeSolver slaeSolver) throws Exception {
     var uri =
         new AtomicReference<>(
-            new URI(
-                "http://"
-                    + WEB_SERVER.getHost()
-                    + ":"
-                    + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT)
-                    + "/solve"));
+            new URI("http://" + getMddsWebServerHost() + ":" + getMddsWebServerPort() + "/solve"));
     var url = new AtomicReference<>(uri.get().toURL());
 
-    var boundary = "----TestBoundary";
     var connection = new AtomicReference<>((HttpURLConnection) url.get().openConnection());
     connection.get().setDoOutput(true);
     connection.get().setRequestMethod("POST");
     connection
         .get()
-        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + BOUNDARY);
 
     try (var output = connection.get().getOutputStream()) {
       var writer = new PrintWriter(new OutputStreamWriter(output, UTF_8), true);
-
-      // add slaeSolvingMethod
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"slaeSolvingMethod\"\r\n\r\n");
-      writer.append(slaeSolver.getName()).append("\r\n");
-      writer.flush();
-
-      // add dataSourceType
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"dataSourceType\"\r\n\r\n");
-      writer.append("mysql").append("\r\n");
-      writer.flush();
-
-      // add mysqlUrl
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlUrl\"\r\n\r\n");
-      writer.append(MYSQL_URL).append("\r\n");
-      writer.flush();
-
-      // add mysqlUser
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlUser\"\r\n\r\n");
-      writer.append(USER_NAME).append("\r\n");
-      writer.flush();
-
-      // add mysqlPassword
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlPassword\"\r\n\r\n");
-      writer.append(PASSWORD).append("\r\n");
-      writer.flush();
-
-      // add mysqlDbName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlDbName\"\r\n\r\n");
-      writer.append(DB_NAME).append("\r\n");
-      writer.flush();
-
-      // add mysqlMatrixTableName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlMatrixTableName\"\r\n\r\n");
-      writer.append("MATRIX_TABLE").append("\r\n");
-      writer.flush();
-
-      // add mysqlMatrixJsonFieldName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlMatrixJsonFieldName\"\r\n\r\n");
-      writer.append("JSON_FIELD").append("\r\n");
-      writer.flush();
-
-      // add mysqlMatrixPrimaryKeyFieldName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append(
-          "Content-Disposition: form-data; name=\"mysqlMatrixPrimaryKeyFieldName\"\r\n\r\n");
-      writer.append("ID").append("\r\n");
-      writer.flush();
-
-      // add mysqlMatrixPrimaryKeyFieldValue
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append(
-          "Content-Disposition: form-data; name=\"mysqlMatrixPrimaryKeyFieldValue\"\r\n\r\n");
-      writer.append("1").append("\r\n");
-      writer.flush();
-
-      // add mysqlRhsTableName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlRhsTableName\"\r\n\r\n");
-      writer.append("RHS_TABLE").append("\r\n");
-      writer.flush();
-
-      // add mysqlRhsJsonFieldName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlRhsJsonFieldName\"\r\n\r\n");
-      writer.append("JSON_FIELD").append("\r\n");
-      writer.flush();
-
-      // add mysqlRhsPrimaryKeyFieldName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"mysqlRhsPrimaryKeyFieldName\"\r\n\r\n");
-      writer.append("ID").append("\r\n");
-      writer.flush();
-
-      // add mysqlRhsPrimaryKeyFieldValue
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append(
-          "Content-Disposition: form-data; name=\"mysqlRhsPrimaryKeyFieldValue\"\r\n\r\n");
-      writer.append("1").append("\r\n");
-      writer.flush();
-
+      appendTo(writer, "slaeSolvingMethod", slaeSolver.getName());
+      appendTo(writer, "dataSourceType", "mysql");
+      appendTo(writer, "mysqlUrl", MYSQL_URL);
+      appendTo(writer, "mysqlUser", USER_NAME);
+      appendTo(writer, "mysqlPassword", PASSWORD);
+      appendTo(writer, "mysqlDbName", DB_NAME);
+      appendTo(writer, "mysqlMatrixTableName", "MATRIX_TABLE");
+      appendTo(writer, "mysqlMatrixJsonFieldName", "JSON_FIELD");
+      appendTo(writer, "mysqlMatrixPrimaryKeyFieldName", "ID");
+      appendTo(writer, "mysqlMatrixPrimaryKeyFieldValue", "1");
+      appendTo(writer, "mysqlRhsTableName", "RHS_TABLE");
+      appendTo(writer, "mysqlRhsJsonFieldName", "JSON_FIELD");
+      appendTo(writer, "mysqlRhsPrimaryKeyFieldName", "ID");
+      appendTo(writer, "mysqlRhsPrimaryKeyFieldValue", "1");
       // finish the request
-      writer.append("--").append(boundary).append("--").append("\r\n");
+      writer.append("--").append(BOUNDARY).append("--").append("\r\n");
       writer.close();
     }
 
@@ -193,9 +113,9 @@ class TestMySqlDataSource extends BaseEnvironment {
               uri.set(
                   new URI(
                       "http://"
-                          + WEB_SERVER.getHost()
+                          + getMddsWebServerHost()
                           + ":"
-                          + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT)
+                          + getMddsWebServerPort()
                           + "/result/"
                           + id));
               url.set(uri.get().toURL());

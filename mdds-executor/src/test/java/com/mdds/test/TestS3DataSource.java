@@ -66,93 +66,31 @@ class TestS3DataSource extends BaseEnvironment {
   void testHttpRequest(SlaeSolver slaeSolver) throws Exception {
     var uri =
         new AtomicReference<>(
-            new URI(
-                "http://"
-                    + WEB_SERVER.getHost()
-                    + ":"
-                    + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT)
-                    + "/solve"));
+            new URI("http://" + getMddsWebServerHost() + ":" + getMddsWebServerPort() + "/solve"));
     var url = new AtomicReference<>(uri.get().toURL());
-
-    var boundary = "----TestBoundary";
     var connection = new AtomicReference<>((HttpURLConnection) url.get().openConnection());
     connection.get().setDoOutput(true);
     connection.get().setRequestMethod("POST");
     connection
         .get()
-        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + BOUNDARY);
 
     try (var output = connection.get().getOutputStream()) {
       var writer = new PrintWriter(new OutputStreamWriter(output, UTF_8), true);
-
-      // add slaeSolvingMethod
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"slaeSolvingMethod\"\r\n\r\n");
-      writer.append(slaeSolver.getName()).append("\r\n");
-      writer.flush();
-
-      // add dataSourceType
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"dataSourceType\"\r\n\r\n");
-      writer.append("s3").append("\r\n");
-      writer.flush();
-
-      // add awsBucketName
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsBucketName\"\r\n\r\n");
-      writer.append(S_3_BUCKET).append("\r\n");
-      writer.flush();
-
-      // add awsUseEndPointUrl
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsUseEndPointUrl\"\r\n\r\n");
-      writer.append("true").append("\r\n");
-      writer.flush();
-
-      // add awsEndPointUrl
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsEndPointUrl\"\r\n\r\n");
-      writer.append("http://" + S_3_HOST + ":" + S_3_PORT).append("\r\n");
-      writer.flush();
-
-      // add awsRegion
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsRegion\"\r\n\r\n");
-      writer.append(S_3_REGION.id()).append("\r\n");
-      writer.flush();
-
-      // add awsAccessKeyId
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsAccessKeyId\"\r\n\r\n");
-      writer.append(S_3_ACCESS_KEY_ID).append("\r\n");
-      writer.flush();
-
-      // add awsSecretAccessKey
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsSecretAccessKey\"\r\n\r\n");
-      writer.append(S_3_SECRET_ACCESS_KEY).append("\r\n");
-      writer.flush();
-
-      // add awsMatrixKey
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsMatrixKey\"\r\n\r\n");
-      writer.append(MATRIX_KEY).append("\r\n");
-      writer.flush();
-
-      // add awsRhsKey
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsRhsKey\"\r\n\r\n");
-      writer.append(RHS_KEY).append("\r\n");
-      writer.flush();
-
-      // add awsPathStyleAccessEnabled
-      writer.append("--").append(boundary).append("\r\n");
-      writer.append("Content-Disposition: form-data; name=\"awsPathStyleAccessEnabled\"\r\n\r\n");
-      writer.append("true").append("\r\n");
-      writer.flush();
+      appendTo(writer, "slaeSolvingMethod", slaeSolver.getName());
+      appendTo(writer, "dataSourceType", "s3");
+      appendTo(writer, "awsBucketName", S_3_BUCKET);
+      appendTo(writer, "awsUseEndPointUrl", "true");
+      appendTo(writer, "awsEndPointUrl", "http://" + S_3_HOST + ":" + S_3_PORT);
+      appendTo(writer, "awsRegion", S_3_REGION.id());
+      appendTo(writer, "awsAccessKeyId", S_3_ACCESS_KEY_ID);
+      appendTo(writer, "awsSecretAccessKey", S_3_SECRET_ACCESS_KEY);
+      appendTo(writer, "awsMatrixKey", MATRIX_KEY);
+      appendTo(writer, "awsRhsKey", RHS_KEY);
+      appendTo(writer, "awsPathStyleAccessEnabled", "true");
 
       // finish the request
-      writer.append("--").append(boundary).append("--").append("\r\n");
+      writer.append("--").append(BOUNDARY).append("--").append("\r\n");
       writer.close();
     }
 
@@ -177,9 +115,9 @@ class TestS3DataSource extends BaseEnvironment {
               uri.set(
                   new URI(
                       "http://"
-                          + WEB_SERVER.getHost()
+                          + getMddsWebServerHost()
                           + ":"
-                          + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT)
+                          + getMddsWebServerPort()
                           + "/result/"
                           + id));
               url.set(uri.get().toURL());
@@ -224,13 +162,9 @@ class TestS3DataSource extends BaseEnvironment {
   }
 
   private static boolean s3MockIsReady() {
-    try {
-      try (var s3Client = createS3Client()) {
-        s3Client.listBuckets();
-        return true;
-      } catch (Exception e) {
-        return false;
-      }
+    try (var s3Client = createS3Client()) {
+      s3Client.listBuckets();
+      return true;
     } catch (Exception e) {
       return false;
     }

@@ -99,7 +99,7 @@ public class BaseEnvironment {
 
   @SuppressWarnings("resource")
   @Container
-  protected static final GenericContainer<?> WEB_SERVER =
+  private static final GenericContainer<?> WEB_SERVER =
       new GenericContainer<>(DockerImageName.parse("mddsproject/web-server:0.1.0"))
           .withNetwork(SHARED_NETWORK)
           .withNetworkAliases(MDDS_WEB_SERVER_HOST)
@@ -137,6 +137,25 @@ public class BaseEnvironment {
     awaitReady(() -> checkHealth(WEB_SERVER, MDDS_WEB_SERVER_PORT), "Web Server");
     awaitReady(() -> checkHealth(EXECUTOR, MDDS_EXECUTOR_PORT), "Executor");
     awaitReady(() -> checkHealth(RESULT_CONSUMER, MDDS_RESULT_CONSUMER_PORT), "Result Consumer");
+  }
+
+  protected String getMddsWebServerHost() {
+    return WEB_SERVER.getHost();
+  }
+
+  protected int getMddsWebServerPort() {
+    return WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT);
+  }
+
+  protected static final String BOUNDARY = "----TestBoundary";
+
+  protected static void appendTo(PrintWriter writer, String key, String value) {
+    writer.append("--").append(BOUNDARY).append("\r\n");
+    writer.append("Content-Disposition: form-data; name=\"");
+    writer.append(key);
+    writer.append("\"\r\n\r\n");
+    writer.append(value).append("\r\n");
+    writer.flush();
   }
 
   protected static void awaitReady(Callable<Boolean> condition, String name) {
