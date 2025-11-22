@@ -118,6 +118,7 @@ class TestServerResultServlet {
     expectedResult.setDateTimeTaskCreated(Instant.now());
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
+    expectedResult.setPercentDone(100);
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
     when(dataStorage.get(taskId, ResultDTO.class)).thenReturn(Optional.of(expectedResult));
     servlet.doGet(request, response);

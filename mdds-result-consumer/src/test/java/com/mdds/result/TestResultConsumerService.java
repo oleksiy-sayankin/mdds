@@ -83,6 +83,7 @@ class TestResultConsumerService {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            100,
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
     var message = new Message<>(expectedResult, new HashMap<>(), Instant.now());

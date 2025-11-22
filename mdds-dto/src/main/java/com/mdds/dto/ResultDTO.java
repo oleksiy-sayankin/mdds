@@ -19,6 +19,15 @@ public class ResultDTO {
   Instant dateTimeTaskCreated;
   Instant dateTimeTaskFinished;
   TaskStatus taskStatus;
+  int percentDone;
   double[] solution;
   String errorMessage;
+
+  public void setPercentDone(int percentDone) {
+    if (percentDone < 0 || percentDone > 100) {
+      throw new IllegalPercentValue(
+          "Percent done must be between 0 and 100, but was " + percentDone);
+    }
+    this.percentDone = percentDone;
+  }
 }

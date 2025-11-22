@@ -204,6 +204,7 @@ class TestExecutor {
             startTime,
             endTime,
             TaskStatus.DONE,
+            100,
             new double[] {
               -2.8019496130141808, -1.9729062026984527, 13.471272875276737, -7.439241424582051
             },
@@ -279,6 +280,7 @@ class TestExecutor {
             startTime,
             endTime,
             TaskStatus.DONE,
+            100,
             new double[] {
               -2.8019496130141808, -1.9729062026984527, 13.471272875276737, -7.439241424582051
             },
@@ -341,7 +343,7 @@ class TestExecutor {
     var delta = 0.000001;
     var endTime = actualResultReference.get().getDateTimeTaskFinished();
     var expectedResult =
-        new ResultDTO(taskId, startTime, endTime, TaskStatus.ERROR, new double[] {}, "");
+        new ResultDTO(taskId, startTime, endTime, TaskStatus.ERROR, 50, new double[] {}, "");
     var actualResult = actualResultReference.get();
     assertEquals(expectedResult.getTaskId(), actualResult.getTaskId());
     assertEquals(expectedResult.getDateTimeTaskCreated(), actualResult.getDateTimeTaskCreated());

@@ -44,6 +44,7 @@ class TestRedisDataStorage {
     result.setDateTimeTaskCreated(Instant.now());
     result.setDateTimeTaskFinished(Instant.now());
     result.setTaskStatus(TaskStatus.DONE);
+    result.setPercentDone(100);
     result.setSolution(new double[] {9.3, 6.278, 6.783, 3.874});
     result.setErrorMessage("");
     try (var dataStorage = new RedisDataStorage(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
@@ -59,6 +60,7 @@ class TestRedisDataStorage {
     expectedResult.setDateTimeTaskCreated(Instant.now());
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
+    expectedResult.setPercentDone(100);
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
     expectedResult.setErrorMessage("");
     try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {

@@ -101,6 +101,7 @@ class TestResultConsumer {
     expectedResult.setDateTimeTaskCreated(Instant.now());
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
+    expectedResult.setPercentDone(100);
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     var message = new Message<>(expectedResult, new HashMap<>(), Instant.now());
     try (var queue =
@@ -135,6 +136,7 @@ class TestResultConsumer {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            100,
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
     var message1 = new Message<>(expectedResult1, new HashMap<>(), Instant.now());
@@ -146,6 +148,7 @@ class TestResultConsumer {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            100,
             new double[] {2.1, 3.2, 3.3, 4.4},
             "");
     var message2 = new Message<>(expectedResult2, new HashMap<>(), Instant.now());
@@ -157,6 +160,7 @@ class TestResultConsumer {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            100,
             new double[] {3.1, 4.2, 3.3, 4.4},
             "");
     var message3 = new Message<>(expectedResult3, new HashMap<>(), Instant.now());

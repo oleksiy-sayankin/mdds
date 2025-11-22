@@ -84,7 +84,13 @@ class TestExecutorService {
     var endTime = Instant.now();
     var expectedResult =
         new ResultDTO(
-            taskId, startTime, endTime, TaskStatus.DONE, new double[] {1.971, 3.213, 7.243}, "");
+            taskId,
+            startTime,
+            endTime,
+            TaskStatus.DONE,
+            100,
+            new double[] {1.971, 3.213, 7.243},
+            "");
 
     // Simulate that ExecutorMessageHandler solves the task
     MessageHandler<TaskDTO> messageHandler =

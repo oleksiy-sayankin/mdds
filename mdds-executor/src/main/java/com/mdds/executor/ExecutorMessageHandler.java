@@ -96,7 +96,8 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
       var solution = response.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
       // create message with solution and publish to result queue
       var resultArray =
-          new ResultDTO(taskId, taskCreationDateTime, Instant.now(), TaskStatus.DONE, solution, "");
+          new ResultDTO(
+              taskId, taskCreationDateTime, Instant.now(), TaskStatus.DONE, 100, solution, "");
       log.debug("Solved system of linear algebraic equations task {}", taskId);
       return new Message<>(resultArray, new HashMap<>(), Instant.now());
     } catch (StatusRuntimeException e) {
@@ -107,6 +108,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
               taskCreationDateTime,
               Instant.now(),
               TaskStatus.ERROR,
+              70,
               new double[] {},
               e.getStatus().getDescription());
       log.error("gRPC call failed for task {}", taskId, e);
