@@ -101,7 +101,7 @@ class TestResultConsumer {
     expectedResult.setDateTimeTaskCreated(Instant.now());
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
-    expectedResult.setPercentDone(100);
+    expectedResult.setProgress(100);
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     var message = new Message<>(expectedResult, new HashMap<>(), Instant.now());
     try (var queue =

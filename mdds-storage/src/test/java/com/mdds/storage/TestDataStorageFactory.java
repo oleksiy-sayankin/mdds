@@ -43,7 +43,7 @@ class TestDataStorageFactory {
     result.setDateTimeTaskCreated(Instant.now());
     result.setDateTimeTaskFinished(Instant.now());
     result.setTaskStatus(TaskStatus.DONE);
-    result.setPercentDone(100);
+    result.setProgress(100);
     result.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     result.setErrorMessage("");
     try (var dataStorage =
@@ -60,7 +60,7 @@ class TestDataStorageFactory {
     expectedResult.setDateTimeTaskCreated(Instant.now());
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
-    expectedResult.setPercentDone(100);
+    expectedResult.setProgress(100);
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     expectedResult.setErrorMessage("");
     try (var dataStorage =
@@ -80,7 +80,7 @@ class TestDataStorageFactory {
     expectedResult.setDateTimeTaskCreated(Instant.now());
     expectedResult.setDateTimeTaskFinished(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
-    expectedResult.setPercentDone(100);
+    expectedResult.setProgress(100);
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     expectedResult.setErrorMessage("");
     try (var dataStorage = DataStorageFactory.createRedis("localhost", REDIS_SERVER_PORT)) {

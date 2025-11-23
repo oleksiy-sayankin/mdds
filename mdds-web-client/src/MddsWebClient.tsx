@@ -142,7 +142,7 @@ export default function App() {
           alert("Error: " + json.errorMessage);
           return;
         }
-        setProgress(json.percentDone ?? 0);
+        setProgress(json.progress ?? 0);
         setTimeout(checkStatus, pollingInterval);
       } catch (err) {
         console.error("Polling error", err);

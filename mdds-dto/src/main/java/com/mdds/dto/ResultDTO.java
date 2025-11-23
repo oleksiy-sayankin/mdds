@@ -19,15 +19,14 @@ public class ResultDTO {
   Instant dateTimeTaskCreated;
   Instant dateTimeTaskFinished;
   TaskStatus taskStatus;
-  int percentDone;
+  int progress;
   double[] solution;
   String errorMessage;
 
-  public void setPercentDone(int percentDone) {
-    if (percentDone < 0 || percentDone > 100) {
-      throw new IllegalPercentValue(
-          "Percent done must be between 0 and 100, but was " + percentDone);
+  public void setProgress(int progress) {
+    if (progress < 0 || progress > 100) {
+      throw new IllegalPercentValue("Progress must be between 0 and 100, but was " + progress);
     }
-    this.percentDone = percentDone;
+    this.progress = progress;
   }
 }

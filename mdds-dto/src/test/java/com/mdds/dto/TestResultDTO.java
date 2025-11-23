@@ -12,10 +12,10 @@ class TestResultDTO {
   @Test
   void testSetPercentDone() {
     var result = new ResultDTO();
-    Assertions.assertDoesNotThrow(() -> result.setPercentDone(10));
-    Assertions.assertDoesNotThrow(() -> result.setPercentDone(0));
-    Assertions.assertDoesNotThrow(() -> result.setPercentDone(100));
-    Assertions.assertThrows(IllegalPercentValue.class, () -> result.setPercentDone(-1));
-    Assertions.assertThrows(IllegalPercentValue.class, () -> result.setPercentDone(101));
+    Assertions.assertDoesNotThrow(() -> result.setProgress(10));
+    Assertions.assertDoesNotThrow(() -> result.setProgress(0));
+    Assertions.assertDoesNotThrow(() -> result.setProgress(100));
+    Assertions.assertThrows(IllegalPercentValue.class, () -> result.setProgress(-1));
+    Assertions.assertThrows(IllegalPercentValue.class, () -> result.setProgress(101));
   }
 }

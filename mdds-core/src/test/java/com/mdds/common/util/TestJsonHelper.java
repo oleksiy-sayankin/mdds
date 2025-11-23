@@ -49,7 +49,7 @@ class TestJsonHelper {
             + "\"dateTimeTaskCreated\":1725466860.000000000,"
             + "\"dateTimeTaskFinished\":1725466860.000000000,"
             + "\"taskStatus\":\"DONE\","
-            + "\"percentDone\":100,"
+            + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
             + "}";
@@ -64,7 +64,7 @@ class TestJsonHelper {
             + "\"dateTimeTaskCreated\":1725466860.000000000,"
             + "\"dateTimeTaskFinished\":1725466860.000000000,"
             + "\"taskStatus\":\"DONE\","
-            + "\"percentDone\":100,"
+            + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
             + "}";
