@@ -5,13 +5,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
-// Building MDDS wen client
+// Building MDDS web client
 export default defineConfig({
   plugins: [react()],
   root: 'src', // link to source root
   base: './',
   build: {
-    outDir: '../mdds-server/web-app', // target dir
+    outDir: '../mdds-web-server/web-app', // target dir
     emptyOutDir: true,
   },
   resolve: {
@@ -23,7 +23,8 @@ export default defineConfig({
     port: 5173,
     open: true,
     proxy: {
-      '/solve': 'http://localhost:8863',
+      "/solve": "http://localhost:8000",
+      "/result": "http://localhost:8000",
     },
   },
 });

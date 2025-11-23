@@ -13,6 +13,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  LinearProgress,
 } from "@mui/material";
 import { CloudUpload } from "@mui/icons-material";
 
@@ -21,6 +22,11 @@ export default function App() {
 
   const [matrixFile, setMatrixFile] = useState<File | null>(null);
   const [rhsFile, setRhsFile] = useState<File | null>(null);
+
+  const [progress, setProgress] = useState(0);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [solutionBlob, setSolutionBlob] = useState<Blob | null>(null);
+  const [isDownloadingAllowed, setIsDownloadingAllowed] = useState(false);
 
   const matrixFileInputRef = useRef<HTMLInputElement | null>(null);
   const rhsFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -71,6 +77,11 @@ export default function App() {
       return;
     }
 
+    setProgress(0);
+    setIsDownloadingAllowed(false);
+    setTaskId(null);
+    setSolutionBlob(null);
+
     try {
       const matrixText = await matrixFile.text();
       const rhsText = await rhsFile.text();
@@ -81,21 +92,76 @@ export default function App() {
       formData.append("slaeSolvingMethod", solver);
       formData.append("dataSourceType", "http_request");
 
-      const response = await fetch("/solve", {
+      const response = await fetch(`/solve`, {
         method: "POST",
         body: formData,
       });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        alert("System solved successfully!");
-      } else {
-        alert("Solving error");
-      }
+      const resultJson = await response.json();
+      console.log("Solve response:", resultJson);
+
+      const returnedTaskId = resultJson.id;
+      setTaskId(returnedTaskId);
+      pollForResult(returnedTaskId);
     } catch (error) {
       console.error(error);
       alert("Error sending files");
     }
+  };
+
+  const pollForResult = async (taskId: string) => {
+    const timeoutMs = 30000;
+    const pollingInterval = 1000;
+    const start = Date.now();
+
+    const checkStatus = async () => {
+      if (Date.now() - start > timeoutMs) {
+        alert("Timeout waiting for solver result.");
+        return;
+      }
+
+      try {
+        const resp = await fetch(`/result/${taskId}`);
+        const json = await resp.json();
+
+        console.log("Polling result:", json);
+
+        if (json.taskStatus === "DONE") {
+          setProgress(100);
+          setIsDownloadingAllowed(true);
+
+          // Create Blob with solution
+          const solutionText = JSON.stringify(json.solution, null, 2);
+          setSolutionBlob(
+            new Blob([solutionText], { type: "application/json" }),
+          );
+          return;
+        }
+
+        if (json.taskStatus === "ERROR") {
+          alert("Error: " + json.errorMessage);
+          return;
+        }
+        setProgress(json.percentDone ?? 0);
+        setTimeout(checkStatus, pollingInterval);
+      } catch (err) {
+        console.error("Polling error", err);
+        setTimeout(checkStatus, pollingInterval);
+      }
+    };
+
+    checkStatus();
+  };
+
+  const handleDownload = () => {
+    if (!solutionBlob) return;
+
+    const url = URL.createObjectURL(solutionBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "solution.json";
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -206,6 +272,23 @@ export default function App() {
                 onClick={handleSolveClick}
               >
                 Solve
+              </Button>
+            </Box>
+            <Box sx={{ mt: 4 }}>
+              <LinearProgress variant="determinate" value={progress} />
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {progress}% completed
+              </Typography>
+            </Box>
+            <Box textAlign="center" mt={4}>
+              <Button
+                variant="contained"
+                color="success"
+                size="large"
+                disabled={!isDownloadingAllowed}
+                onClick={handleDownload}
+              >
+                Download solution
               </Button>
             </Box>
           </Box>
