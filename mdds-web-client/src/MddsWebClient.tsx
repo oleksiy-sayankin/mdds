@@ -29,6 +29,9 @@ export default function App() {
   const [solutionBlob, setSolutionBlob] = useState<Blob | null>(null);
   const [isDownloadingAllowed, setIsDownloadingAllowed] = useState(false);
 
+  const [isMatrixSelected, setIsMatrixSelected] = useState(false);
+  const [isRhsSelected, setIsRhsSelected] = useState(false);
+
   const matrixFileInputRef = useRef<HTMLInputElement | null>(null);
   const rhsFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -50,6 +53,7 @@ export default function App() {
     const file = event.target.files?.[0];
     if (file) {
       setMatrixFile(file);
+      setIsMatrixSelected(true);
       console.log("Matrix CSV selected:", file);
     }
   };
@@ -60,6 +64,7 @@ export default function App() {
     const file = event.target.files?.[0];
     if (file) {
       setRhsFile(file);
+      setIsRhsSelected(true);
       console.log("Right hand side CSV selected:", file);
     }
   };
@@ -271,6 +276,7 @@ export default function App() {
                 variant="contained"
                 color="primary"
                 size="large"
+                disabled={!isMatrixSelected || !isRhsSelected}
                 onClick={handleSolveClick}
               >
                 Solve
