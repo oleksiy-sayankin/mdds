@@ -24,6 +24,7 @@ export default function App() {
   const [rhsFile, setRhsFile] = useState<File | null>(null);
 
   const [progress, setProgress] = useState(0);
+  const [isSolving, setIsSolving] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [solutionBlob, setSolutionBlob] = useState<Blob | null>(null);
   const [isDownloadingAllowed, setIsDownloadingAllowed] = useState(false);
@@ -77,6 +78,7 @@ export default function App() {
       return;
     }
 
+    setIsSolving(true);
     setProgress(0);
     setIsDownloadingAllowed(false);
     setTaskId(null);
@@ -274,12 +276,14 @@ export default function App() {
                 Solve
               </Button>
             </Box>
-            <Box sx={{ mt: 4 }}>
-              <LinearProgress variant="determinate" value={progress} />
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                {progress}% completed
-              </Typography>
-            </Box>
+            {isSolving && (
+              <Box sx={{ mt: 4 }}>
+                <LinearProgress variant="determinate" value={progress} />
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  {progress}% completed
+                </Typography>
+              </Box>
+            )}
             <Box textAlign="center" mt={4}>
               <Button
                 variant="contained"
