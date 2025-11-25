@@ -12,7 +12,7 @@ export default defineConfig({
   base: './',
   build: {
     outDir: '../../mdds-web-server/web-app', // target dir
-    emptyOutDir: false,
+    emptyOutDir: true,
   },
   resolve: {
     alias: {
