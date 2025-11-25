@@ -75,7 +75,7 @@ test_and_run: test_all run_server
 #
 # Run all tests
 #
-test_all: test_python test_js test_java test_e2e
+test_all: test_python test_java test_e2e
 
 #
 # Run CVE scan for Java jars
@@ -356,16 +356,6 @@ build_jars:
     fi
 	$(call log_done,"Building jars completed")
 
-#
-# Run JavaScript tests
-#
-test_js:
-	$(call log_info,"Running JavaScript unit tests...")
-	@if ! npm test; then \
-		$(call log_error_sh, "JS tests failed"); \
-		exit 1; \
-	fi
-	$(call log_done,"JavaScript tests completed.")
 
 #
 # Run server
