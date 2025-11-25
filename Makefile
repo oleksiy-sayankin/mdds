@@ -9,8 +9,10 @@ PROJECT_NAME := mdds
 PROJECT_VERSION := 0.1.0
 MDDS_GRPC_CORE := mdds_grpc_core
 MDDS_WEB_SERVER := mdds-web-server
+MDDS_WEB_CLIENT := mdds-web-client
 PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_GRPC_CORE)
-JS_ROOT := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/web-app
+WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/web-app
+TS_ROOT :=  $(PROJECT_ROOT)/$(MDDS_CLIENT)/src
 JAVA_ROOT := $(PROJECT_ROOT)
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := mddsproject
@@ -63,7 +65,7 @@ run_all: reformat_and_check_all test_and_run
 #
 # Reformat and check all code
 #
-reformat_and_check_all: check_license build_jars build_and_push_main_images reformat_python check_python_code_style reformat_js check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
+reformat_and_check_all: check_license build_jars reformat_ts build_and_copy_web_client build_and_push_main_images reformat_python check_python_code_style check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
 
 #
 # Run tests and start server
@@ -209,13 +211,23 @@ push_result_consumer_docker_image:
 # Build and push main images. Here we do not build base Java and Python docker images since they are rarely changed.
 #
 build_and_push_main_images: build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
+
 #
-# Reformat JavaScript files
+# Build web-client and copy binaries to web-app folder of web-server
 #
-reformat_js:
-	$(call log_info,"Reformating JavaScript sources...")
-	prettier --write $(JS_ROOT)/
-	$(call log_done,"Reformating JavaScript sources completed.")
+build_and_copy_web_client:
+	$(call log_info,"Building web-client and copying to web-app folder of web-server...")
+	cd $(MDDS_WEB_CLIENT) && npm run build
+	$(call log_done,"Building web-client and copying to web-app folder of web-server completed.")
+
+
+#
+# Reformat web client files
+#
+reformat_ts:
+	$(call log_info,"Reformating web client sources...")
+	cd $(MDDS_WEB_CLIENT) && prettier --write $(TS_ROOT)/*
+	$(call log_done,"Reformating web client sources completed.")
 
 #
 # Check python code style
@@ -444,11 +456,13 @@ check_license:
 		-not -path "./logs/*" \
 		-not -path "./*target/*" \
 		-not -path "*/$(PYTHON_GENERATED_SOURCES)/*" \
+		-not -path "*$(WEB_APP_DIR)/*" \
 		-not -name "*.csv" \
 		-not -name "*.log" \
 		-not -name "*.ico" \
 		-not -name ".sonar_token" \
 		-not -name "*.gitignore" \
+		-not -name "*.prettierignore" \
 		-not -name "*.gitkeep" \
 		-not -name "*.dockerignore" \
 		-not -name "*.json" \
