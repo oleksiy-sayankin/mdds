@@ -22,7 +22,8 @@
   run curl -s -X POST http://localhost:8000/solve \
     -F "matrix=@$MATRIX" \
     -F "rhs=@$RHS" \
-    -F "method=numpy_exact_solver" \
+    -F "slaeSolvingMethod=numpy_exact_solver" \
+    -F "dataSourceType=http_request" \
     -o "$OUTPUT"
 
   [ "$status" -eq 0 ]
@@ -54,12 +55,41 @@
     run curl -s -X POST http://localhost:8000/solve \
       -F "matrix=@$MATRIX" \
       -F "rhs=@$RHS" \
-      -F "method=$method" \
+      -F "slaeSolvingMethod=$method" \
+      -F "dataSourceType=http_request" \
       -o "$ACTUAL"
 
-    # Check that status is ok and output is nit empty
+    # Check that status is ok and output is not empty
     [ "$status" -eq 0 ]
     [ -s "$ACTUAL" ]
+
+    task_id=$(cat "$ACTUAL" | jq -r '.id')
+    echo "task_id=$task_id"
+
+    for i in {1..5}; do
+      echo "Current iteration: $i"
+      run curl -s -X GET http://localhost:8000/result/$task_id -o "$ACTUAL"
+      echo "output = $ACTUAL"
+      cat $ACTUAL
+      taskStatus=$(cat "$ACTUAL" | jq -r '.taskStatus')
+      echo "taskStatus=$taskStatus"
+      if [ "$taskStatus" == "DONE" ]; then
+        echo "[INFO] Task completed successfully"
+        break
+      fi
+      sleep 1
+    done
+    if [ "$taskStatus" == "ERROR" ]; then
+      echo "[ERROR] Task finished with error"
+    fi
+    if [ "$taskStatus" == "IN_PROGRESS" ]; then
+      echo "[ERROR] Time out error"
+    fi
+
+    solution=$(cat "$ACTUAL" | jq -r '.solution')
+    echo "$solution" > "$ACTUAL"
+    solution=$(jq -c '.[]' "$ACTUAL")
+    echo "$solution" > "$ACTUAL"
 
     # Compare line by line actual and expected result
     expected_lines=$(wc -l <"$EXPECTED")
