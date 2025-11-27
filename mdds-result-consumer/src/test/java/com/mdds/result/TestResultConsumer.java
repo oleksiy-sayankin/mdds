@@ -5,6 +5,7 @@
 package com.mdds.result;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
+import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,10 +16,8 @@ import com.mdds.dto.TaskStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.QueueFactory;
 import com.mdds.storage.DataStorageFactory;
+import io.restassured.RestAssured;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -38,12 +37,11 @@ import redis.embedded.RedisServer;
 @Testcontainers
 class TestResultConsumer {
   private static Tomcat tomcat;
-  private static final String MDDS_RESULT_CONSUMER_HOST =
-      ResultConsumerConfFactory.fromEnvOrDefaultProperties().host();
-  private static final int MDDS_RESULT_CONSUMER_PORT = findFreePort();
-  private static final String MDDS_RESULT_CONSUMER_APPLICATION_LOCATION =
+  private static final String HOST = ResultConsumerConfFactory.fromEnvOrDefaultProperties().host();
+  private static final int PORT = findFreePort();
+  private static final String WEBAPP =
       ResultConsumerConfFactory.fromEnvOrDefaultProperties().webappDirLocation();
-  private static final int REDIS_SERVER_PORT = findFreePort();
+  private static final int REDIS_PORT = findFreePort();
   private static RedisServer redisServer;
 
   @Container
@@ -54,20 +52,17 @@ class TestResultConsumer {
 
   @BeforeAll
   static void startServer() throws LifecycleException, IOException {
-    redisServer = new RedisServer(REDIS_SERVER_PORT);
+    redisServer = new RedisServer(REDIS_PORT);
     redisServer.start();
     System.setProperty("redis.host", "localhost");
-    System.setProperty("redis.port", String.valueOf(REDIS_SERVER_PORT));
+    System.setProperty("redis.port", String.valueOf(REDIS_PORT));
     System.setProperty("rabbitmq.host", rabbitMq.getHost());
     System.setProperty("rabbitmq.port", String.valueOf(rabbitMq.getAmqpPort()));
     System.setProperty("rabbitmq.user", rabbitMq.getAdminUsername());
     System.setProperty("rabbitmq.password", rabbitMq.getAdminPassword());
 
-    tomcat =
-        ResultConsumer.start(
-            MDDS_RESULT_CONSUMER_HOST,
-            MDDS_RESULT_CONSUMER_PORT,
-            MDDS_RESULT_CONSUMER_APPLICATION_LOCATION);
+    tomcat = ResultConsumer.start(HOST, PORT, WEBAPP);
+    RestAssured.baseURI = "http://" + HOST + ":" + PORT;
   }
 
   @AfterAll
@@ -82,28 +77,22 @@ class TestResultConsumer {
   }
 
   @Test
-  void testHealthReturnsStatusOk() throws URISyntaxException, IOException {
-    var uri =
-        new URI(
-            "http://" + MDDS_RESULT_CONSUMER_HOST + ":" + MDDS_RESULT_CONSUMER_PORT + "/health");
-    var url = uri.toURL();
-    var connection = (HttpURLConnection) url.openConnection();
-    connection.setRequestMethod("GET");
-    assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
+  void testHealthReturnsStatusOk() {
+    given().when().get("/health").then().statusCode(200);
   }
 
   @Test
   void testResultConsumerTakesResultFromQueue() {
     // Prepare and put data to result queue
-    var expectedResult = new ResultDTO();
+    var expected = new ResultDTO();
     var taskId = "test";
-    expectedResult.setTaskId(taskId);
-    expectedResult.setDateTimeTaskCreated(Instant.now());
-    expectedResult.setDateTimeTaskFinished(Instant.now());
-    expectedResult.setTaskStatus(TaskStatus.DONE);
-    expectedResult.setProgress(100);
-    expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
-    var message = new Message<>(expectedResult, new HashMap<>(), Instant.now());
+    expected.setTaskId(taskId);
+    expected.setDateTimeTaskCreated(Instant.now());
+    expected.setDateTimeTaskFinished(Instant.now());
+    expected.setTaskStatus(TaskStatus.DONE);
+    expected.setProgress(100);
+    expected.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
+    var message = new Message<>(expected, new HashMap<>(), Instant.now());
     try (var queue =
         QueueFactory.createRabbitMq(
             rabbitMq.getHost(),
@@ -118,10 +107,10 @@ class TestResultConsumer {
         .atMost(Duration.ofSeconds(10))
         .untilAsserted(
             () -> {
-              try (var storage = DataStorageFactory.createRedis("localhost", REDIS_SERVER_PORT)) {
+              try (var storage = DataStorageFactory.createRedis("localhost", REDIS_PORT)) {
                 var actualResult = storage.get(taskId, ResultDTO.class);
                 assertTrue(actualResult.isPresent());
-                actualResult.ifPresent(ar -> assertEquals(expectedResult, ar));
+                actualResult.ifPresent(ar -> assertEquals(expected, ar));
               }
             });
   }
@@ -181,7 +170,7 @@ class TestResultConsumer {
         .atMost(Duration.ofSeconds(10))
         .untilAsserted(
             () -> {
-              try (var storage = DataStorageFactory.createRedis("localhost", REDIS_SERVER_PORT)) {
+              try (var storage = DataStorageFactory.createRedis("localhost", REDIS_PORT)) {
                 var actualResult1 = storage.get(taskId1, ResultDTO.class);
                 assertTrue(actualResult1.isPresent());
                 actualResult1.ifPresent(ar -> assertEquals(expectedResult1, ar));

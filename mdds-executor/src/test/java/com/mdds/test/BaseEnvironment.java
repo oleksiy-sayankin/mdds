@@ -4,16 +4,21 @@
  */
 package com.mdds.test;
 
+import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+
+import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
+import com.mdds.dto.TaskStatus;
 import com.rabbitmq.client.ConnectionFactory;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.health.v1.HealthCheckRequest;
 import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.health.v1.HealthGrpc;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
@@ -125,6 +130,8 @@ public class BaseEnvironment {
 
   @BeforeAll
   static void init() {
+    RestAssured.baseURI =
+        "http://" + WEB_SERVER.getHost() + ":" + WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT);
     EXECUTOR.followOutput(
         outputFrame -> log.info("[EXECUTOR] {}", outputFrame.getUtf8String().trim()));
     WEB_SERVER.followOutput(
@@ -139,37 +146,27 @@ public class BaseEnvironment {
     awaitReady(() -> checkHealth(RESULT_CONSUMER, MDDS_RESULT_CONSUMER_PORT), "Result Consumer");
   }
 
-  protected String getMddsWebServerHost() {
-    return WEB_SERVER.getHost();
-  }
-
-  protected int getMddsWebServerPort() {
-    return WEB_SERVER.getMappedPort(MDDS_WEB_SERVER_PORT);
-  }
-
-  protected static final String BOUNDARY = "----TestBoundary";
-
-  protected static void appendTo(PrintWriter writer, String key, String value) {
-    writer.append("--").append(BOUNDARY).append("\r\n");
-    writer.append("Content-Disposition: form-data; name=\"");
-    writer.append(key);
-    writer.append("\"\r\n\r\n");
-    writer.append(value).append("\r\n");
-    writer.flush();
-  }
-
   protected static void awaitReady(Callable<Boolean> condition, String name) {
     Awaitility.await().atMost(Duration.ofSeconds(30)).ignoreExceptions().until(condition);
     log.info("{} container is ready", name);
   }
 
-  private static boolean checkHealth(GenericContainer<?> container, int port)
-      throws IOException, URISyntaxException {
-    var uri =
-        new URI("http://" + container.getHost() + ":" + container.getMappedPort(port) + "/health");
-    var connection = (HttpURLConnection) uri.toURL().openConnection();
-    connection.setRequestMethod("GET");
-    return HttpURLConnection.HTTP_OK == connection.getResponseCode();
+  private static String containerBaseUrl(GenericContainer<?> container, int port) {
+    return "http://" + container.getHost() + ":" + container.getMappedPort(port);
+  }
+
+  private static boolean checkHealth(GenericContainer<?> container, int port) {
+    try {
+      given()
+          .baseUri(containerBaseUrl(container, port))
+          .when()
+          .get("/health")
+          .then()
+          .statusCode(200);
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   private static boolean queueIsReady() throws IOException, TimeoutException {
@@ -195,6 +192,29 @@ public class BaseEnvironment {
     var result = HealthCheckResponse.ServingStatus.SERVING.equals(response.getStatus());
     channel.shutdownNow();
     return result;
+  }
+
+  protected static ResultDTO awaitForResult(String taskId) {
+    return Awaitility.await()
+        .atMost(Duration.ofSeconds(30))
+        .ignoreExceptions()
+        .until(
+            () ->
+                given()
+                    .when()
+                    .get("/result/" + taskId)
+                    .then()
+                    .statusCode(200)
+                    .contentType(ContentType.JSON)
+                    .extract()
+                    .as(ResultDTO.class),
+            result -> result.getTaskStatus() == TaskStatus.DONE);
+  }
+
+  protected static void assertDoneAndEquals(double[] expected, ResultDTO actual) {
+    assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
+    var delta = 0.00000001;
+    assertArrayEquals(expected, actual.getSolution(), delta);
   }
 
   private static boolean redisIsReady() throws IOException, InterruptedException {

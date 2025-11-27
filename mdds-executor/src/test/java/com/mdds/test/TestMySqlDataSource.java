@@ -4,26 +4,15 @@
  */
 package com.mdds.test;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.util.JsonHelper;
-import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.dto.TaskStatus;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.HttpURLConnection;
-import java.net.URI;
+import io.restassured.http.ContentType;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.time.Duration;
-import java.util.concurrent.atomic.AtomicReference;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -58,89 +47,40 @@ class TestMySqlDataSource extends BaseEnvironment {
 
   @ParameterizedTest
   @MethodSource("solvers")
-  void testHttpRequest(SlaeSolver slaeSolver) throws Exception {
-    var uri =
-        new AtomicReference<>(
-            new URI("http://" + getMddsWebServerHost() + ":" + getMddsWebServerPort() + "/solve"));
-    var url = new AtomicReference<>(uri.get().toURL());
+  void testHttpRequest(SlaeSolver solver) {
+    var json =
+        given()
+            .multiPart("slaeSolvingMethod", solver.getName())
+            .multiPart("dataSourceType", "mysql")
+            .multiPart("mysqlUrl", MYSQL_URL)
+            .multiPart("mysqlUser", USER_NAME)
+            .multiPart("mysqlPassword", PASSWORD)
+            .multiPart("mysqlDbName", DB_NAME)
+            .multiPart("mysqlMatrixTableName", "MATRIX_TABLE")
+            .multiPart("mysqlMatrixJsonFieldName", "JSON_FIELD")
+            .multiPart("mysqlMatrixPrimaryKeyFieldName", "ID")
+            .multiPart("mysqlMatrixPrimaryKeyFieldValue", "1")
+            .multiPart("mysqlRhsTableName", "RHS_TABLE")
+            .multiPart("mysqlRhsJsonFieldName", "JSON_FIELD")
+            .multiPart("mysqlRhsPrimaryKeyFieldName", "ID")
+            .multiPart("mysqlRhsPrimaryKeyFieldValue", "1")
+            .when()
+            .post("/solve")
+            .then()
+            .statusCode(200)
+            .contentType(ContentType.JSON)
+            .extract()
+            .asString();
 
-    var connection = new AtomicReference<>((HttpURLConnection) url.get().openConnection());
-    connection.get().setDoOutput(true);
-    connection.get().setRequestMethod("POST");
-    connection
-        .get()
-        .setRequestProperty("Content-Type", "multipart/form-data; boundary=" + BOUNDARY);
+    var taskId = JsonHelper.fromJson(json, TaskIdResponseDTO.class).getId();
+    assertThat(taskId).as("Task id should not be null").isNotNull();
+    var actual = awaitForResult(taskId);
 
-    try (var output = connection.get().getOutputStream()) {
-      var writer = new PrintWriter(new OutputStreamWriter(output, UTF_8), true);
-      appendTo(writer, "slaeSolvingMethod", slaeSolver.getName());
-      appendTo(writer, "dataSourceType", "mysql");
-      appendTo(writer, "mysqlUrl", MYSQL_URL);
-      appendTo(writer, "mysqlUser", USER_NAME);
-      appendTo(writer, "mysqlPassword", PASSWORD);
-      appendTo(writer, "mysqlDbName", DB_NAME);
-      appendTo(writer, "mysqlMatrixTableName", "MATRIX_TABLE");
-      appendTo(writer, "mysqlMatrixJsonFieldName", "JSON_FIELD");
-      appendTo(writer, "mysqlMatrixPrimaryKeyFieldName", "ID");
-      appendTo(writer, "mysqlMatrixPrimaryKeyFieldValue", "1");
-      appendTo(writer, "mysqlRhsTableName", "RHS_TABLE");
-      appendTo(writer, "mysqlRhsJsonFieldName", "JSON_FIELD");
-      appendTo(writer, "mysqlRhsPrimaryKeyFieldName", "ID");
-      appendTo(writer, "mysqlRhsPrimaryKeyFieldValue", "1");
-      // finish the request
-      writer.append("--").append(BOUNDARY).append("--").append("\r\n");
-      writer.close();
-    }
+    double[] expected = {
+      3.8673716012084592145015, -1.8960725075528700906344, 0.8996978851963746223565
+    };
 
-    // Check the answer
-    assertEquals(HttpURLConnection.HTTP_OK, connection.get().getResponseCode());
-    assertEquals("application/json;charset=ISO-8859-1", connection.get().getContentType());
-
-    TaskIdResponseDTO response;
-    try (var reader =
-        new BufferedReader(new InputStreamReader(connection.get().getInputStream()))) {
-      var body = reader.lines().reduce("", (a, b) -> a + b);
-      assertTrue(body.contains("id"));
-      response = JsonHelper.fromJson(body, TaskIdResponseDTO.class);
-    }
-    var id = response.getId();
-
-    Awaitility.await()
-        .atMost(Duration.ofSeconds(30))
-        .ignoreExceptions()
-        .untilAsserted(
-            () -> {
-              uri.set(
-                  new URI(
-                      "http://"
-                          + getMddsWebServerHost()
-                          + ":"
-                          + getMddsWebServerPort()
-                          + "/result/"
-                          + id));
-              url.set(uri.get().toURL());
-              connection.set((HttpURLConnection) url.get().openConnection());
-              connection.get().setRequestMethod("GET");
-
-              assertEquals(HttpURLConnection.HTTP_OK, connection.get().getResponseCode());
-              assertEquals(
-                  "application/json;charset=ISO-8859-1", connection.get().getContentType());
-
-              ResultDTO actualResult;
-              try (var reader =
-                  new BufferedReader(new InputStreamReader(connection.get().getInputStream()))) {
-                var body = reader.lines().reduce("", (a, b) -> a + b);
-                actualResult = JsonHelper.fromJson(body, ResultDTO.class);
-              }
-              assertSame(TaskStatus.DONE, actualResult.getTaskStatus());
-
-              var expectedResult =
-                  new double[] {
-                    3.8673716012084592145015, -1.8960725075528700906344, 0.8996978851963746223565
-                  };
-              var delta = 0.00000001;
-              assertArrayEquals(expectedResult, actualResult.getSolution(), delta);
-            });
+    assertDoneAndEquals(expected, actual);
   }
 
   private static void createMySqlTestData() throws SQLException {
