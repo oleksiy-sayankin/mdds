@@ -63,15 +63,15 @@
     [ "$status" -eq 0 ]
     [ -s "$ACTUAL" ]
 
-    task_id=$(cat "$ACTUAL" | jq -r '.id')
+    task_id=$(jq -r '.id' <"$ACTUAL")
     echo "task_id=$task_id"
 
     for i in {1..5}; do
       echo "Current iteration: $i"
-      run curl -s -X GET http://localhost:8000/result/$task_id -o "$ACTUAL"
+      run curl -s -X GET http://localhost:8000/result/"$task_id" -o "$ACTUAL"
       echo "output = $ACTUAL"
       cat $ACTUAL
-      taskStatus=$(cat "$ACTUAL" | jq -r '.taskStatus')
+      taskStatus=$(jq -r '.taskStatus' <"$ACTUAL")
       echo "taskStatus=$taskStatus"
       if [ "$taskStatus" == "DONE" ]; then
         echo "[INFO] Task completed successfully"
@@ -86,10 +86,10 @@
       echo "[ERROR] Time out error"
     fi
 
-    solution=$(cat "$ACTUAL" | jq -r '.solution')
-    echo "$solution" > "$ACTUAL"
+    solution=$(jq -r '.solution' <"$ACTUAL")
+    echo "$solution" >"$ACTUAL"
     solution=$(jq -c '.[]' "$ACTUAL")
-    echo "$solution" > "$ACTUAL"
+    echo "$solution" >"$ACTUAL"
 
     # Compare line by line actual and expected result
     expected_lines=$(wc -l <"$EXPECTED")
