@@ -32,57 +32,34 @@
       <version>1.0-SNAPSHOT</version>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>com.vaadin.external.google</groupId>
+          <artifactId>android-json</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-assembly-plugin</artifactId>
-        <version>${maven-assembly-plugin.version}</version>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
-          <archive>
-            <manifest>
-              <mainClass>com.mdds.server.Server</mainClass>
-            </manifest>
-          </archive>
+          <mainClass>com.mdds.server.ServerApplication</mainClass>
+          <finalName>${project.artifactId}-${project.version}-jar-with-spring-dependencies</finalName>
         </configuration>
         <executions>
           <execution>
-            <id>assemble-all</id>
-            <phase>package</phase>
             <goals>
-              <goal>single</goal>
+              <goal>repackage</goal>
             </goals>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <classpathDependencyExcludes>
-            <!-- Here we fix this warning:
-
-                            SLF4J(W): Class path contains multiple SLF4J providers.
-                            SLF4J(W): Found provider [com.github.valfirst.slf4jtest.TestSLF4JServiceProvider@5f8edcc5]
-                            SLF4J(W): Found provider [org.apache.logging.slf4j.SLF4JServiceProvider@7b02881e]
-
-                            by excluding log4j-slf4j2-impl from class path during test run. We use slf4j-test
-                            to trace log event during tests and hence it conflicts with existing log4j-slf4j2-impl
-                            used for production logging.
-
-                            Also note, this fix excludes log4j-slf4j2-impl from test classpath and therefore
-                            there will be no logs in console and log file during tests run. All logs will be
-                            redirected to slf4j-test logger.
-                            -->
-            <classpathDependencyExcludes>org.apache.logging.log4j:log4j-slf4j2-impl</classpathDependencyExcludes>
-            <classpathDependencyExcludes>ch.qos.logback:logback-classic</classpathDependencyExcludes>
-          </classpathDependencyExcludes>
-          <useSystemClassLoader>false</useSystemClassLoader>
-        </configuration>
       </plugin>
     </plugins>
   </build>

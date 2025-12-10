@@ -10,8 +10,9 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.mdds.dto.TaskDTO;
-import com.mdds.queue.rabbitmq.RabbitMqConf;
 import com.mdds.queue.rabbitmq.RabbitMqConnectionException;
+import com.mdds.queue.rabbitmq.RabbitMqProperties;
+import com.mdds.queue.rabbitmq.RabbitMqQueue;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -59,8 +60,7 @@ class TestQueueFactory {
         RabbitMqConnectionException.class,
         () -> {
           try (var queue =
-              QueueFactory.createRabbitMq(
-                  randomHost, randomPort, randomUser, randomPassword, timeOut)) {
+              new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
             // Do nothing.
           }
         });
@@ -73,7 +73,7 @@ class TestQueueFactory {
     assertThrows(
         RabbitMqConnectionException.class,
         () -> {
-          try (var queue = QueueFactory.createRabbitMq(properties, timeOut)) {
+          try (var queue = new RabbitMqQueue(properties, timeOut)) {
             // Do nothing.
           }
         });
@@ -91,7 +91,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
     }
@@ -109,7 +109,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
     }
@@ -127,7 +127,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       var actualTask = new AtomicReference<>();
 
@@ -157,8 +157,8 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    var properties = new RabbitMqConf(host, port, user, password);
-    try (var queue = QueueFactory.createRabbitMq(properties)) {
+    var properties = new RabbitMqProperties(host, port, user, password);
+    try (var queue = new RabbitMqQueue(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       var actualTask = new AtomicReference<>();
 
@@ -188,7 +188,7 @@ class TestQueueFactory {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    try (var queue = QueueFactory.createRabbitMq(host, port, user, password)) {
+    try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
       var actualTask = new AtomicReference<>();
 

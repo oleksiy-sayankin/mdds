@@ -77,6 +77,76 @@ export default function App() {
     { value: "scipy_gmres_solver", label: "SciPy GMRES Solver" },
   ];
 
+  const parseMatrixCsv = (text: string): number[][] => {
+    const rows = text
+      .trim()
+      .split(/\r?\n/)
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0);
+
+    if (rows.length === 0) {
+      throw new Error("Matrix file is empty");
+    }
+
+    const matrix: number[][] = rows.map((row, rowIndex) => {
+      const items = row
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0);
+
+      if (items.length === 0) {
+        throw new Error(`Empty row ${rowIndex + 1} in matrix`);
+      }
+
+      const nums = items.map((value, colIndex) => {
+        const n = Number(value);
+        if (Number.isNaN(n)) {
+          throw new Error(
+            `Invalid number "${value}" in matrix at row ${rowIndex + 1}, column ${colIndex + 1}`,
+          );
+        }
+        return n;
+      });
+
+      return nums;
+    });
+
+    // Check if matrix rectangular
+    const cols = matrix[0].length;
+    if (!matrix.every((row) => row.length === cols)) {
+      throw new Error(
+        "Matrix is not rectangular (rows have different lengths)",
+      );
+    }
+
+    return matrix;
+  };
+
+  const parseVectorCsv = (text: string): number[] => {
+    // Support both columns "1.3\n2.2\n3.7" and rows "1.3,2.2,3.7"
+    const tokens = text
+      .trim()
+      .split(/[\s,]+/) // spaces, new line symbols, commas
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    if (tokens.length === 0) {
+      throw new Error("RHS file is empty");
+    }
+
+    const vector = tokens.map((value, index) => {
+      const n = Number(value);
+      if (Number.isNaN(n)) {
+        throw new Error(
+          `Invalid number "${value}" in RHS at position ${index + 1}`,
+        );
+      }
+      return n;
+    });
+
+    return vector;
+  };
+
   const handleSolveClick = async () => {
     if (!matrixFile || !rhsFile) {
       alert("Please select both matrix and RHS files.");
@@ -92,17 +162,33 @@ export default function App() {
     try {
       const matrixText = await matrixFile.text();
       const rhsText = await rhsFile.text();
+      const matrix = parseMatrixCsv(matrixText); // number[][]
+      const rhs = parseVectorCsv(rhsText); // number[]
 
-      const formData = new FormData();
-      formData.append("matrix", matrixText);
-      formData.append("rhs", rhsText);
-      formData.append("slaeSolvingMethod", solver);
-      formData.append("dataSourceType", "http_request");
+      // Create JSON-object
+      const requestBody = {
+        dataSourceType: "http_request",
+        slaeSolvingMethod: solver,
+        params: {
+          matrix,
+          rhs,
+        },
+      };
 
-      const response = await fetch(`/solve`, {
+      const response = await fetch("/solve", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
       });
+
+      if (!response.ok) {
+        console.error("Solve request failed with status:", response.status);
+        alert("Error sending request to server");
+        setIsSolving(false);
+        return;
+      }
 
       const resultJson = await response.json();
       console.log("Solve response:", resultJson);
@@ -113,6 +199,7 @@ export default function App() {
     } catch (error) {
       console.error(error);
       alert("Error sending files");
+      setIsSolving(false);
     }
   };
 

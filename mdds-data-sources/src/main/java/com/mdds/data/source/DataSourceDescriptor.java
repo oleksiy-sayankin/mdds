@@ -4,8 +4,13 @@
  */
 package com.mdds.data.source;
 
+import com.mdds.data.source.provider.http.request.HttpRequestConfig;
+import com.mdds.data.source.provider.mysql.MySqlConfig;
+import com.mdds.data.source.provider.s3.S3Config;
 import jakarta.annotation.Nonnull;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import lombok.Getter;
 
 /**
@@ -27,6 +32,32 @@ public class DataSourceDescriptor {
 
     Type(String name) {
       this.name = name;
+    }
+
+    public boolean fitsFor(Map<String, Object> params) {
+      return params.keySet().containsAll(requiredParams());
+    }
+
+    private Set<String> requiredParams() {
+      switch (this) {
+        case HTTP_REQUEST -> {
+          return HttpRequestConfig.getParams();
+        }
+        case MYSQL -> {
+          return MySqlConfig.getParams();
+        }
+        case S3 -> {
+          return S3Config.getParams();
+        }
+      }
+      return Set.of();
+    }
+
+    public String findMissingIn(Map<String, Object> params) {
+      var keySet = params.keySet();
+      var diff = new HashSet<>(requiredParams());
+      diff.removeAll(keySet);
+      return diff.toString();
     }
 
     public static Type parse(String type) {

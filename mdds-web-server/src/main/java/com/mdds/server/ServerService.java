@@ -6,25 +6,33 @@ package com.mdds.server;
 
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
-import jakarta.annotation.Nonnull;
+import jakarta.annotation.PreDestroy;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
 
 @Slf4j
 @Getter
+@Service
 public class ServerService implements AutoCloseable {
-  private final @Nonnull DataStorage dataStorage;
-  private final @Nonnull Queue queue;
+  private final DataStorage dataStorage;
+  private final Queue taskQueue;
 
-  public ServerService(@Nonnull DataStorage dataStorage, @Nonnull Queue queue) {
+  @Autowired
+  public ServerService(DataStorage dataStorage, @Qualifier("taskQueue") Queue taskQueue) {
     this.dataStorage = dataStorage;
-    this.queue = queue;
+    this.taskQueue = taskQueue;
+    log.info(
+        "Constructed Server Service with task queue {} and storage {}", taskQueue, dataStorage);
   }
 
+  @PreDestroy
   @Override
   public void close() {
-    queue.close();
+    taskQueue.close();
     dataStorage.close();
-    log.info("ResultConsumerService shut down cleanly");
+    log.info("Web Server Service shut down cleanly");
   }
 }

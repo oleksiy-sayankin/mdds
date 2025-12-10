@@ -5,6 +5,7 @@
 package com.mdds.data.source.provider.s3;
 
 import java.util.Map;
+import java.util.Set;
 import lombok.Getter;
 import software.amazon.awssdk.regions.Region;
 
@@ -20,6 +21,19 @@ public class S3Config {
   private final boolean useEndpointUrl;
   private final String endpointUrl;
   private final boolean pathStyleAccessEnabled;
+
+  @Getter
+  private static final Set<String> params =
+      Set.of(
+          "aws.bucket.name",
+          "aws.access.key.id",
+          "aws.secret.access.key",
+          "aws.matrix.key",
+          "aws.rhs.key",
+          "aws.region",
+          "aws.use.endpoint.url",
+          "aws.endpoint.url",
+          "aws.path.style.access.enabled");
 
   private S3Config(Map<String, Object> params) {
     this.bucketName = (String) params.get("aws.bucket.name");

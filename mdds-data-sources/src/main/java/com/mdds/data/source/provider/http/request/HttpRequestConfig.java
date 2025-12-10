@@ -5,17 +5,21 @@
 package com.mdds.data.source.provider.http.request;
 
 import jakarta.annotation.Nonnull;
-import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.Getter;
 
 /** Configuration class for http request data source provider. */
 @Getter
 public class HttpRequestConfig {
-  private final HttpServletRequest request;
+  private final List<? extends List<? extends Number>> rawMatrix;
+  private final List<? extends Number> rawRhs;
+  @Getter private static final Set<String> params = Set.of("matrix", "rhs");
 
   private HttpRequestConfig(@Nonnull Map<String, Object> params) {
-    request = (HttpServletRequest) params.get("request");
+    rawMatrix = (List<? extends List<? extends Number>>) params.get("matrix");
+    rawRhs = (List<? extends Number>) params.get("rhs");
   }
 
   public static HttpRequestConfig of(@Nonnull Map<String, Object> params) {

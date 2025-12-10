@@ -27,12 +27,12 @@ public class RabbitMqQueue implements Queue {
   private final @Nonnull Channel channel;
   private final @Nonnull Connection connection;
 
-  public RabbitMqQueue(@Nonnull RabbitMqConf conf) {
-    this(conf.host(), conf.port(), conf.user(), conf.password());
+  public RabbitMqQueue(@Nonnull RabbitMqProperties conf) {
+    this(conf.getHost(), conf.getPort(), conf.getUser(), conf.getPassword());
   }
 
-  public RabbitMqQueue(@Nonnull RabbitMqConf conf, Duration timeOut) {
-    this(conf.host(), conf.port(), conf.user(), conf.password(), timeOut);
+  public RabbitMqQueue(@Nonnull RabbitMqProperties conf, Duration timeOut) {
+    this(conf.getHost(), conf.getPort(), conf.getUser(), conf.getPassword(), timeOut);
   }
 
   public RabbitMqQueue(@Nonnull String host, int port, String user, String password) {

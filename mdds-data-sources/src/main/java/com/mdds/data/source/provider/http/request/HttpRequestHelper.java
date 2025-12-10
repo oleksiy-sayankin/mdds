@@ -4,14 +4,9 @@
  */
 package com.mdds.data.source.provider.http.request;
 
-import static com.mdds.common.util.CsvHelper.*;
-
 import com.mdds.api.Processable;
-import com.opencsv.exceptions.CsvException;
 import jakarta.annotation.Nonnull;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import java.io.IOException;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 /** Helper class for getting data from Http Request. */
@@ -22,42 +17,48 @@ public final class HttpRequestHelper {
   /**
    * Extracts matrix of the equation from the request.
    *
-   * @param request Http request.
+   * @param rawMatrix Http request.
    * @return matrix from the request.
    */
-  public static Processable<double[][]> extractMatrix(@Nonnull HttpServletRequest request) {
-    try {
-      var matrixPart = request.getPart("matrix");
-      if (matrixPart == null) {
-        return Processable.failure("Missing matrix in request");
-      }
-      try (var is = matrixPart.getInputStream()) {
-        return Processable.of(convert(readCsvAsMatrix(is)));
+  public static Processable<double[][]> extractMatrix(
+      @Nonnull List<? extends List<? extends Number>> rawMatrix) {
+    if (rawMatrix.isEmpty()) {
+      return Processable.failure("Matrix must not be empty");
+    }
+    var firstRow = rawMatrix.getFirst();
+    var rows = rawMatrix.size();
+    var cols = firstRow.size();
+    if (cols == 0) {
+      return Processable.failure("Matrix must have at least one column");
+    }
+    var result = new double[rows][cols];
+    for (var i = 0; i <= rows - 1; i++) {
+      var row = rawMatrix.get(i);
+      if (row.size() != cols) {
+        return Processable.failure("Matrix is not rectangular");
       }
 
-    } catch (IOException | ServletException | CsvException e) {
-      return Processable.failure("Error parsing matrix in the request", e);
+      for (var j = 0; j <= cols - 1; j++) {
+        var cell = row.get(j);
+        result[i][j] = cell.doubleValue();
+      }
     }
+
+    return Processable.of(result);
   }
 
   /**
    * Extracts right hand side (rhs) vector of the equation from the request.
    *
-   * @param request Http request.
+   * @param rawRhs Http request.
    * @return right hand side vector from the request.
    */
-  public static Processable<double[]> extractRhs(@Nonnull HttpServletRequest request) {
-    try {
-      var rhsPart = request.getPart("rhs");
-      if (rhsPart == null) {
-        return Processable.failure("Missing right hand side in request");
-      }
-      try (var is = rhsPart.getInputStream()) {
-        return Processable.of(convert(readCsvAsVector(is)));
-      }
-    } catch (IOException | ServletException | CsvException e) {
-      log.error("Error parsing right hand side in the request", e);
-      return Processable.failure("Error parsing right hand side in the request", e);
+  public static Processable<double[]> extractRhs(List<? extends Number> rawRhs) {
+    var result = new double[rawRhs.size()];
+    for (var i = 0; i <= rawRhs.size() - 1; i++) {
+      var cell = rawRhs.get(i);
+      result[i] = cell.doubleValue();
     }
+    return Processable.of(result);
   }
 }

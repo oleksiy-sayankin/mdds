@@ -60,10 +60,10 @@ services:
       MDDS_EXECUTOR_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-executor
       MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc.server.mdds.com
       MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
-      RABBITMQ_HOST: rabbitmq.mdds.com
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
+      MDDS_RABBITMQ_HOST: rabbitmq.mdds.com
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
     ports:
       - "35232:35232"
     healthcheck:
@@ -86,12 +86,12 @@ services:
       MDDS_SERVER_HOST: web.server.mdds.com
       MDDS_SERVER_PORT: 8000
       MDDS_SERVER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-web-server/web-app
-      RABBITMQ_HOST: rabbitmq.mdds.com
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
-      REDIS_HOST: redis.mdds.com
-      REDIS_PORT: 6379
+      MDDS_RABBITMQ_HOST: rabbitmq.mdds.com
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
+      MDDS_REDIS_HOST: redis.mdds.com
+      MDDS_REDIS_PORT: 6379
     ports:
       - "8000:8000"
     healthcheck:
@@ -114,12 +114,12 @@ services:
       MDDS_RESULT_CONSUMER_HOST: result.consumer.mdds.com
       MDDS_RESULT_CONSUMER_PORT: 8863
       MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-result-consumer
-      RABBITMQ_HOST: rabbitmq.mdds.com
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
-      REDIS_HOST: redis.mdds.com
-      REDIS_PORT: 6379
+      MDDS_RABBITMQ_HOST: rabbitmq.mdds.com
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
+      MDDS_REDIS_HOST: redis.mdds.com
+      MDDS_REDIS_PORT: 6379
     ports:
       - "8863:8863"
     healthcheck:

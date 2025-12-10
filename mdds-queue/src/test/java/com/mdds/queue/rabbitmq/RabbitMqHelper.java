@@ -23,7 +23,7 @@ public final class RabbitMqHelper {
    * @param rabbitMqProperties *.properties file inside *.jar file which is in classpath.
    * @return record with connection parameters
    */
-  public static RabbitMqConf readFromResources(String rabbitMqProperties) {
+  public static RabbitMqProperties readFromResources(String rabbitMqProperties) {
     var properties = new Properties();
     try (var input =
         RabbitMqHelper.class.getClassLoader().getResourceAsStream(rabbitMqProperties)) {
@@ -48,6 +48,6 @@ public final class RabbitMqHelper {
         System.getProperty(
             "rabbitmq.user.password",
             properties.getProperty("rabbitmq.user.password", new String(DEFAULT_PASSWORD)));
-    return new RabbitMqConf(host, port, user, password);
+    return new RabbitMqProperties(host, port, user, password);
   }
 }

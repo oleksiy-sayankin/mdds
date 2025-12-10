@@ -47,7 +47,7 @@ class TestRedisDataStorage {
     result.setProgress(100);
     result.setSolution(new double[] {9.3, 6.278, 6.783, 3.874});
     result.setErrorMessage("");
-    try (var dataStorage = new RedisDataStorage(new RedisConf(DEFAULT_HOST, REDIS_SERVER_PORT))) {
+    try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
       Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, result));
     }
   }
@@ -97,12 +97,11 @@ class TestRedisDataStorage {
 
   @Test
   void testWrongConfFile() {
-    var properties = RedisHelper.readFromResources("no.connection.redis.properties");
     var oneSecond = Duration.ofSeconds(1);
     assertThrows(
         RedisConnectionException.class,
         () -> {
-          try (var ignore = new RedisDataStorage(properties, oneSecond)) {
+          try (var ignore = new RedisDataStorage("wrong.host", 3234, oneSecond)) {
             // Do nothing.
           }
         });

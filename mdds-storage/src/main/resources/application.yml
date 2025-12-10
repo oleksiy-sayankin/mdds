@@ -1,0 +1,9 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+spring:
+  config:
+    import: "classpath:mdds-common.yml"
+
+mdds.redis:
+  host: localhost
+  port: 6379

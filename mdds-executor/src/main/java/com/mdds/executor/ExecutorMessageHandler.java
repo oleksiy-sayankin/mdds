@@ -5,8 +5,7 @@
 package com.mdds.executor;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.mdds.common.AppConstants;
-import com.mdds.common.AppConstantsFactory;
+import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskDTO;
 import com.mdds.dto.TaskStatus;
@@ -20,53 +19,85 @@ import com.mdds.queue.Queue;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NettyChannelBuilder;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import jakarta.annotation.Nonnull;
+import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 /** Solves system of linear algebraic equations. */
 @Slf4j
+@Component
 public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoCloseable {
   private final SolverServiceGrpc.SolverServiceBlockingStub solverStub;
   private final ManagedChannel channel;
-  private final @Nonnull Queue resultQueue;
+  private final Queue resultQueue;
   private final ExecutorService threadExecutor = Executors.newFixedThreadPool(2);
-  private final NioEventLoopGroup eventLoopGroup = new NioEventLoopGroup(2);
+  private final MultiThreadIoEventLoopGroup eventLoopGroup =
+      new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
+  private final GrpcServerProperties grpcServerProperties;
+  private final CommonProperties commonProperties;
 
-  public ExecutorMessageHandler(@Nonnull Queue resultQueue) {
+  @Autowired
+  public ExecutorMessageHandler(
+      @Qualifier("resultQueue") Queue resultQueue,
+      GrpcServerProperties grpcServerProperties,
+      CommonProperties commonProperties) {
+    this.grpcServerProperties = grpcServerProperties;
     channel = buildGrpcChannel();
     this.solverStub = SolverServiceGrpc.newBlockingStub(channel);
     this.resultQueue = resultQueue;
+    this.commonProperties = commonProperties;
+    log.info(
+        "Created Executor Message Handler '{}', {}, gRPC Server {}:{}",
+        commonProperties.getResultQueueName(),
+        resultQueue,
+        grpcServerProperties.getHost(),
+        grpcServerProperties.getPort());
   }
 
   @VisibleForTesting
   public ExecutorMessageHandler(
-      @Nonnull Queue resultQueue,
-      @Nonnull SolverServiceGrpc.SolverServiceBlockingStub solverStub,
-      @Nonnull ManagedChannel channel) {
+      Queue resultQueue,
+      SolverServiceGrpc.SolverServiceBlockingStub solverStub,
+      ManagedChannel channel,
+      GrpcServerProperties grpcServerProperties,
+      CommonProperties commonProperties) {
+    this.grpcServerProperties = grpcServerProperties;
     this.channel = channel;
     this.resultQueue = resultQueue;
     this.solverStub = solverStub;
+    this.commonProperties = commonProperties;
   }
 
   @Override
   public void handle(@Nonnull Message<TaskDTO> message, @Nonnull Acknowledger ack) {
     var payload = message.payload();
+    log.info("Start handling task {}", payload.getId());
     var resultMessage =
         processRequest(buildSolveRequest(payload), payload.getId(), payload.getDateTime());
-    resultQueue.publish(
-        AppConstantsFactory.getString(AppConstants.RESULT_QUEUE_NAME), resultMessage);
+    resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
     // inform queue that message was processed
     ack.ack();
+    log.info(
+        "Published task {} with status {} to queue '{}', {}",
+        resultMessage.payload().getTaskId(),
+        resultMessage.payload().getTaskStatus(),
+        commonProperties.getResultQueueName(),
+        resultQueue);
   }
 
   private static SolveRequest buildSolveRequest(TaskDTO payload) {
+    log.info("Building solve request for task {}", payload.getId());
     // set solving method for gRPC request
     var requestBuilder =
         SolveRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());
@@ -89,6 +120,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
 
   private Message<ResultDTO> processRequest(
       SolveRequest solveRequest, String taskId, Instant taskCreationDateTime) {
+    log.info("Processing solve request for task {}", taskId);
     try {
       // RPC call
       var response = solverStub.solve(solveRequest);
@@ -98,7 +130,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
       var resultArray =
           new ResultDTO(
               taskId, taskCreationDateTime, Instant.now(), TaskStatus.DONE, 100, solution, "");
-      log.debug("Solved system of linear algebraic equations task {}", taskId);
+      log.info("Solved system of linear algebraic equations task {}", taskId);
       return new Message<>(resultArray, new HashMap<>(), Instant.now());
     } catch (StatusRuntimeException e) {
       // create error message
@@ -117,6 +149,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   }
 
   @Override
+  @PreDestroy
   public void close() {
     channel.shutdown();
     threadExecutor.shutdown();
@@ -141,10 +174,22 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
     log.info("All gRPC resources stopped cleanly.");
   }
 
+  @Override
+  public String toString() {
+    return "ExecutorMessageHandler[gRPC="
+        + grpcServerProperties.getHost()
+        + ":"
+        + grpcServerProperties.getPort()
+        + ", '"
+        + commonProperties.getResultQueueName()
+        + "',"
+        + resultQueue
+        + "]";
+  }
+
   private ManagedChannel buildGrpcChannel() {
-    var executorConf = ExecutorConfFactory.fromEnvOrDefaultProperties();
-    var grpcServerHost = executorConf.grpcServerHost();
-    var grpcServerPort = executorConf.grpcServerPort();
+    var grpcServerHost = grpcServerProperties.getHost();
+    var grpcServerPort = grpcServerProperties.getPort();
     var grpcChannel =
         NettyChannelBuilder.forAddress(grpcServerHost, grpcServerPort)
             .usePlaintext()

@@ -11,7 +11,7 @@ export default defineConfig({
   root: 'src', // link to source root
   base: './',
   build: {
-    outDir: '../../mdds-web-server/web-app', // target dir
+    outDir: '../../mdds-web-server/src/main/resources/static', // target dir
     emptyOutDir: true,
   },
   resolve: {

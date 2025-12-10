@@ -5,6 +5,7 @@
 package com.mdds.data.source.provider.mysql;
 
 import java.util.Map;
+import java.util.Set;
 import lombok.Getter;
 
 /** Configuration class for MySql data source provider. */
@@ -22,6 +23,22 @@ public class MySqlConfig {
   private final String rhsJsonFieldName;
   private final String rhsPrimaryKeyFieldName;
   private final String rhsPrimaryKeyFieldValue;
+
+  @Getter
+  private static final Set<String> params =
+      Set.of(
+          "mysql.url",
+          "mysql.user",
+          "mysql.password",
+          "mysql.db.name",
+          "mysql.matrix.table.name",
+          "mysql.matrix.json.field.name",
+          "mysql.matrix.primary.key.field.name",
+          "mysql.matrix.primary.key.field.value",
+          "mysql.rhs.table.name",
+          "mysql.rhs.json.field.name",
+          "mysql.rhs.primary.key.field.name",
+          "mysql.rhs.primary.key.field.value");
 
   private MySqlConfig(Map<String, Object> params) {
     this.url = (String) params.get("mysql.url");

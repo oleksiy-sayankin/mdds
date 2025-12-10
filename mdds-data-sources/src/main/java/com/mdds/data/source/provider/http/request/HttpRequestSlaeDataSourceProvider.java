@@ -9,26 +9,28 @@ import static com.mdds.data.source.provider.http.request.HttpRequestHelper.extra
 
 import com.mdds.api.Processable;
 import com.mdds.data.source.provider.SlaeDataSourceProvider;
-import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * This data source provider reads matrix of coefficients and right hand side vector from instance
- * of multipart HttpServletRequest.
+ * of configuration class.
  */
 public class HttpRequestSlaeDataSourceProvider implements SlaeDataSourceProvider {
-  private final HttpServletRequest request;
+  private final List<? extends List<? extends Number>> rawMatrix;
+  private final List<? extends Number> rawRhs;
 
   public HttpRequestSlaeDataSourceProvider(HttpRequestConfig config) {
-    this.request = config.getRequest();
+    this.rawMatrix = config.getRawMatrix();
+    this.rawRhs = config.getRawRhs();
   }
 
   @Override
   public Processable<double[][]> loadMatrix() {
-    return extractMatrix(request);
+    return extractMatrix(rawMatrix);
   }
 
   @Override
   public Processable<double[]> loadRhs() {
-    return extractRhs(request);
+    return extractRhs(rawRhs);
   }
 }

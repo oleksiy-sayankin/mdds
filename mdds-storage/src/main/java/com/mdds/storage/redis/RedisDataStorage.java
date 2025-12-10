@@ -20,9 +20,11 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 @Slf4j
 public class RedisDataStorage implements DataStorage {
   private final @Nonnull UnifiedJedis jedis;
+  private final String host;
+  private final int port;
 
-  public RedisDataStorage(@Nonnull RedisConf conf) {
-    this(conf.host(), conf.port());
+  public RedisDataStorage(@Nonnull RedisProperties conf) {
+    this(conf.getHost(), conf.getPort());
   }
 
   public RedisDataStorage(@Nonnull String host, int port) {
@@ -30,8 +32,8 @@ public class RedisDataStorage implements DataStorage {
   }
 
   @VisibleForTesting
-  public RedisDataStorage(@Nonnull RedisConf conf, Duration timeOut) {
-    this(conf.host(), conf.port(), timeOut);
+  public RedisDataStorage(@Nonnull RedisProperties conf, Duration timeOut) {
+    this(conf.getHost(), conf.getPort(), timeOut);
   }
 
   @VisibleForTesting
@@ -40,6 +42,8 @@ public class RedisDataStorage implements DataStorage {
       jedis = new UnifiedJedis("redis://" + host + ":" + port);
       untilRedisAvailable(jedis, host, port, timeOut);
       log.info("Connected to Redis redis://{}:{}", host, port);
+      this.host = host;
+      this.port = port;
     } catch (JedisConnectionException e) {
       throw new RedisConnectionException("Failed to connect to redis://" + host + ":" + port, e);
     }
@@ -72,6 +76,11 @@ public class RedisDataStorage implements DataStorage {
       return Optional.empty();
     }
     return Optional.of(JsonHelper.fromJson(json, type));
+  }
+
+  @Override
+  public String toString() {
+    return this.getClass() + "[" + host + ":" + port + "]";
   }
 
   @Override

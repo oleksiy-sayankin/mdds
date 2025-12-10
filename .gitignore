@@ -11,4 +11,4 @@ tests/e2e/output/
 target/
 *generated*
 *.iml
-mdds-web-server/web-app
+mdds-web-server/src/main/resources/static/

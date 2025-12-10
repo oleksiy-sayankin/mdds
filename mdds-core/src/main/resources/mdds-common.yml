@@ -1,0 +1,6 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+mdds.common:
+  task-queue-name: mdds_task_queue
+  result-queue-name: mdds_result_queue

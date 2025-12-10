@@ -1,0 +1,20 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+spring:
+  config:
+    import: "classpath:mdds-common.yml"
+
+mdds:
+  executor:
+    host: localhost
+    port: 35232
+    webapp.dir.location: web-app
+    grpc.server:
+      host: localhost
+      port: 50051
+server:
+  address: ${mdds.executor.host}
+  port: ${mdds.executor.port}
+  basedir: ${mdds.executor.webapp.dir.location}
+

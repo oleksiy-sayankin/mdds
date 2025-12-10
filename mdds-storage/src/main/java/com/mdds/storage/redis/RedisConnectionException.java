@@ -9,8 +9,4 @@ public class RedisConnectionException extends RuntimeException {
   public RedisConnectionException(String message, Throwable cause) {
     super(message, cause);
   }
-
-  public RedisConnectionException(String message) {
-    super();
-  }
 }
