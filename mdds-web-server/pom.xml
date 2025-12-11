@@ -45,13 +45,14 @@
     </dependency>
   </dependencies>
   <build>
+    <finalName>${project.artifactId}-${project.version}-jar-with-spring-dependencies</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${springframework.version}</version>
         <configuration>
           <mainClass>com.mdds.server.ServerApplication</mainClass>
-          <finalName>${project.artifactId}-${project.version}-jar-with-spring-dependencies</finalName>
         </configuration>
         <executions>
           <execution>
