@@ -19,9 +19,6 @@ import com.mdds.queue.Queue;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NettyChannelBuilder;
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.nio.NioIoHandler;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
@@ -42,8 +39,6 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   private final ManagedChannel channel;
   private final Queue resultQueue;
   private final ExecutorService threadExecutor = Executors.newFixedThreadPool(2);
-  private final MultiThreadIoEventLoopGroup eventLoopGroup =
-      new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
   private final GrpcServerProperties grpcServerProperties;
   private final CommonProperties commonProperties;
 
@@ -156,17 +151,10 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
     try {
       if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
         channel.shutdownNow();
-        if (!channel.awaitTermination(1, TimeUnit.SECONDS)) {
-          log.error("Channel did not terminate gRPC channel after forced shutdown.");
-        }
       }
       if (!threadExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
         threadExecutor.shutdownNow();
-        if (threadExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
-          log.error("Channel did not terminate thread executor after forced shutdown.");
-        }
       }
-      eventLoopGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
     } catch (InterruptedException e) {
       log.error("Error during shutdown", e);
       Thread.currentThread().interrupt();
@@ -195,8 +183,6 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
             .usePlaintext()
             .executor(threadExecutor)
             .offloadExecutor(threadExecutor)
-            .channelType(NioSocketChannel.class)
-            .eventLoopGroup(eventLoopGroup)
             .build();
     log.info("Created gRPC channel for {}:{}", grpcServerHost, grpcServerPort);
     return grpcChannel;
