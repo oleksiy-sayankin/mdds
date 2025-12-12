@@ -27,14 +27,14 @@ public class ServerResultController {
   }
 
   @GetMapping("/{taskId}")
-  public ResponseEntity<ResultDTO> result(@PathVariable("taskId") String taskId) {
+  public ResultDTO result(@PathVariable("taskId") String taskId) {
     log.info("Processing request in result controller for {}...", taskId);
     var result = storage.get(taskId, ResultDTO.class);
     result.ifPresentOrElse(
         value -> log.info("Found result for task {} with status {}", taskId, value.getTaskStatus()),
         () -> log.info("No result found for {}", taskId));
     if (result.isPresent()) {
-      return ResponseEntity.ok().body(result.get());
+      return result.get();
     } else {
       throw new NoResultFoundException("No result found for " + taskId);
     }

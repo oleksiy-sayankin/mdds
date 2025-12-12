@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /** Controller for solving system of linear algebraic equations. */
@@ -46,7 +45,7 @@ public class ServerSolveController {
       path = "/solve",
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
-  public ResponseEntity<TaskIdResponseDTO> solve(@RequestBody SolveRequestDTO request) {
+  public TaskIdResponseDTO solve(@RequestBody SolveRequestDTO request) {
     var rawType = request.getDataSourceType();
     var rawMethod = request.getSlaeSolvingMethod();
     var params = request.getParams();
@@ -78,6 +77,6 @@ public class ServerSolveController {
         taskId,
         commonProperties.getTaskQueueName(),
         queue);
-    return ResponseEntity.ok(new TaskIdResponseDTO(taskId));
+    return new TaskIdResponseDTO(taskId);
   }
 }
