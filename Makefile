@@ -20,7 +20,7 @@ DEPLOYMENT_DIR := deployment
 DEPLOYMENT_TEST_ROOT := $(PROJECT_ROOT)/$(DEPLOYMENT_DIR)/test
 MDDS_SERVER_PORT ?= 8000
 MDDS_SERVER_HOST ?= localhost
-E2E_HOME := tests/e2e
+E2E_HOME := mdds-tests/e2e
 SONAR_HOST_URL ?= http://localhost:9000
 SONAR_PROJECT_KEY ?= mdds
 SONAR_TOKEN ?= $(shell cat .sonar_token)
@@ -260,7 +260,7 @@ reformat_python:
 #
 check_bash_code_style:
 	$(call log_info,"Checking Bash code style...")
-	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) | xargs shellcheck
+	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) | xargs --no-run-if-empty shellcheck
 	$(call log_done,"Checking Bash code style completed.")
 
 #
@@ -268,7 +268,7 @@ check_bash_code_style:
 #
 reformat_bash:
 	$(call log_info,"Reformating bash sources...")
-	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) |xargs shfmt  -i 2 -w
+	find . ! -path "*$(NODE_MODULES)*" -type f \( -name "*.sh" -o -name "*.bats" \) |xargs --no-run-if-empty shfmt  -i 2 -w
 	$(call log_done,"Reformating bash shell scripts completed.")
 
 #
@@ -371,7 +371,7 @@ run_server:
 wait_for_server:
 	@retry_count=10; \
 	current_retry=1; \
-	$(call log_info_sh,"Waiting for server on port $(MDDS_SERVER_PORT)..."); \
+	$(call log_info_sh,"Waiting for mdds web-server on $(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)..."); \
 	while [ $$current_retry -le $$retry_count ]; do \
 		if curl -s http://$(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)/health > /dev/null; then \
 			$(call log_done_sh,"Server is up!"); \
@@ -386,17 +386,39 @@ wait_for_server:
 	exit 1
 
 #
+# Generate Postman environment-file with baseUrl
+#
+define FILE_CONTENT
+{
+  "name": "mdds-e2e-env",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://$(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)",
+      "enabled": true
+    }
+  ]
+}
+endef
+
+create_config_file:
+	$(call log_info,"Generating .env file for postman...")
+	$(file > $(E2E_HOME)/env.json,$(FILE_CONTENT))
+	$(call log_done,"Generating .env file for postman completed.")
+
+
+#
 # Start Docker container and run end to end tests
 #
 test_e2e:
 	$(call log_info,"Starting up environment...")
-	@echo "MDDS_SERVER_PORT=$(MDDS_SERVER_PORT)" > $(E2E_HOME)/.env
-	@docker compose -f $(E2E_HOME)/docker-compose.yml up -d
+	@$(MAKE) create_config_file
+	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml up -d
 	@$(MAKE) wait_for_server
 	$(call log_info,"Running end to end tests...")
-	@npm run test:e2e
+	@newman run "$(E2E_HOME)/collection.json" -e "$(E2E_HOME)/env.json" --reporters cli
 	$(call log_info,"Shutting down environment...")
-	@docker compose -f $(E2E_HOME)/docker-compose.yml down
+	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml down
 	$(call log_done,"End to end tests completed.")
 
 #
