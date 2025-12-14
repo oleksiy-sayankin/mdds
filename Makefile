@@ -70,7 +70,7 @@ reformat_and_check_all: check_license build_jars reformat_ts build_and_copy_web_
 #
 # Run tests and start server
 #
-test_and_run: test_all run_server
+test_and_run: test_all start_mdds_env
 
 #
 # Run all tests
@@ -358,12 +358,23 @@ build_jars:
 
 
 #
-# Run server
+# Start MDDS environment with all Docker containers
 #
-run_server:
-	$(call log_info,"Starting web-server...")
-	@python -m run
-	$(call log_done,"Starting web-server completed. Web-server is up!")
+start_mdds_env:
+	$(call log_info,"Starting MDDS environment...")
+	@$(MAKE) create_config_file
+	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml up -d
+	@$(MAKE) wait_for_server
+	$(call log_done,"Starting MDDS environment completed. MDDS environment is up!")
+
+#
+# Stop MDDS environment with all Docker containers
+#
+stop_mdds_env:
+	$(call log_info,"Stopping MDDS environment...")
+	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml down
+	$(call log_done,"Stopping MDDS environment completed.")
+
 
 #
 # Wait until server is ready by checking its health state
@@ -402,23 +413,19 @@ define FILE_CONTENT
 endef
 
 create_config_file:
-	$(call log_info,"Generating .env file for postman...")
+	$(call log_info,"Generating env.json file for newman...")
 	$(file > $(E2E_HOME)/env.json,$(FILE_CONTENT))
-	$(call log_done,"Generating .env file for postman completed.")
+	$(call log_done,"Generating env.json file for newman completed.")
 
 
 #
 # Start Docker container and run end to end tests
 #
 test_e2e:
-	$(call log_info,"Starting up environment...")
-	@$(MAKE) create_config_file
-	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml up -d
-	@$(MAKE) wait_for_server
+	@$(MAKE) start_mdds_env
 	$(call log_info,"Running end to end tests...")
 	@newman run "$(E2E_HOME)/collection.json" -e "$(E2E_HOME)/env.json" --reporters cli
-	$(call log_info,"Shutting down environment...")
-	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml down
+	@$(MAKE) stop_mdds_env
 	$(call log_done,"End to end tests completed.")
 
 #
