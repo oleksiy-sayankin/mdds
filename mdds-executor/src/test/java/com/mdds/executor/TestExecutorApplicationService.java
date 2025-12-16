@@ -4,7 +4,7 @@
  */
 package com.mdds.executor;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -28,12 +28,12 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -41,7 +41,6 @@ import org.testcontainers.utility.MountableFile;
 
 @Testcontainers
 @SpringBootTest
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Slf4j
 class TestExecutorApplicationService {
   @Autowired
@@ -55,6 +54,8 @@ class TestExecutorApplicationService {
   @Autowired private GrpcServerProperties grpcServerConfig;
 
   @Autowired private CommonProperties commonProperties;
+
+  @MockitoBean private ExecutorMessageHandler executorMessageHandler;
 
   @Container
   private static final RabbitMQContainer rabbitMq =
@@ -88,7 +89,7 @@ class TestExecutorApplicationService {
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
     var endTime = Instant.now();
-    var expectedResult =
+    var expected =
         new ResultDTO(
             taskId,
             startTime,
@@ -99,18 +100,22 @@ class TestExecutorApplicationService {
             "");
 
     // Simulate that ExecutorMessageHandler solves the task
-    MessageHandler<TaskDTO> messageHandler =
-        (message, ack) -> {
-          var resultMessage = new Message<>(expectedResult, new HashMap<>(), Instant.now());
-          resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
-          ack.ack();
-        };
+    doAnswer(
+            invocation -> {
+              var resultMessage = new Message<>(expected, new HashMap<>(), Instant.now());
+              resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
+              return null;
+            })
+        .when(executorMessageHandler)
+        .handle(any(), any());
+
     try (var executorService =
         new ExecutorService(
             taskQueue,
             resultQueue,
-            messageHandler,
-            taskQueue.subscribe(commonProperties.getTaskQueueName(), TaskDTO.class, messageHandler),
+            executorMessageHandler,
+            taskQueue.subscribe(
+                commonProperties.getTaskQueueName(), TaskDTO.class, executorMessageHandler),
             commonProperties)) {
       var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
       taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
@@ -125,8 +130,8 @@ class TestExecutorApplicationService {
                       public void handle(
                           @Nonnull Message<ResultDTO> message, @Nonnull Acknowledger ack) {
                         // Check the result here
-                        var actualResult = message.payload();
-                        assertEquals(expectedResult, actualResult);
+                        var actual = message.payload();
+                        assertThat(actual).isEqualTo(expected);
                       }
                     };
                 try (var ignored =
