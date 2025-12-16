@@ -4,8 +4,6 @@
  */
 package com.mdds.test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskIdResponseDTO;
@@ -13,6 +11,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -30,7 +29,7 @@ class TestHttpRequestDataSource extends BaseEnvironment {
     var json = response.body();
 
     var taskId = JsonHelper.fromJson(json, TaskIdResponseDTO.class).getId();
-    assertThat(taskId).as("Task id should not be null").isNotNull();
+    Assertions.assertThat(taskId).as("Task id should not be null").isNotNull();
     var actual = awaitForResult(taskId);
 
     double[] expected = {

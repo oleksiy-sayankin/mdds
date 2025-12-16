@@ -11,12 +11,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES;
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
+import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ErrorResponseDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskStatus;
 import com.mdds.storage.redis.RedisDataStorage;
-import com.mdds.util.HttpTestClient;
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;

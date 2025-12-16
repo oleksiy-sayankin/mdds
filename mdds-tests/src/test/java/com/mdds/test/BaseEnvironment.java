@@ -4,14 +4,11 @@
  */
 package com.mdds.test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-
+import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskStatus;
-import com.mdds.util.HttpTestClient;
 import com.rabbitmq.client.ConnectionFactory;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.health.v1.HealthCheckRequest;
@@ -24,6 +21,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
+import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.GenericContainer;
@@ -219,9 +217,9 @@ public class BaseEnvironment {
   }
 
   protected static void assertDoneAndEquals(double[] expected, ResultDTO actual) {
-    assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
+    Assertions.assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
     var delta = 0.00000001;
-    assertArrayEquals(expected, actual.getSolution(), delta);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(expected, actual.getSolution(), delta);
   }
 
   private static boolean redisIsReady() throws IOException, InterruptedException {

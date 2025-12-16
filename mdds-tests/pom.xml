@@ -8,8 +8,8 @@
     <artifactId>mdds</artifactId>
     <version>1.0-SNAPSHOT</version>
   </parent>
-  <name>MDDS Queue Service</name>
-  <artifactId>mdds-queue</artifactId>
+  <name>MDDS Integration Tests</name>
+  <artifactId>mdds-tests</artifactId>
   <dependencies>
     <dependency>
       <groupId>com.mdds</groupId>
@@ -31,27 +31,14 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-amqp</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
+      <groupId>com.adobe.testing</groupId>
+      <artifactId>s3mock</artifactId>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>com.vaadin.external.google</groupId>
-          <artifactId>android-json</artifactId>
-        </exclusion>
-      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.adobe.testing</groupId>
+      <artifactId>s3mock-testcontainers</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

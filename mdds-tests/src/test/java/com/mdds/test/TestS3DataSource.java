@@ -5,7 +5,6 @@
 package com.mdds.test;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.assertj.core.api.Assertions.assertThat;
 import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES;
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
@@ -18,6 +17,7 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -69,10 +69,10 @@ class TestS3DataSource extends BaseEnvironment {
     var json = response.body();
 
     var taskId = JsonHelper.fromJson(json, TaskIdResponseDTO.class).getId();
-    assertThat(taskId).as("Task id should not be null").isNotNull();
+    Assertions.assertThat(taskId).as("Task id should not be null").isNotNull();
     var actual = awaitForResult(taskId);
 
-    assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
+    Assertions.assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
 
     double[] expected = {
       -0.1499382089687040253643, 0.0280711223847708241758, 0.0080775029256540625510

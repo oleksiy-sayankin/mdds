@@ -15,6 +15,20 @@
       <groupId>com.mdds</groupId>
       <artifactId>mdds-dto</artifactId>
       <version>1.0-SNAPSHOT</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>log4j-slf4j2-impl</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>log4j-core</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -37,12 +51,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <classpathDependencyExcludes>
-            <classpathDependencyExcludes>org.apache.logging.log4j:log4j-slf4j2-impl</classpathDependencyExcludes>
-          </classpathDependencyExcludes>
-          <useSystemClassLoader>false</useSystemClassLoader>
-        </configuration>
       </plugin>
     </plugins>
   </build>

@@ -2,9 +2,8 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.util;
+package com.mdds.common.util;
 
-import com.mdds.common.util.JsonHelper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
