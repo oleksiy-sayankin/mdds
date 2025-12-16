@@ -15,20 +15,6 @@
       <groupId>com.mdds</groupId>
       <artifactId>mdds-core</artifactId>
       <version>1.0-SNAPSHOT</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-slf4j2-impl</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-core</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.mdds</groupId>
@@ -50,20 +36,6 @@
       <artifactId>mdds-data-sources</artifactId>
       <version>1.0-SNAPSHOT</version>
       <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-slf4j2-impl</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.logging.log4j</groupId>
-          <artifactId>log4j-core</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -79,12 +51,26 @@
     <dependency>
       <groupId>com.adobe.testing</groupId>
       <artifactId>s3mock</artifactId>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.adobe.testing</groupId>
       <artifactId>s3mock-testcontainers</artifactId>
-      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.github.codemonstur</groupId>
+      <artifactId>embedded-redis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>rabbitmq</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mysql</artifactId>
     </dependency>
   </dependencies>
   <build>
