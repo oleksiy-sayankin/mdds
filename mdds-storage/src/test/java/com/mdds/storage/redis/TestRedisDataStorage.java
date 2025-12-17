@@ -5,7 +5,9 @@
 package com.mdds.storage.redis;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskStatus;

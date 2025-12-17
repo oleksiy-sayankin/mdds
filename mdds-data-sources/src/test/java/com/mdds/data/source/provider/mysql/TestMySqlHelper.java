@@ -4,7 +4,13 @@
  */
 package com.mdds.data.source.provider.mysql;
 
-import static com.mdds.data.source.provider.mysql.MySqlHelper.*;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.buildMatrixQuery;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.buildRhsQuery;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.extractMatrix;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.extractRhs;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.getConnection;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.requestMatrixData;
+import static com.mdds.data.source.provider.mysql.MySqlHelper.requestRhsData;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

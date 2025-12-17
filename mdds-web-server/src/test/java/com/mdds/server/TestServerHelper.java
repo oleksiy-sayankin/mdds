@@ -4,7 +4,9 @@
  */
 package com.mdds.server;
 
-import static com.mdds.data.source.DataSourceDescriptor.Type.*;
+import static com.mdds.data.source.DataSourceDescriptor.Type.HTTP_REQUEST;
+import static com.mdds.data.source.DataSourceDescriptor.Type.MYSQL;
+import static com.mdds.data.source.DataSourceDescriptor.Type.S3;
 import static com.mdds.data.source.DataSourceProviderFactory.fromDescriptor;
 import static com.mdds.server.ServerHelper.extractDescriptor;
 import static java.nio.charset.StandardCharsets.UTF_8;

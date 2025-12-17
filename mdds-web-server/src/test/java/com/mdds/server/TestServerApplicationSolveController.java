@@ -4,8 +4,9 @@
  */
 package com.mdds.server;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.SolveRequestDTO;

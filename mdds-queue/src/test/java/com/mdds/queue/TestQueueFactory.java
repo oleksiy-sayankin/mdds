@@ -6,7 +6,9 @@ package com.mdds.queue;
 
 import static com.mdds.dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import com.mdds.dto.TaskDTO;
