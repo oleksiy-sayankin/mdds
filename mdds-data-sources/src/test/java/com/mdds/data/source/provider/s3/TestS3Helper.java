@@ -7,13 +7,16 @@ package com.mdds.data.source.provider.s3;
 import static com.mdds.data.source.provider.s3.S3Helper.extractMatrix;
 import static com.mdds.data.source.provider.s3.S3Helper.extractRhs;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.assertj.core.api.Assertions.assertThat;
 import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES;
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -100,7 +103,7 @@ class TestS3Helper {
     var actualMatrix = extractMatrix(s3Config);
     var expectedMatrix =
         new double[][] {{1.2, 3.343, 543}, {4.32, 243.3, 2.232}, {7.32, 32.32, 432.1}};
-    Assertions.assertArrayEquals(expectedMatrix, actualMatrix.get());
+    assertThat(actualMatrix.get()).isEqualTo(expectedMatrix);
   }
 
   @Test
@@ -118,6 +121,6 @@ class TestS3Helper {
     var s3Config = S3Config.of(params);
     var actualRhs = extractRhs(s3Config);
     var expectedRhs = new double[] {4.3, 6.2, 3.3};
-    Assertions.assertArrayEquals(expectedRhs, actualRhs.get());
+    assertThat(actualRhs.get()).isEqualTo(expectedRhs);
   }
 }

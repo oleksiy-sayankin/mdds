@@ -4,9 +4,10 @@
  */
 package com.mdds.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 class TestProcessable {
@@ -15,7 +16,7 @@ class TestProcessable {
   void testOf() {
     var testClass = new TestClass();
     var result = Processable.of(testClass);
-    Assertions.assertEquals(testClass, result.get());
+    assertThat(testClass).isEqualTo(result.get());
   }
 
   @Test
@@ -23,13 +24,13 @@ class TestProcessable {
     var testClass = new TestClass();
     testClass.setId(100);
     var result = Processable.of(testClass);
-    result.ifPresent(r -> Assertions.assertEquals(100, r.getId()));
+    result.ifPresent(r -> assertThat(r.getId()).isEqualTo(100));
   }
 
   @Test
   void testIfFailure() {
     var result = Processable.failure("Test failure", new Exception());
-    result.ifFailure(r -> Assertions.assertEquals("Test failure", r.getErrorMessage()));
+    result.ifFailure(r -> assertThat(r.getErrorMessage()).isEqualTo("Test failure"));
   }
 
   @Getter

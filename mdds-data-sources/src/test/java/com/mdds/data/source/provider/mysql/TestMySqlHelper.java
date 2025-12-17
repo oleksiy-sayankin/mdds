@@ -5,6 +5,8 @@
 package com.mdds.data.source.provider.mysql;
 
 import static com.mdds.data.source.provider.mysql.MySqlHelper.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.mdds.common.util.JsonHelper;
 import java.sql.Connection;
@@ -13,7 +15,6 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +43,7 @@ class TestMySqlHelper {
     var mySqlConfig = MySqlConfig.of(params);
     var actualQuery = buildMatrixQuery(mySqlConfig);
     var expectedQuery = "SELECT json_filed FROM db_name.matrix_table WHERE id = ?";
-    Assertions.assertEquals(expectedQuery, actualQuery);
+    assertThat(actualQuery).isEqualTo(expectedQuery);
   }
 
   @Test
@@ -51,7 +52,7 @@ class TestMySqlHelper {
     params.put("mysql.db.name", "db_name");
     params.put("mysql.matrix.primary.key.field.value", "1984");
     var mySqlConfig = MySqlConfig.of(params);
-    Assertions.assertThrows(SQLException.class, () -> getConnection(mySqlConfig));
+    assertThatThrownBy(() -> getConnection(mySqlConfig)).isInstanceOf(SQLException.class);
   }
 
   @Test
@@ -65,7 +66,7 @@ class TestMySqlHelper {
     var mySqlConfig = MySqlConfig.of(params);
     var actualQuery = buildRhsQuery(mySqlConfig);
     var expectedQuery = "SELECT json_filed FROM db_name.rhs_table WHERE id = ?";
-    Assertions.assertEquals(expectedQuery, actualQuery);
+    assertThat(actualQuery).isEqualTo(expectedQuery);
   }
 
   @Test
@@ -81,7 +82,7 @@ class TestMySqlHelper {
     params.put("mysql.rhs.primary.key.field.value", "1984");
     var mySqlConfig = MySqlConfig.of(params);
     var mySqlConn = getConnection(mySqlConfig);
-    Assertions.assertNotNull(mySqlConn);
+    assertThat(mySqlConn).isNotNull();
   }
 
   @Test
@@ -101,7 +102,7 @@ class TestMySqlHelper {
     var rawJson = requestMatrixData(mySqlConn, actualQuery, mySqlConfig);
     var actualMatrix = JsonHelper.fromJson(rawJson, double[][].class);
     var expectedMatrix = new double[][] {{3.4, 5.5, 2.2}, {1.2, 5.5, 8.1}, {3.4, 8.6, 9.4}};
-    Assertions.assertArrayEquals(expectedMatrix, actualMatrix);
+    assertThat(actualMatrix).isEqualTo(expectedMatrix);
   }
 
   @Test
@@ -118,8 +119,9 @@ class TestMySqlHelper {
     var mySqlConfig = MySqlConfig.of(params);
     var actualQuery = buildMatrixQuery(mySqlConfig);
     var mySqlConn = getConnection(mySqlConfig);
-    Assertions.assertThrows(
-        NoDataFoundException.class, () -> requestMatrixData(mySqlConn, actualQuery, mySqlConfig));
+    assertThatThrownBy(() -> requestMatrixData(mySqlConn, actualQuery, mySqlConfig))
+        .isInstanceOf(NoDataFoundException.class)
+        .hasMessageContaining("No matrix data found for");
   }
 
   @Test
@@ -136,7 +138,7 @@ class TestMySqlHelper {
     var mySqlConfig = MySqlConfig.of(params);
     var actualMatrix = extractMatrix(mySqlConfig);
     var expectedMatrix = new double[][] {{3.4, 5.5, 2.2}, {1.2, 5.5, 8.1}, {3.4, 8.6, 9.4}};
-    Assertions.assertArrayEquals(expectedMatrix, actualMatrix.get());
+    assertThat(actualMatrix.get()).isEqualTo(expectedMatrix);
   }
 
   @Test
@@ -153,7 +155,7 @@ class TestMySqlHelper {
     var mySqlConfig = MySqlConfig.of(params);
     var actualRhs = extractRhs(mySqlConfig);
     var expectedRhs = new double[] {4.7, 1.5, 5.3};
-    Assertions.assertArrayEquals(expectedRhs, actualRhs.get());
+    assertThat(actualRhs.get()).isEqualTo(expectedRhs);
   }
 
   @Test
@@ -169,8 +171,9 @@ class TestMySqlHelper {
     params.put("mysql.rhs.primary.key.field.value", "762");
     var mySqlConfig = MySqlConfig.of(params);
     var query = buildRhsQuery(mySqlConfig);
-    Assertions.assertThrows(
-        NoDataFoundException.class, () -> requestRhsData(connection, query, mySqlConfig));
+    assertThatThrownBy(() -> requestRhsData(connection, query, mySqlConfig))
+        .isInstanceOf(NoDataFoundException.class)
+        .hasMessageContaining("No right hand side vector data found for");
   }
 
   private static Connection getH2Connection() throws SQLException {

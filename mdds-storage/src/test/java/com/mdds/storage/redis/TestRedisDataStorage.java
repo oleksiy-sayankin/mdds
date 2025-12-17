@@ -5,7 +5,7 @@
 package com.mdds.storage.redis;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.*;
 
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskStatus;
@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import redis.embedded.RedisServer;
@@ -48,7 +47,7 @@ class TestRedisDataStorage {
     result.setSolution(new double[] {9.3, 6.278, 6.783, 3.874});
     result.setErrorMessage("");
     try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
-      Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, result));
+      assertThatCode(() -> dataStorage.put(taskId, result)).doesNotThrowAnyException();
     }
   }
 
@@ -64,20 +63,17 @@ class TestRedisDataStorage {
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
     expectedResult.setErrorMessage("");
     try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
-      Assertions.assertDoesNotThrow(() -> dataStorage.put(taskId, expectedResult));
+      assertThatCode(() -> dataStorage.put(taskId, expectedResult)).doesNotThrowAnyException();
       var actualResult = dataStorage.get(taskId, ResultDTO.class);
-      Assertions.assertEquals(
-          expectedResult, actualResult.isPresent() ? actualResult.get() : actualResult);
+      assertThat(actualResult.isPresent() ? actualResult.get() : actualResult)
+          .isEqualTo(expectedResult);
     }
   }
 
   @Test
   void testClose() {
     try (var ignore = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
-      Assertions.assertDoesNotThrow(
-          () -> {
-            // Do nothing
-          });
+      assertThatCode(() -> {}).doesNotThrowAnyException();
     }
   }
 
@@ -86,24 +82,26 @@ class TestRedisDataStorage {
     var randomHost = "random.host";
     var randomPort = 89798;
     var oneSecond = Duration.ofSeconds(1);
-    assertThrows(
-        RedisConnectionException.class,
-        () -> {
-          try (var ignore = new RedisDataStorage(randomHost, randomPort, oneSecond)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var ignore = new RedisDataStorage(randomHost, randomPort, oneSecond)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RedisConnectionException.class)
+        .hasMessageContaining("Failed to connect to redis://");
   }
 
   @Test
   void testWrongConfFile() {
     var oneSecond = Duration.ofSeconds(1);
-    assertThrows(
-        RedisConnectionException.class,
-        () -> {
-          try (var ignore = new RedisDataStorage("wrong.host", 3234, oneSecond)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var ignore = new RedisDataStorage("wrong.host", 3234, oneSecond)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RedisConnectionException.class)
+        .hasMessageContaining("Failed to connect to redis://");
   }
 }

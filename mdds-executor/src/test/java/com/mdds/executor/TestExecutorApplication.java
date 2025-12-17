@@ -5,7 +5,8 @@
 package com.mdds.executor;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.offset;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
@@ -131,7 +132,7 @@ class TestExecutorApplication {
               .build();
       response = client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding());
     }
-    assertEquals(HttpURLConnection.HTTP_OK, response.statusCode());
+    assertThat(response.statusCode()).isEqualTo(HttpURLConnection.HTTP_OK);
   }
 
   @Test
@@ -253,11 +254,8 @@ class TestExecutorApplication {
         new ResultDTO(taskId, startTime, endTime, TaskStatus.ERROR, 50, new double[] {}, "");
 
     assertSolution(expected, actual);
-    assertTrue(
-        actual
-            .getErrorMessage()
-            .contains(
-                "Unexpected <class 'ValueError'>: setting an array element with a sequence."));
+    assertThat(actual.getErrorMessage())
+        .contains("Unexpected <class 'ValueError'>: setting an array element with a sequence.");
   }
 
   private ResultDTO waitForResult(String taskId, Queue resultQueue) {
@@ -285,10 +283,9 @@ class TestExecutorApplication {
   }
 
   private static void assertSolution(ResultDTO expected, ResultDTO actual) {
-    var delta = 1e-6;
-    assertEquals(expected.getTaskId(), actual.getTaskId());
-    assertEquals(expected.getDateTimeTaskCreated(), actual.getDateTimeTaskCreated());
-    assertEquals(expected.getTaskStatus(), actual.getTaskStatus());
-    assertArrayEquals(expected.getSolution(), actual.getSolution(), delta);
+    assertThat(actual.getTaskId()).isEqualTo(expected.getTaskId());
+    assertThat(actual.getDateTimeTaskCreated()).isEqualTo(expected.getDateTimeTaskCreated());
+    assertThat(actual.getTaskStatus()).isEqualTo(expected.getTaskStatus());
+    assertThat(actual.getSolution()).containsExactly(expected.getSolution(), offset(1e-6));
   }
 }

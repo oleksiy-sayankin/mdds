@@ -6,18 +6,20 @@ package com.mdds.queue.rabbitmq;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
 import static com.mdds.queue.rabbitmq.RabbitMqQueue.convertFrom;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rabbitmq.client.AMQP;
 import java.util.HashMap;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 class TestRabbitMqHelper {
 
   @Test
   void testNoConfFileExists() {
-    assertThrows(RabbitMqConnectionException.class, () -> readFromResources("wrong.file.name"));
+    assertThatThrownBy(() -> readFromResources("wrong.file.name"))
+        .isInstanceOf(RabbitMqConnectionException.class)
+        .hasMessageContaining("File not found in resources:");
   }
 
   @Test
@@ -28,7 +30,6 @@ class TestRabbitMqHelper {
     headers.put(key, value);
     var expectedBasicProperties = new AMQP.BasicProperties.Builder().headers(headers).build();
     var actualBasicProperties = convertFrom(headers);
-    Assertions.assertEquals(
-        expectedBasicProperties.getHeaders(), actualBasicProperties.getHeaders());
+    assertThat(actualBasicProperties.getHeaders()).isEqualTo(expectedBasicProperties.getHeaders());
   }
 }

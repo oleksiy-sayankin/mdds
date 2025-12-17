@@ -5,8 +5,7 @@
 package com.mdds.result;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
@@ -98,7 +97,7 @@ class TestResultConsumerApplication {
               .build();
       response = client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding());
     }
-    assertEquals(HttpURLConnection.HTTP_OK, response.statusCode());
+    assertThat(response.statusCode()).isEqualTo(HttpURLConnection.HTTP_OK);
   }
 
   @Test
@@ -129,8 +128,8 @@ class TestResultConsumerApplication {
             () -> {
               try (var storage = new RedisDataStorage("localhost", REDIS_PORT)) {
                 var actualResult = storage.get(taskId, ResultDTO.class);
-                assertTrue(actualResult.isPresent());
-                actualResult.ifPresent(ar -> assertEquals(expected, ar));
+                assertThat(actualResult).isPresent();
+                actualResult.ifPresent(ar -> assertThat(ar).isEqualTo(expected));
               }
             });
   }
@@ -192,16 +191,16 @@ class TestResultConsumerApplication {
             () -> {
               try (var storage = new RedisDataStorage("localhost", REDIS_PORT)) {
                 var actualResult1 = storage.get(taskId1, ResultDTO.class);
-                assertTrue(actualResult1.isPresent());
-                actualResult1.ifPresent(ar -> assertEquals(expectedResult1, ar));
+                assertThat(actualResult1).isPresent();
+                actualResult1.ifPresent(ar -> assertThat(ar).isEqualTo(expectedResult1));
 
                 var actualResult2 = storage.get(taskId2, ResultDTO.class);
-                assertTrue(actualResult2.isPresent());
-                actualResult2.ifPresent(ar -> assertEquals(expectedResult2, ar));
+                assertThat(actualResult2).isPresent();
+                actualResult2.ifPresent(ar -> assertThat(ar).isEqualTo(expectedResult2));
 
                 var actualResult3 = storage.get(taskId3, ResultDTO.class);
-                assertTrue(actualResult3.isPresent());
-                actualResult3.ifPresent(ar -> assertEquals(expectedResult3, ar));
+                assertThat(actualResult3).isPresent();
+                actualResult3.ifPresent(ar -> assertThat(ar).isEqualTo(expectedResult3));
               }
             });
   }

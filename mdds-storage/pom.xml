@@ -53,5 +53,10 @@
       <groupId>com.github.codemonstur</groupId>
       <artifactId>embedded-redis</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

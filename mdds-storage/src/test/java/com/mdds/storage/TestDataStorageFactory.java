@@ -13,7 +13,6 @@ import com.mdds.dto.TaskStatus;
 import java.io.IOException;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,8 +78,8 @@ class TestDataStorageFactory {
     expectedResult.setErrorMessage("");
     assertThatCode(() -> dataStorage.put(taskId, expectedResult)).doesNotThrowAnyException();
     var actualResult = dataStorage.get(taskId, ResultDTO.class);
-    Assertions.assertEquals(
-        expectedResult, actualResult.isPresent() ? actualResult.get() : actualResult);
+    assertThat(actualResult.isPresent() ? actualResult.get() : actualResult)
+        .isEqualTo(expectedResult);
   }
 
   @Test

@@ -4,7 +4,9 @@
  */
 package com.mdds.dto;
 
-import org.junit.jupiter.api.Assertions;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import org.junit.jupiter.api.Test;
 
 class TestResultDTO {
@@ -12,10 +14,14 @@ class TestResultDTO {
   @Test
   void testSetPercentDone() {
     var result = new ResultDTO();
-    Assertions.assertDoesNotThrow(() -> result.setProgress(10));
-    Assertions.assertDoesNotThrow(() -> result.setProgress(0));
-    Assertions.assertDoesNotThrow(() -> result.setProgress(100));
-    Assertions.assertThrows(IllegalPercentValue.class, () -> result.setProgress(-1));
-    Assertions.assertThrows(IllegalPercentValue.class, () -> result.setProgress(101));
+    assertThatCode(() -> result.setProgress(10)).doesNotThrowAnyException();
+    assertThatCode(() -> result.setProgress(0)).doesNotThrowAnyException();
+    assertThatCode(() -> result.setProgress(100)).doesNotThrowAnyException();
+    assertThatThrownBy(() -> result.setProgress(-1))
+        .isInstanceOf(IllegalPercentValue.class)
+        .hasMessageContaining("Progress must be between 0 and 100, but was");
+    assertThatThrownBy(() -> result.setProgress(101))
+        .isInstanceOf(IllegalPercentValue.class)
+        .hasMessageContaining("Progress must be between 0 and 100, but was");
   }
 }

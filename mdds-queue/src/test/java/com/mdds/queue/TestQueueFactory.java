@@ -6,8 +6,8 @@ package com.mdds.queue;
 
 import static com.mdds.dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
+import static org.assertj.core.api.Assertions.*;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.mdds.dto.TaskDTO;
 import com.mdds.queue.rabbitmq.RabbitMqConnectionException;
@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.RabbitMQContainer;
@@ -56,27 +55,29 @@ class TestQueueFactory {
     var randomUser = "random";
     var randomPassword = "random";
     var timeOut = Duration.ofSeconds(1);
-    assertThrows(
-        RabbitMqConnectionException.class,
-        () -> {
-          try (var queue =
-              new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var queue =
+                  new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RabbitMqConnectionException.class)
+        .hasMessageContaining("Failed to connect to rabbitmq://random.host:89798");
   }
 
   @Test
   void testNoConnectionToRabbitMq() {
     var properties = readFromResources("no.connection.rabbitmq.properties");
     var timeOut = Duration.ofSeconds(1);
-    assertThrows(
-        RabbitMqConnectionException.class,
-        () -> {
-          try (var queue = new RabbitMqQueue(properties, timeOut)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var queue = new RabbitMqQueue(properties, timeOut)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RabbitMqConnectionException.class)
+        .hasMessageContaining("Failed to connect to rabbitmq://wrong.host:7974");
   }
 
   @Test
@@ -93,7 +94,7 @@ class TestQueueFactory {
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
+      assertThatCode(() -> queue.publish(TASK_QUEUE_NAME, message)).doesNotThrowAnyException();
     }
   }
 
@@ -111,7 +112,7 @@ class TestQueueFactory {
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
+      assertThatCode(() -> queue.deleteQueue(TASK_QUEUE_NAME)).doesNotThrowAnyException();
     }
   }
 
@@ -140,7 +141,7 @@ class TestQueueFactory {
       try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
+            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
     }
   }
@@ -171,7 +172,7 @@ class TestQueueFactory {
       try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
+            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
     }
   }
@@ -201,7 +202,7 @@ class TestQueueFactory {
       try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
+            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
     }
   }

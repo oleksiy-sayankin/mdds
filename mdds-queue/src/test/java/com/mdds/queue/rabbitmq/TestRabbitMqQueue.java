@@ -6,8 +6,8 @@ package com.mdds.queue.rabbitmq;
 
 import static com.mdds.dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
+import static org.assertj.core.api.Assertions.*;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.mdds.dto.TaskDTO;
 import com.mdds.queue.Message;
@@ -17,7 +17,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.RabbitMQContainer;
@@ -55,14 +54,15 @@ class TestRabbitMqQueue {
     var randomUser = "random";
     var randomPassword = "random";
     var timeOut = Duration.ofSeconds(1);
-    assertThrows(
-        RabbitMqConnectionException.class,
-        () -> {
-          try (var queue =
-              new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var queue =
+                  new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RabbitMqConnectionException.class)
+        .hasMessageContaining("Failed to connect to rabbitmq://random.host:89798");
   }
 
   @Test
@@ -79,33 +79,36 @@ class TestRabbitMqQueue {
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      Assertions.assertDoesNotThrow(() -> queue.publish(TASK_QUEUE_NAME, message));
+      assertThatCode(() -> queue.publish(TASK_QUEUE_NAME, message)).doesNotThrowAnyException();
     }
   }
 
   @Test
   void testWrongUserAndPassword() {
     var timeOut = Duration.ofSeconds(1);
-    assertThrows(
-        RabbitMqConnectionException.class,
-        () -> {
-          try (var queue = new RabbitMqQueue(host, port, "wrong user", "wrong password", timeOut)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var queue =
+                  new RabbitMqQueue(host, port, "wrong user", "wrong password", timeOut)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RabbitMqConnectionException.class)
+        .hasMessageContaining("Failed to connect to rabbitmq:");
   }
 
   @Test
   void testNoConnectionToRabbitMq() {
     var timeOut = Duration.ofSeconds(1);
     var properties = readFromResources("no.connection.rabbitmq.properties");
-    assertThrows(
-        RabbitMqConnectionException.class,
-        () -> {
-          try (var queue = new RabbitMqQueue(properties, timeOut)) {
-            // Do nothing.
-          }
-        });
+    assertThatThrownBy(
+            () -> {
+              try (var queue = new RabbitMqQueue(properties, timeOut)) {
+                // Do nothing.
+              }
+            })
+        .isInstanceOf(RabbitMqConnectionException.class)
+        .hasMessageContaining("Failed to connect to rabbitmq://wrong.host:7974");
   }
 
   @Test
@@ -122,7 +125,7 @@ class TestRabbitMqQueue {
     var message = new Message<>(expectedTask, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
       queue.publish(TASK_QUEUE_NAME, message);
-      Assertions.assertDoesNotThrow(() -> queue.deleteQueue(TASK_QUEUE_NAME));
+      assertThatCode(() -> queue.deleteQueue(TASK_QUEUE_NAME)).doesNotThrowAnyException();
     }
   }
 
@@ -151,7 +154,7 @@ class TestRabbitMqQueue {
       try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
+            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
     }
   }
@@ -182,7 +185,7 @@ class TestRabbitMqQueue {
       try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
+            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
     }
   }
@@ -212,7 +215,7 @@ class TestRabbitMqQueue {
       try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> Assertions.assertEquals(expectedTask, actualTask.get()));
+            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
     }
   }

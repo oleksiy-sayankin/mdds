@@ -7,7 +7,6 @@ package com.mdds.server;
 import static com.mdds.common.util.CommonHelper.findFreePort;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES;
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -158,9 +156,9 @@ class TestServerApplication {
     // Request result using endpoint
     var http = new HttpTestClient(HOST, PORT);
     var response = http.get("/result/" + taskId);
-    assertEquals(404, response.statusCode());
+    assertThat(response.statusCode()).isEqualTo(404);
     var body = JsonHelper.fromJson(response.body(), ErrorResponseDTO.class);
-    assertEquals("No result found for " + taskId, body.message());
+    assertThat(body.message()).isEqualTo("No result found for " + taskId);
   }
 
   @Test
@@ -180,14 +178,14 @@ class TestServerApplication {
       storage.put(taskId, expected);
       // Test that data is in data storage
       var actual = storage.get(taskId, ResultDTO.class);
-      Assertions.assertEquals(expected, actual.isPresent() ? actual.get() : actual);
+      assertThat(actual.isPresent() ? actual.get() : actual).isEqualTo(expected);
     }
 
     // Request result using endpoint
     var http = new HttpTestClient(HOST, PORT);
     var response = http.get("/result/" + taskId);
     var actual = JsonHelper.fromJson(response.body(), ResultDTO.class);
-    assertEquals(expected, actual);
+    assertThat(actual).isEqualTo(expected);
   }
 
   @Test
@@ -199,9 +197,9 @@ class TestServerApplication {
         List.of(List.of(1.3, 2.4, 3.1), List.of(4.77, 5.2321, 6.32), List.of(7.23, 8.43, 9.4343)));
     params.put("rhs", List.of(1.3, 2.2, 3.7));
     var response = http.postSolve("http_request", "numpy_exact_solver", params);
-    assertEquals(200, response.statusCode());
+    assertThat(response.statusCode()).isEqualTo(200);
     var contentType = response.headers().firstValue("Content-Type").orElse("");
-    assertTrue(contentType.contains("application/json"));
+    assertThat(contentType).contains("application/json");
     var json = response.body();
     var id = JsonHelper.fromJson(json, Map.class).get("id");
     assertThat(id).isNotNull();
