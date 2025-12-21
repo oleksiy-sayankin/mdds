@@ -10,10 +10,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.mdds.dto.TaskDTO;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
+import com.rabbitmq.client.CancelCallback;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.DeliverCallback;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -68,6 +80,44 @@ class TestRabbitMqQueue {
   }
 
   @Test
+  void testCreateChannelException() throws IOException {
+    try (var connection = mock(Connection.class)) {
+      when(connection.createChannel()).thenThrow(new IOException());
+      assertThatThrownBy(
+              () -> {
+                try (var ignore = new RabbitMqQueue(connection)) {
+                  // Do nothing.
+                }
+              })
+          .isInstanceOf(RabbitMqConnectionException.class)
+          .hasMessageContaining("Failed to create RabbitMq connection");
+    }
+  }
+
+  @Test
+  void testPublishException() throws IOException {
+    var taskId = "test_id";
+    var timeCreated = Instant.now();
+    var expectedTask = new TaskDTO();
+    expectedTask.setRhs(new double[] {73.4, 764.6});
+    expectedTask.setMatrix(new double[][] {{783.7, 757.6}, {72.9, 4.75}});
+    expectedTask.setId(taskId);
+    expectedTask.setDateTime(timeCreated);
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    Map<String, Object> headers = new HashMap<>();
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    try (var connection = mock(Connection.class)) {
+      var channel = mock(Channel.class);
+      doThrow(new IOException()).when(channel).basicPublish(anyString(), anyString(), any(), any());
+      try (var queue = new RabbitMqQueue(channel, connection)) {
+        assertThatThrownBy(() -> queue.publish(TASK_QUEUE_NAME, message))
+            .isInstanceOf(RabbitMqConnectionException.class)
+            .hasMessageContaining("Failed to publish to queue");
+      }
+    }
+  }
+
+  @Test
   void testPublish() {
     var taskId = "test_id";
     var timeCreated = Instant.now();
@@ -90,7 +140,7 @@ class TestRabbitMqQueue {
     var timeOut = Duration.ofSeconds(1);
     assertThatThrownBy(
             () -> {
-              try (var queue =
+              try (var ignore =
                   new RabbitMqQueue(host, port, "wrong user", "wrong password", timeOut)) {
                 // Do nothing.
               }
@@ -105,7 +155,7 @@ class TestRabbitMqQueue {
     var properties = readFromResources("no.connection.rabbitmq.properties");
     assertThatThrownBy(
             () -> {
-              try (var queue = new RabbitMqQueue(properties, timeOut)) {
+              try (var ignore = new RabbitMqQueue(properties, timeOut)) {
                 // Do nothing.
               }
             })
@@ -132,6 +182,29 @@ class TestRabbitMqQueue {
   }
 
   @Test
+  void testFailedToDelete() throws IOException {
+    var taskId = "test_id";
+    var timeCreated = Instant.now();
+    var expectedTask = new TaskDTO();
+    expectedTask.setRhs(new double[] {3.4, 4.6});
+    expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
+    expectedTask.setId(taskId);
+    expectedTask.setDateTime(timeCreated);
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    Map<String, Object> headers = new HashMap<>();
+    var message = new Message<>(expectedTask, headers, Instant.now());
+    var channel = mock(Channel.class);
+    doThrow(new IOException()).when(channel).queueDelete(anyString());
+    var connection = mock(Connection.class);
+    try (var queue = new RabbitMqQueue(channel, connection)) {
+      queue.publish(TASK_QUEUE_NAME, message);
+      assertThatThrownBy(() -> queue.deleteQueue(TASK_QUEUE_NAME))
+          .isInstanceOf(RabbitMqConnectionException.class)
+          .hasMessageContaining("Failed to delete queue");
+    }
+  }
+
+  @Test
   void testRegisterConsumer() {
     var taskId = "test_id";
     var timeCreated = Instant.now();
@@ -153,11 +226,107 @@ class TestRabbitMqQueue {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var ignore = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
       }
+    }
+  }
+
+  @Test
+  void testSubscribeFailedToConsume() throws IOException {
+    var taskId = "test_id";
+    var timeCreated = Instant.now();
+    var expectedTask = new TaskDTO();
+    expectedTask.setRhs(new double[] {1.1, 2.2});
+    expectedTask.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
+    expectedTask.setId(taskId);
+    expectedTask.setDateTime(timeCreated);
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    Map<String, Object> headers = new HashMap<>();
+    var message = new Message<>(expectedTask, headers, Instant.now());
+
+    var connection = mock(Connection.class);
+    var channel = mock(Channel.class);
+    doThrow(new IOException())
+        .when(channel)
+        .basicConsume(
+            anyString(), anyBoolean(), any(DeliverCallback.class), any(CancelCallback.class));
+
+    try (var queue = new RabbitMqQueue(channel, connection)) {
+      queue.publish(TASK_QUEUE_NAME, message);
+
+      MessageHandler<TaskDTO> messageHandler =
+          (receivedMessage, ack) -> {
+            ack.ack(); // Mark message as processed for the queue
+          };
+
+      assertThatThrownBy(() -> queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler))
+          .isInstanceOf(RabbitMqConnectionException.class)
+          .hasMessageContaining("Failed consume from queue");
+    }
+  }
+
+  @Test
+  void testSubscribeFailedToDeclare() throws IOException {
+    var taskId = "test_id";
+    var timeCreated = Instant.now();
+    var expectedTask = new TaskDTO();
+    expectedTask.setRhs(new double[] {1.1, 2.2});
+    expectedTask.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
+    expectedTask.setId(taskId);
+    expectedTask.setDateTime(timeCreated);
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+
+    var connection = mock(Connection.class);
+    var channel = mock(Channel.class);
+    doThrow(new IOException())
+        .when(channel)
+        .queueDeclare(
+            nullable(String.class), anyBoolean(), anyBoolean(), anyBoolean(), nullable(Map.class));
+
+    try (var queue = new RabbitMqQueue(channel, connection)) {
+      MessageHandler<TaskDTO> messageHandler =
+          (receivedMessage, ack) -> {
+            ack.ack(); // Mark message as processed for the queue
+          };
+
+      assertThatThrownBy(() -> queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler))
+          .isInstanceOf(RabbitMqConnectionException.class)
+          .hasMessageContaining("Failed to declare queue");
+    }
+  }
+
+  @Test
+  void testSubscribeFailedToCancel() throws IOException {
+    var taskId = "test_id";
+    var timeCreated = Instant.now();
+    var expectedTask = new TaskDTO();
+    expectedTask.setRhs(new double[] {1.1, 2.2});
+    expectedTask.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
+    expectedTask.setId(taskId);
+    expectedTask.setDateTime(timeCreated);
+    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    Map<String, Object> headers = new HashMap<>();
+    var message = new Message<>(expectedTask, headers, Instant.now());
+
+    var connection = mock(Connection.class);
+    var channel = mock(Channel.class);
+    doThrow(new IOException()).when(channel).basicCancel(nullable(String.class));
+
+    try (var queue = new RabbitMqQueue(channel, connection)) {
+      queue.publish(TASK_QUEUE_NAME, message);
+
+      MessageHandler<TaskDTO> messageHandler =
+          (receivedMessage, ack) -> {
+            ack.ack(); // Mark message as processed for the queue
+          };
+
+      var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler);
+      assertThatThrownBy(subscription::close)
+          .isInstanceOf(RabbitMqConnectionException.class)
+          .hasMessageContaining("Failed cancel subscription");
     }
   }
 
@@ -184,7 +353,7 @@ class TestRabbitMqQueue {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var ignore = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
@@ -214,7 +383,7 @@ class TestRabbitMqQueue {
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var ignore = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));

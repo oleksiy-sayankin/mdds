@@ -50,15 +50,26 @@ public class RabbitMqQueue implements Queue {
 
   public RabbitMqQueue(
       @Nonnull String host, int port, String user, String password, Duration timeOut) {
-    var factory = createConnectionFactory(host, port, user, password);
+    this(
+        createConnectionWithRetry(
+            createConnectionFactory(host, port, user, password), host, port, timeOut));
+  }
+
+  public RabbitMqQueue(@Nonnull Connection connection) {
     try {
-      connection = createConnectionWithRetry(factory, host, port, timeOut);
+      this.connection = connection;
       log.info("Connected to RabbitMq {}", connection);
       channel = connection.createChannel();
       log.info("Created RabbitMq channel {}", channel);
     } catch (IOException e) {
       throw new RabbitMqConnectionException("Failed to create RabbitMq connection", e);
     }
+  }
+
+  @VisibleForTesting
+  public RabbitMqQueue(@Nonnull Channel channel, @Nonnull Connection connection) {
+    this.channel = channel;
+    this.connection = connection;
   }
 
   /**
