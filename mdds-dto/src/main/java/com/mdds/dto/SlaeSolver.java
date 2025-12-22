@@ -45,7 +45,7 @@ public enum SlaeSolver {
     };
   }
 
-  private static class SolverParsingException extends RuntimeException {
+  static class SolverParsingException extends RuntimeException {
     private SolverParsingException(String message) {
       super(message);
     }
