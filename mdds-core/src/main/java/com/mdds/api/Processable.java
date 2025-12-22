@@ -23,6 +23,8 @@ public class Processable<T> {
   @Getter private final String errorMessage;
   @Getter private final Throwable cause;
 
+  private static final Processable<?> EMPTY = new Processable<>(null, "", null);
+
   private Processable(T value, String errorMessage, Throwable cause) {
     this.value = value;
     this.errorMessage = errorMessage;
@@ -65,6 +67,11 @@ public class Processable<T> {
 
   public void ifFailure(Consumer<? super Processable<T>> action) {
     if (isFailure()) action.accept(this);
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> Processable<T> ofNullable(T value) {
+    return value == null ? (Processable<T>) EMPTY : new Processable<>(value, "", null);
   }
 
   public <U> Processable<U> map(Function<? super T, ? extends U> mapper) {
