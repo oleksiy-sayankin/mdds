@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
@@ -29,9 +30,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -153,16 +159,44 @@ class TestExecutorApplicationService {
   void testExecutorMessageHandlerWithMock() {
     // given
     var mockedResultQueue = mock(Queue.class);
-    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
+    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceFutureStub.class);
     var mockedChanel = mock(ManagedChannel.class);
+    var response =
+        SolveResponse.newBuilder().addSolution(1.371).addSolution(3.283).addSolution(3.243).build();
 
     when(mockedSolverStub.solve(any()))
         .thenReturn(
-            SolveResponse.newBuilder()
-                .addSolution(1.371)
-                .addSolution(3.283)
-                .addSolution(3.243)
-                .build());
+            new ListenableFuture<SolveResponse>() {
+              @Override
+              public void addListener(@NonNull Runnable listener, @NonNull Executor executor) {
+                throw new UnsupportedOperationException();
+              }
+
+              @Override
+              public boolean cancel(boolean mayInterruptIfRunning) {
+                return false;
+              }
+
+              @Override
+              public boolean isCancelled() {
+                return false;
+              }
+
+              @Override
+              public boolean isDone() {
+                return true;
+              }
+
+              @Override
+              public SolveResponse get() {
+                return response;
+              }
+
+              @Override
+              public SolveResponse get(long timeout, @NonNull TimeUnit unit) {
+                return response;
+              }
+            });
 
     var handler =
         new ExecutorMessageHandler(
@@ -187,6 +221,77 @@ class TestExecutorApplicationService {
 
     // then
     verify(mockedResultQueue).publish(anyString(), any());
+    verify(ack).ack();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void testCancelTask() {
+    // given
+    var mockedResultQueue = mock(Queue.class);
+    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceFutureStub.class);
+    var mockedChanel = mock(ManagedChannel.class);
+
+    when(mockedSolverStub.solve(any()))
+        .thenReturn(
+            new ListenableFuture<SolveResponse>() {
+              @Override
+              public void addListener(@NonNull Runnable listener, @NonNull Executor executor) {
+                throw new UnsupportedOperationException();
+              }
+
+              @Override
+              public boolean cancel(boolean mayInterruptIfRunning) {
+                return true;
+              }
+
+              @Override
+              public boolean isCancelled() {
+                return true;
+              }
+
+              @Override
+              public boolean isDone() {
+                return true;
+              }
+
+              @Override
+              public SolveResponse get() {
+                throw new CancellationException();
+              }
+
+              @Override
+              public SolveResponse get(long timeout, @NonNull TimeUnit unit) {
+                throw new CancellationException();
+              }
+            });
+
+    var handler =
+        new ExecutorMessageHandler(
+            mockedResultQueue, mockedSolverStub, mockedChanel, grpcServerConfig, commonProperties);
+
+    // Prepare and put data to task queue
+    var taskId = UUID.randomUUID().toString();
+    var startTime = Instant.now();
+    var task =
+        new TaskDTO(
+            taskId,
+            startTime,
+            new double[][] {
+              {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
+            },
+            new double[] {4.3, 3.23, 5.324},
+            SlaeSolver.NUMPY_EXACT_SOLVER);
+    var ack = mock(Acknowledger.class);
+    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+    // when
+    handler.handle(taskMessage, ack);
+
+    // then
+    ArgumentCaptor<Message<ResultDTO>> messageCaptor = ArgumentCaptor.forClass(Message.class);
+    verify(mockedResultQueue).publish(anyString(), messageCaptor.capture());
+    var capturedMessage = messageCaptor.getValue();
+    assertThat(capturedMessage.payload().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED);
     verify(ack).ack();
   }
 }

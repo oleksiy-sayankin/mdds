@@ -5,12 +5,14 @@
 package com.mdds.executor;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskDTO;
 import com.mdds.dto.TaskStatus;
 import com.mdds.grpc.solver.Row;
 import com.mdds.grpc.solver.SolveRequest;
+import com.mdds.grpc.solver.SolveResponse;
 import com.mdds.grpc.solver.SolverServiceGrpc;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
@@ -23,6 +25,10 @@ import jakarta.annotation.Nonnull;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -35,12 +41,14 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoCloseable {
-  private final SolverServiceGrpc.SolverServiceBlockingStub solverStub;
+  private final SolverServiceGrpc.SolverServiceFutureStub solverStub;
   private final ManagedChannel channel;
   private final Queue resultQueue;
   private final ExecutorService threadExecutor = Executors.newFixedThreadPool(2);
   private final GrpcServerProperties grpcServerProperties;
   private final CommonProperties commonProperties;
+  private final ConcurrentMap<String, ListenableFuture<SolveResponse>> activeCalls =
+      new ConcurrentHashMap<>();
 
   @Autowired
   public ExecutorMessageHandler(
@@ -49,7 +57,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
       CommonProperties commonProperties) {
     this.grpcServerProperties = grpcServerProperties;
     channel = buildGrpcChannel();
-    this.solverStub = SolverServiceGrpc.newBlockingStub(channel);
+    this.solverStub = SolverServiceGrpc.newFutureStub(channel);
     this.resultQueue = resultQueue;
     this.commonProperties = commonProperties;
     log.info(
@@ -63,7 +71,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   @VisibleForTesting
   public ExecutorMessageHandler(
       Queue resultQueue,
-      SolverServiceGrpc.SolverServiceBlockingStub solverStub,
+      SolverServiceGrpc.SolverServiceFutureStub solverStub,
       ManagedChannel channel,
       GrpcServerProperties grpcServerProperties,
       CommonProperties commonProperties) {
@@ -116,9 +124,11 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   private Message<ResultDTO> processRequest(
       SolveRequest solveRequest, String taskId, Instant taskCreationDateTime) {
     log.info("Processing solve request for task {}", taskId);
+    var future = solverStub.solve(solveRequest);
+    activeCalls.put(taskId, future);
     try {
       // RPC call
-      var response = solverStub.solve(solveRequest);
+      var response = future.get();
       // extract solution from response
       var solution = response.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
       // create message with solution and publish to result queue
@@ -127,7 +137,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
               taskId, taskCreationDateTime, Instant.now(), TaskStatus.DONE, 100, solution, "");
       log.info("Solved system of linear algebraic equations task {}", taskId);
       return new Message<>(resultArray, new HashMap<>(), Instant.now());
-    } catch (StatusRuntimeException e) {
+    } catch (StatusRuntimeException | ExecutionException e) {
       // create error message
       var errorResult =
           new ResultDTO(
@@ -137,10 +147,43 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
               TaskStatus.ERROR,
               70,
               new double[] {},
-              e.getStatus().getDescription());
+              e.getMessage());
       log.error("gRPC call failed for task {}", taskId, e);
       return new Message<>(errorResult, new HashMap<>(), Instant.now());
+    } catch (CancellationException e) {
+      var cancelled =
+          new ResultDTO(
+              taskId,
+              taskCreationDateTime,
+              Instant.now(),
+              TaskStatus.CANCELLED,
+              70,
+              new double[] {},
+              "Cancelled");
+      log.warn("gRPC call cancelled for task {}", taskId, e);
+      return new Message<>(cancelled, new HashMap<>(), Instant.now());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      // create interrupted message
+      var errorResult =
+          new ResultDTO(
+              taskId,
+              taskCreationDateTime,
+              Instant.now(),
+              TaskStatus.CANCELLED,
+              70,
+              new double[] {},
+              e.getMessage());
+      log.error("gRPC call interrupted for task {}", taskId, e);
+      return new Message<>(errorResult, new HashMap<>(), Instant.now());
+    } finally {
+      activeCalls.remove(taskId, future);
     }
+  }
+
+  public boolean cancelTask(String taskId) {
+    var future = activeCalls.get(taskId);
+    return future != null && future.cancel(true);
   }
 
   @Override
