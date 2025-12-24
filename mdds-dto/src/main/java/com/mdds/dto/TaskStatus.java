@@ -9,5 +9,6 @@ package com.mdds.dto;
 public enum TaskStatus {
   IN_PROGRESS,
   DONE,
+  CANCELLED,
   ERROR
 }
