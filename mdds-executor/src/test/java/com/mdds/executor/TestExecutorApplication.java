@@ -25,9 +25,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
@@ -170,6 +169,7 @@ class TestExecutorApplication {
             startTime,
             endTime,
             TaskStatus.DONE,
+            "cancel.queue-executor-0001",
             100,
             new double[] {
               -2.8019496130141808, -1.9729062026984527, 13.471272875276737, -7.439241424582051
@@ -217,6 +217,7 @@ class TestExecutorApplication {
             startTime,
             endTime,
             TaskStatus.DONE,
+            "cancel.queue-executor-0001",
             100,
             new double[] {
               -2.8019496130141808, -1.9729062026984527, 13.471272875276737, -7.439241424582051
@@ -252,7 +253,15 @@ class TestExecutorApplication {
     var actual = waitForResult(taskId, resultQueue);
     var endTime = actual.getDateTimeTaskFinished();
     var expected =
-        new ResultDTO(taskId, startTime, endTime, TaskStatus.ERROR, 50, new double[] {}, "");
+        new ResultDTO(
+            taskId,
+            startTime,
+            endTime,
+            TaskStatus.ERROR,
+            "cancel.queue-executor-001",
+            50,
+            new double[] {},
+            "");
 
     assertSolution(expected, actual);
     assertThat(actual.getErrorMessage())
@@ -260,7 +269,7 @@ class TestExecutorApplication {
   }
 
   private ResultDTO waitForResult(String taskId, Queue resultQueue) {
-    var future = new CompletableFuture<ResultDTO>();
+    var results = new CopyOnWriteArrayList<ResultDTO>();
 
     try (var ignored =
         resultQueue.subscribe(
@@ -269,14 +278,13 @@ class TestExecutorApplication {
             (message, ack) -> {
               var payload = message.payload();
               if (taskId.equals(payload.getTaskId())) {
-                future.complete(payload);
+                results.add(payload);
               }
               ack.ack();
             })) {
 
-      return Awaitility.await()
-          .atMost(Duration.ofSeconds(2))
-          .until(() -> future.isDone() ? future.get() : null, Objects::nonNull);
+      Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> results.size() == 2);
+      return results.getLast();
 
     } catch (Exception e) {
       throw new AssertionError("Failed to receive result for taskId = " + taskId, e);

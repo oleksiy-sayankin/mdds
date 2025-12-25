@@ -9,11 +9,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.mdds.common.CommonProperties;
+import com.mdds.dto.CancelTaskDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskDTO;
@@ -61,11 +63,19 @@ class TestExecutorApplicationService {
   @Qualifier("resultQueue")
   private Queue resultQueue;
 
+  @Autowired
+  @Qualifier("cancelQueue")
+  private Queue cancelQueue;
+
   @Autowired private GrpcServerProperties grpcServerConfig;
 
   @Autowired private CommonProperties commonProperties;
 
+  @Autowired private ExecutorProperties executorProperties;
+
   @MockitoBean private ExecutorMessageHandler executorMessageHandler;
+
+  @MockitoBean private CancelMessageHandler cancelMessageHandler;
 
   @Container
   private static final RabbitMQContainer rabbitMq =
@@ -105,6 +115,7 @@ class TestExecutorApplicationService {
             startTime,
             endTime,
             TaskStatus.DONE,
+            executorProperties.getCancelQueueName(),
             100,
             new double[] {1.971, 3.213, 7.243},
             "");
@@ -123,10 +134,15 @@ class TestExecutorApplicationService {
         new ExecutorService(
             taskQueue,
             resultQueue,
+            cancelQueue,
             executorMessageHandler,
+            cancelMessageHandler,
             taskQueue.subscribe(
                 commonProperties.getTaskQueueName(), TaskDTO.class, executorMessageHandler),
-            commonProperties)) {
+            cancelQueue.subscribe(
+                executorProperties.getCancelQueueName(), CancelTaskDTO.class, cancelMessageHandler),
+            commonProperties,
+            executorProperties)) {
       var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
       taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
 
@@ -200,7 +216,12 @@ class TestExecutorApplicationService {
 
     var handler =
         new ExecutorMessageHandler(
-            mockedResultQueue, mockedSolverStub, mockedChanel, grpcServerConfig, commonProperties);
+            mockedResultQueue,
+            mockedSolverStub,
+            mockedChanel,
+            grpcServerConfig,
+            commonProperties,
+            executorProperties);
 
     // Prepare and put data to task queue
     var taskId = UUID.randomUUID().toString();
@@ -220,7 +241,7 @@ class TestExecutorApplicationService {
     handler.handle(taskMessage, ack);
 
     // then
-    verify(mockedResultQueue).publish(anyString(), any());
+    verify(mockedResultQueue, times(2)).publish(anyString(), any());
     verify(ack).ack();
   }
 
@@ -268,7 +289,12 @@ class TestExecutorApplicationService {
 
     var handler =
         new ExecutorMessageHandler(
-            mockedResultQueue, mockedSolverStub, mockedChanel, grpcServerConfig, commonProperties);
+            mockedResultQueue,
+            mockedSolverStub,
+            mockedChanel,
+            grpcServerConfig,
+            commonProperties,
+            executorProperties);
 
     // Prepare and put data to task queue
     var taskId = UUID.randomUUID().toString();
@@ -289,7 +315,7 @@ class TestExecutorApplicationService {
 
     // then
     ArgumentCaptor<Message<ResultDTO>> messageCaptor = ArgumentCaptor.forClass(Message.class);
-    verify(mockedResultQueue).publish(anyString(), messageCaptor.capture());
+    verify(mockedResultQueue, times(2)).publish(anyString(), messageCaptor.capture());
     var capturedMessage = messageCaptor.getValue();
     assertThat(capturedMessage.payload().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED);
     verify(ack).ack();

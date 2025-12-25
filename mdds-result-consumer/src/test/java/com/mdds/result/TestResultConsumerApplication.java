@@ -144,6 +144,7 @@ class TestResultConsumerApplication {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            "cancel.queue-executor-0001",
             100,
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
@@ -156,6 +157,7 @@ class TestResultConsumerApplication {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            "cancel.queue-executor-0001",
             100,
             new double[] {2.1, 3.2, 3.3, 4.4},
             "");
@@ -168,6 +170,7 @@ class TestResultConsumerApplication {
             Instant.now(),
             Instant.now(),
             TaskStatus.DONE,
+            "cancel.queue-executor-0001",
             100,
             new double[] {3.1, 4.2, 3.3, 4.4},
             "");

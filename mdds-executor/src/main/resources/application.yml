@@ -9,12 +9,11 @@ mdds:
   executor:
     host: localhost
     port: 35232
-    webapp.dir.location: web-app
+    id: executor-0001
+    cancel-queue-name: cancel.queue-${mdds.executor.id}
     grpc.server:
       host: localhost
       port: 50051
 server:
   address: ${mdds.executor.host}
   port: ${mdds.executor.port}
-  basedir: ${mdds.executor.webapp.dir.location}
-

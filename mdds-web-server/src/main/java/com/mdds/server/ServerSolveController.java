@@ -75,7 +75,7 @@ public class ServerSolveController {
     var taskId = UUID.randomUUID().toString();
     var now = Instant.now();
     // Put result to storage
-    storage.put(taskId, new ResultDTO(taskId, now, null, TaskStatus.IN_PROGRESS, 30, null, null));
+    storage.put(taskId, new ResultDTO(taskId, now, null, TaskStatus.NEW, null, 10, null, null));
 
     // create TaskDTO and publish to queue
     queue.publish(

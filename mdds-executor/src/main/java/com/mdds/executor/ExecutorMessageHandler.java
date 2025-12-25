@@ -47,6 +47,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   private final ExecutorService threadExecutor = Executors.newFixedThreadPool(2);
   private final GrpcServerProperties grpcServerProperties;
   private final CommonProperties commonProperties;
+  private final ExecutorProperties executorProperties;
   private final ConcurrentMap<String, ListenableFuture<SolveResponse>> activeCalls =
       new ConcurrentHashMap<>();
 
@@ -54,12 +55,14 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
   public ExecutorMessageHandler(
       @Qualifier("resultQueue") Queue resultQueue,
       GrpcServerProperties grpcServerProperties,
-      CommonProperties commonProperties) {
+      CommonProperties commonProperties,
+      ExecutorProperties executorProperties) {
     this.grpcServerProperties = grpcServerProperties;
     channel = buildGrpcChannel();
     this.solverStub = SolverServiceGrpc.newFutureStub(channel);
     this.resultQueue = resultQueue;
     this.commonProperties = commonProperties;
+    this.executorProperties = executorProperties;
     log.info(
         "Created Executor Message Handler '{}', {}, gRPC Server {}:{}",
         commonProperties.getResultQueueName(),
@@ -74,29 +77,52 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
       SolverServiceGrpc.SolverServiceFutureStub solverStub,
       ManagedChannel channel,
       GrpcServerProperties grpcServerProperties,
-      CommonProperties commonProperties) {
+      CommonProperties commonProperties,
+      ExecutorProperties executorProperties) {
     this.grpcServerProperties = grpcServerProperties;
     this.channel = channel;
     this.resultQueue = resultQueue;
     this.solverStub = solverStub;
     this.commonProperties = commonProperties;
+    this.executorProperties = executorProperties;
   }
 
   @Override
   public void handle(@Nonnull Message<TaskDTO> message, @Nonnull Acknowledger ack) {
     var payload = message.payload();
-    log.info("Start handling task {}", payload.getId());
-    var resultMessage =
-        processRequest(buildSolveRequest(payload), payload.getId(), payload.getDateTime());
-    resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
+    var taskId = payload.getId();
+    var taskCreationDateTime = payload.getDateTime();
+    log.info("Start handling task {}", taskId);
+    publish(inProgressMessage(taskId, taskCreationDateTime));
+    log.info("Start processing task {} with executor '{}'", taskId, executorProperties.getId());
+    publish(solvedMessage(buildSolveRequest(payload), taskId, taskCreationDateTime));
     // inform queue that message was processed
     ack.ack();
+  }
+
+  private void publish(Message<ResultDTO> resultMessage) {
+    resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
     log.info(
-        "Published task {} with status {} to queue '{}', {}",
+        "Published result for task with id {} and status {} to queue '{}', {}",
         resultMessage.payload().getTaskId(),
         resultMessage.payload().getTaskStatus(),
         commonProperties.getResultQueueName(),
         resultQueue);
+  }
+
+  private Message<ResultDTO> inProgressMessage(String taskId, Instant taskCreationDateTime) {
+    // create message with 'in progress' status
+    var resultArray =
+        new ResultDTO(
+            taskId,
+            taskCreationDateTime,
+            Instant.now(),
+            TaskStatus.IN_PROGRESS,
+            executorProperties.getCancelQueueName(),
+            30,
+            null,
+            "");
+    return new Message<>(resultArray, new HashMap<>(), Instant.now());
   }
 
   private static SolveRequest buildSolveRequest(TaskDTO payload) {
@@ -121,7 +147,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
     return requestBuilder.build();
   }
 
-  private Message<ResultDTO> processRequest(
+  private Message<ResultDTO> solvedMessage(
       SolveRequest solveRequest, String taskId, Instant taskCreationDateTime) {
     log.info("Processing solve request for task {}", taskId);
     var future = solverStub.solve(solveRequest);
@@ -134,7 +160,14 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
       // create message with solution and publish to result queue
       var resultArray =
           new ResultDTO(
-              taskId, taskCreationDateTime, Instant.now(), TaskStatus.DONE, 100, solution, "");
+              taskId,
+              taskCreationDateTime,
+              Instant.now(),
+              TaskStatus.DONE,
+              executorProperties.getCancelQueueName(),
+              100,
+              solution,
+              "");
       log.info("Solved system of linear algebraic equations task {}", taskId);
       return new Message<>(resultArray, new HashMap<>(), Instant.now());
     } catch (StatusRuntimeException | ExecutionException e) {
@@ -145,6 +178,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
               taskCreationDateTime,
               Instant.now(),
               TaskStatus.ERROR,
+              executorProperties.getCancelQueueName(),
               70,
               new double[] {},
               e.getMessage());
@@ -157,6 +191,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
               taskCreationDateTime,
               Instant.now(),
               TaskStatus.CANCELLED,
+              executorProperties.getCancelQueueName(),
               70,
               new double[] {},
               "Cancelled");
@@ -171,6 +206,7 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
               taskCreationDateTime,
               Instant.now(),
               TaskStatus.CANCELLED,
+              executorProperties.getCancelQueueName(),
               70,
               new double[] {},
               e.getMessage());

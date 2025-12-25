@@ -41,7 +41,14 @@ class TestJsonHelper {
     var instant = Instant.parse(isoFormattedString);
     var resultDTO =
         new ResultDTO(
-            taskId, instant, instant, TaskStatus.DONE, 100, new double[] {1.971, 3.213, 7.243}, "");
+            taskId,
+            instant,
+            instant,
+            TaskStatus.DONE,
+            "cancel.queue-executor-0001",
+            100,
+            new double[] {1.971, 3.213, 7.243},
+            "");
     var actualJson = JsonHelper.toJson(resultDTO);
     var expectedJson =
         "{"
@@ -49,6 +56,7 @@ class TestJsonHelper {
             + "\"dateTimeTaskCreated\":1725466860.000000000,"
             + "\"dateTimeTaskFinished\":1725466860.000000000,"
             + "\"taskStatus\":\"DONE\","
+            + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
             + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
@@ -64,6 +72,7 @@ class TestJsonHelper {
             + "\"dateTimeTaskCreated\":1725466860.000000000,"
             + "\"dateTimeTaskFinished\":1725466860.000000000,"
             + "\"taskStatus\":\"DONE\","
+            + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
             + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
@@ -74,7 +83,14 @@ class TestJsonHelper {
     var instant = Instant.parse(isoFormattedString);
     var expectedResult =
         new ResultDTO(
-            taskId, instant, instant, TaskStatus.DONE, 100, new double[] {1.971, 3.213, 7.243}, "");
+            taskId,
+            instant,
+            instant,
+            TaskStatus.DONE,
+            "cancel.queue-executor-0001",
+            100,
+            new double[] {1.971, 3.213, 7.243},
+            "");
     assertThat(actualResult).isEqualTo(expectedResult);
   }
 

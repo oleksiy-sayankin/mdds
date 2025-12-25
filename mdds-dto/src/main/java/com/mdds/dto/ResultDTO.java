@@ -19,6 +19,7 @@ public class ResultDTO {
   Instant dateTimeTaskCreated;
   Instant dateTimeTaskFinished;
   TaskStatus taskStatus;
+  String cancelQueueName;
   int progress;
   double[] solution;
   String errorMessage;

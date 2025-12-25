@@ -23,4 +23,10 @@ public class QueueConfig {
     return new RabbitMqQueue(
         properties.getHost(), properties.getPort(), properties.getUser(), properties.getPassword());
   }
+
+  @Bean(name = "cancelQueue")
+  public Queue cancelQueue(RabbitMqProperties properties) {
+    return new RabbitMqQueue(
+        properties.getHost(), properties.getPort(), properties.getUser(), properties.getPassword());
+  }
 }
