@@ -21,4 +21,9 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ErrorResponseDTO> handleNoResultFound(NoResultFoundException ex) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDTO(ex.getMessage()));
   }
+
+  @ExceptionHandler(CanNotCancelTaskException.class)
+  public ResponseEntity<ErrorResponseDTO> handleCanNotCancelTask(CanNotCancelTaskException ex) {
+    return ResponseEntity.status(ex.getHttpStatus()).body(new ErrorResponseDTO(ex.getMessage()));
+  }
 }
