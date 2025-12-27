@@ -19,6 +19,7 @@ message SolveRequest {
   string method = 1;            // method name (e.g: "numpy_exact_solver")
   repeated Row matrix = 2;      // matrix A
   repeated double rhs = 3;      // right hand side b
+  string taskId = 4;            // unique task id
 }
 
 // Matrix for SLAE as repeated row

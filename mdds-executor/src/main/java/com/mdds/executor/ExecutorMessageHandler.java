@@ -144,6 +144,9 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
     for (var value : payload.getRhs()) {
       requestBuilder.addRhs(value);
     }
+
+    // set task id
+    requestBuilder.setTaskId(payload.getId());
     return requestBuilder.build();
   }
 

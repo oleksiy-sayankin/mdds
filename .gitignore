@@ -9,6 +9,6 @@ mdds-tests/e2e/env.json
 mdds-tests/e2e/output/
 .sonar_token
 target/
-*generated*
+mdds_grpc_core/generated
 *.iml
 mdds-web-server/src/main/resources/static/
