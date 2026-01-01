@@ -13,7 +13,9 @@ min_solving_interval = 4
 max_matrix_size = 10000
 
 
-def find_matrix_size_and_solve_interval() -> tuple[int, float]:
+def find_matrix_rhs_and_solve_interval() -> (
+    tuple[list[list[float]], list[float], float]
+):
     print("[parent] looking for matrix size and solve interval")
     n = 10
     while True:
@@ -31,25 +33,49 @@ def find_matrix_size_and_solve_interval() -> tuple[int, float]:
             raise AssertionError(
                 f"Could not reach {min_solving_interval}s before MAX_N={max_matrix_size}"
             )
-    return n, interval
+    return matrix, rhs, interval
 
 
 def find_time_of_solving(matrix: list[list[float]], rhs: list[float]) -> int:
+    """
+    Here we find time of solving for SLAE in a separate thread, simulating production solving.
+
+    :param matrix: matrix of coefficients for SLAE
+    :param rhs: right hand side vector for SLAE
+    :return: duration of solving in nanoseconds
+    """
+    ctx = mp.get_context("spawn")
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
+    p = ctx.Process(
+        target=solve_with_numpy_exact_solver,
+        args=(matrix, rhs, child_conn),
+        daemon=True,
+    )
+    p.start()
+    child_conn.close()
+    while True:
+        if parent_conn.poll(0.1):
+            duration_ns = parent_conn.recv()
+            break
+        if not p.is_alive():
+            raise RuntimeError(f"Child exited, exitcode={p.exitcode}")
+
+    p.join()
+    return duration_ns
+
+
+def solve_with_numpy_exact_solver(matrix: list[list[float]], rhs: list[float], conn):
     start_time_ns = time.perf_counter_ns()
     solver = NumpyExactSolver()
     solver.solve(matrix, rhs)
     end_time_ns = time.perf_counter_ns()
     duration_ns = end_time_ns - start_time_ns
-    return duration_ns
+    conn.send(duration_ns)
+    conn.close()
 
 
-def solve_job(n: int):
-    print(f"[child] pid={os.getpid()} starting solve for n={n}", flush=True)
-
-    # Generate random data for SLAE
-    matrix = np.random.rand(n, n).astype(np.float64).tolist()
-    rhs = np.random.rand(n).astype(np.float64).tolist()
-
+def solve_job(matrix: list[list[float]], rhs: list[float]):
+    print(f"[child] pid={os.getpid()} starting solve for n={len(matrix)}", flush=True)
     # Long time call for solving
     solver = NumpyExactSolver()
     x = solver.solve(matrix, rhs)
@@ -57,11 +83,14 @@ def solve_job(n: int):
 
 
 def test_numpy_exact_solver():
+    matrix, rhs, interval = find_matrix_rhs_and_solve_interval()
+    print(
+        f"[parent] matrix size = {len(matrix)}, solve interval = {interval}s",
+        flush=True,
+    )
     # Create multithreading context
     ctx = mp.get_context("spawn")
-    n, interval = find_matrix_size_and_solve_interval()
-    print(f"[parent] matrix size = {n}, solve interval = {interval}s", flush=True)
-    p = ctx.Process(target=solve_job, args=(n,), daemon=True)
+    p = ctx.Process(target=solve_job, args=(matrix, rhs), daemon=True)
     print("[parent] starting solve job in a single thread")
     p.start()
     print(f"[parent] child pid={p.pid}", flush=True)
