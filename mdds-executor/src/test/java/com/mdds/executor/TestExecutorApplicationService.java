@@ -13,31 +13,28 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.CancelTaskDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskDTO;
 import com.mdds.dto.TaskStatus;
-import com.mdds.grpc.solver.SolveResponse;
+import com.mdds.grpc.solver.GetTaskStatusResponse;
+import com.mdds.grpc.solver.GrpcTaskStatus;
+import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.SolverServiceGrpc;
+import com.mdds.grpc.solver.SubmitTaskResponse;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.Queue;
-import io.grpc.ManagedChannel;
 import jakarta.annotation.Nonnull;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.UUID;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
-import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -175,51 +172,28 @@ class TestExecutorApplicationService {
   void testExecutorMessageHandlerWithMock() {
     // given
     var mockedResultQueue = mock(Queue.class);
-    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceFutureStub.class);
-    var mockedChanel = mock(ManagedChannel.class);
-    var response =
-        SolveResponse.newBuilder().addSolution(1.371).addSolution(3.283).addSolution(3.243).build();
+    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
+    var mockedChanel = mock(GrpcChannel.class);
 
-    when(mockedSolverStub.solve(any()))
+    when(mockedSolverStub.submitTask(any()))
         .thenReturn(
-            new ListenableFuture<SolveResponse>() {
-              @Override
-              public void addListener(@NonNull Runnable listener, @NonNull Executor executor) {
-                throw new UnsupportedOperationException();
-              }
+            SubmitTaskResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
 
-              @Override
-              public boolean cancel(boolean mayInterruptIfRunning) {
-                return false;
-              }
-
-              @Override
-              public boolean isCancelled() {
-                return false;
-              }
-
-              @Override
-              public boolean isDone() {
-                return true;
-              }
-
-              @Override
-              public SolveResponse get() {
-                return response;
-              }
-
-              @Override
-              public SolveResponse get(long timeout, @NonNull TimeUnit unit) {
-                return response;
-              }
-            });
+    when(mockedSolverStub.getTaskStatus(any()))
+        .thenReturn(
+            GetTaskStatusResponse.newBuilder()
+                .setGrpcTaskStatus(GrpcTaskStatus.DONE)
+                .addSolution(1.371)
+                .addSolution(3.283)
+                .addSolution(3.243)
+                .setRequestStatus(RequestStatus.COMPLETED)
+                .build());
 
     var handler =
         new ExecutorMessageHandler(
             mockedResultQueue,
             mockedSolverStub,
             mockedChanel,
-            grpcServerConfig,
             commonProperties,
             executorProperties);
 
@@ -250,49 +224,25 @@ class TestExecutorApplicationService {
   void testCancelTask() {
     // given
     var mockedResultQueue = mock(Queue.class);
-    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceFutureStub.class);
-    var mockedChanel = mock(ManagedChannel.class);
+    var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
+    var mockedChanel = mock(GrpcChannel.class);
 
-    when(mockedSolverStub.solve(any()))
+    when(mockedSolverStub.submitTask(any()))
         .thenReturn(
-            new ListenableFuture<SolveResponse>() {
-              @Override
-              public void addListener(@NonNull Runnable listener, @NonNull Executor executor) {
-                throw new UnsupportedOperationException();
-              }
+            SubmitTaskResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
 
-              @Override
-              public boolean cancel(boolean mayInterruptIfRunning) {
-                return true;
-              }
-
-              @Override
-              public boolean isCancelled() {
-                return true;
-              }
-
-              @Override
-              public boolean isDone() {
-                return true;
-              }
-
-              @Override
-              public SolveResponse get() {
-                throw new CancellationException();
-              }
-
-              @Override
-              public SolveResponse get(long timeout, @NonNull TimeUnit unit) {
-                throw new CancellationException();
-              }
-            });
+    when(mockedSolverStub.getTaskStatus(any()))
+        .thenReturn(
+            GetTaskStatusResponse.newBuilder()
+                .setGrpcTaskStatus(GrpcTaskStatus.CANCELLED)
+                .setRequestStatus(RequestStatus.COMPLETED)
+                .build());
 
     var handler =
         new ExecutorMessageHandler(
             mockedResultQueue,
             mockedSolverStub,
             mockedChanel,
-            grpcServerConfig,
             commonProperties,
             executorProperties);
 

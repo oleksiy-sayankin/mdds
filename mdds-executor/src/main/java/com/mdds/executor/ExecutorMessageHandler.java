@@ -5,34 +5,31 @@
 package com.mdds.executor;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskDTO;
 import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.GetTaskStatusRequest;
+import com.mdds.grpc.solver.GetTaskStatusResponse;
+import com.mdds.grpc.solver.GrpcTaskStatus;
+import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.Row;
-import com.mdds.grpc.solver.SolveRequest;
-import com.mdds.grpc.solver.SolveResponse;
 import com.mdds.grpc.solver.SolverServiceGrpc;
+import com.mdds.grpc.solver.SubmitTaskRequest;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.Queue;
-import io.grpc.ManagedChannel;
-import io.grpc.StatusRuntimeException;
-import io.grpc.netty.NettyChannelBuilder;
 import jakarta.annotation.Nonnull;
-import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
+import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -40,26 +37,21 @@ import org.springframework.stereotype.Component;
 /** Solves system of linear algebraic equations. */
 @Slf4j
 @Component
-public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoCloseable {
-  private final SolverServiceGrpc.SolverServiceFutureStub solverStub;
-  private final ManagedChannel channel;
+public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
+  private final SolverServiceGrpc.SolverServiceBlockingStub solverStub;
   private final Queue resultQueue;
-  private final ExecutorService threadExecutor = Executors.newFixedThreadPool(2);
-  private final GrpcServerProperties grpcServerProperties;
+  private final GrpcChannel grpcChannel;
   private final CommonProperties commonProperties;
   private final ExecutorProperties executorProperties;
-  private final ConcurrentMap<String, ListenableFuture<SolveResponse>> activeCalls =
-      new ConcurrentHashMap<>();
 
   @Autowired
   public ExecutorMessageHandler(
       @Qualifier("resultQueue") Queue resultQueue,
-      GrpcServerProperties grpcServerProperties,
+      GrpcChannel grpcChannel,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
-    this.grpcServerProperties = grpcServerProperties;
-    channel = buildGrpcChannel();
-    this.solverStub = SolverServiceGrpc.newFutureStub(channel);
+    this.grpcChannel = grpcChannel;
+    this.solverStub = SolverServiceGrpc.newBlockingStub(grpcChannel.getChannel());
     this.resultQueue = resultQueue;
     this.commonProperties = commonProperties;
     this.executorProperties = executorProperties;
@@ -67,20 +59,18 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
         "Created Executor Message Handler '{}', {}, gRPC Server {}:{}",
         commonProperties.getResultQueueName(),
         resultQueue,
-        grpcServerProperties.getHost(),
-        grpcServerProperties.getPort());
+        grpcChannel.getHost(),
+        grpcChannel.getPort());
   }
 
   @VisibleForTesting
   public ExecutorMessageHandler(
       Queue resultQueue,
-      SolverServiceGrpc.SolverServiceFutureStub solverStub,
-      ManagedChannel channel,
-      GrpcServerProperties grpcServerProperties,
+      SolverServiceGrpc.SolverServiceBlockingStub solverStub,
+      GrpcChannel channel,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
-    this.grpcServerProperties = grpcServerProperties;
-    this.channel = channel;
+    this.grpcChannel = channel;
     this.resultQueue = resultQueue;
     this.solverStub = solverStub;
     this.commonProperties = commonProperties;
@@ -93,9 +83,163 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
     var taskId = payload.getId();
     var taskCreationDateTime = payload.getDateTime();
     log.info("Start handling task {}", taskId);
-    publish(inProgressMessage(taskId, taskCreationDateTime));
-    log.info("Start processing task {} with executor '{}'", taskId, executorProperties.getId());
-    publish(solvedMessage(buildSolveRequest(payload), taskId, taskCreationDateTime));
+    var submitTaskRequest = buildSubmitTaskRequest(payload);
+    var submitTaskResponse = solverStub.submitTask(submitTaskRequest);
+    var submitTaskResponseStatus = submitTaskResponse.getRequestStatus();
+    log.info(
+        "Got response to submit solve task request. Task id = {}, request status = {}, details ="
+            + " {}",
+        taskId,
+        submitTaskResponseStatus,
+        submitTaskResponse.getRequestStatusDetails());
+
+    if (RequestStatus.COMPLETED.equals(submitTaskResponseStatus)) {
+      // create message with 'in progress' status
+      var inProgress =
+          new ResultDTO(
+              taskId,
+              taskCreationDateTime,
+              Instant.now(),
+              TaskStatus.IN_PROGRESS,
+              executorProperties.getCancelQueueName(),
+              30,
+              null,
+              "");
+      log.info("Publishing in-progress status for task {}", taskId);
+      publish(new Message<>(inProgress, new HashMap<>(), Instant.now()));
+      var getTaskStatusRequest = buildGetTaskStatusRequest(taskId);
+      var timeOut = Duration.ofSeconds(600);
+      AtomicInteger retryCount = new AtomicInteger(1);
+      var validStatuses =
+          Set.of(GrpcTaskStatus.DONE, GrpcTaskStatus.CANCELLED, GrpcTaskStatus.ERROR);
+      AtomicReference<GetTaskStatusResponse> getTaskStatusResponse = new AtomicReference<>();
+      try {
+        Awaitility.await()
+            .atMost(timeOut)
+            .pollInterval(Duration.ofSeconds(1))
+            .pollDelay(Duration.ZERO)
+            .logging((s -> log.info("Requesting for task status. Retry count {}", retryCount)))
+            .ignoreExceptions()
+            .until(
+                () -> {
+                  retryCount.incrementAndGet();
+                  getTaskStatusResponse.set(solverStub.getTaskStatus(getTaskStatusRequest));
+
+                  var getTaskStatusResponseStatus = getTaskStatusResponse.get().getRequestStatus();
+                  log.info(
+                      "Task status response: id {}, status {}, message '{}'",
+                      taskId,
+                      getTaskStatusResponse.get().getGrpcTaskStatus(),
+                      getTaskStatusResponse.get().getTaskMessage());
+                  if (RequestStatus.COMPLETED.equals(getTaskStatusResponseStatus)) {
+                    return validStatuses.contains(getTaskStatusResponse.get().getGrpcTaskStatus());
+                  }
+                  log.warn(
+                      "Task status request completed with status {} for task id {}",
+                      getTaskStatusResponseStatus,
+                      taskId);
+                  return false;
+                });
+
+        var taskResponse = getTaskStatusResponse.get();
+        var status = taskResponse.getGrpcTaskStatus();
+        var taskMessage = taskResponse.getTaskMessage();
+        switch (status) {
+          case DONE -> {
+            // create message with solution and publish to result queue
+            var solution =
+                taskResponse.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
+            var resultArray =
+                new ResultDTO(
+                    taskId,
+                    taskCreationDateTime,
+                    Instant.now(),
+                    TaskStatus.DONE,
+                    executorProperties.getCancelQueueName(),
+                    100,
+                    solution,
+                    taskMessage);
+            log.info("Solved system of linear algebraic equations task {}", taskId);
+            publish(new Message<>(resultArray, new HashMap<>(), Instant.now()));
+          }
+          case CANCELLED -> {
+            // create cancel message
+            var cancelled =
+                new ResultDTO(
+                    taskId,
+                    taskCreationDateTime,
+                    Instant.now(),
+                    TaskStatus.CANCELLED,
+                    executorProperties.getCancelQueueName(),
+                    70,
+                    new double[] {},
+                    taskMessage);
+            log.warn("Successfully cancelled task {}", taskId);
+            publish(new Message<>(cancelled, new HashMap<>(), Instant.now()));
+          }
+          case ERROR -> {
+            // create error message
+            var errorResult =
+                new ResultDTO(
+                    taskId,
+                    taskCreationDateTime,
+                    Instant.now(),
+                    TaskStatus.ERROR,
+                    executorProperties.getCancelQueueName(),
+                    70,
+                    new double[] {},
+                    taskMessage);
+            log.error("Internal error for task {}", taskId);
+            publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
+          }
+          default -> {
+            // create error message
+            var errorResult =
+                new ResultDTO(
+                    taskId,
+                    taskCreationDateTime,
+                    Instant.now(),
+                    TaskStatus.ERROR,
+                    executorProperties.getCancelQueueName(),
+                    70,
+                    new double[] {},
+                    taskMessage);
+            log.error("Unexpected status '{}' for task {}", status, taskId);
+            publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
+          }
+        }
+      } catch (ConditionTimeoutException e) {
+        // create error message
+        var errorResult =
+            new ResultDTO(
+                taskId,
+                taskCreationDateTime,
+                Instant.now(),
+                TaskStatus.ERROR,
+                executorProperties.getCancelQueueName(),
+                70,
+                new double[] {},
+                "Timeout exception");
+        log.error("Timeout exception for task {}", taskId);
+        publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
+      }
+    } else {
+      var errorResult =
+          new ResultDTO(
+              taskId,
+              taskCreationDateTime,
+              Instant.now(),
+              TaskStatus.ERROR,
+              executorProperties.getCancelQueueName(),
+              70,
+              new double[] {},
+              "Error submitting task");
+      log.error(
+          "Error submitting task {}, details = {}",
+          taskId,
+          submitTaskResponse.getRequestStatusDetails());
+      publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
+    }
     // inform queue that message was processed
     ack.ack();
   }
@@ -110,26 +254,17 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
         resultQueue);
   }
 
-  private Message<ResultDTO> inProgressMessage(String taskId, Instant taskCreationDateTime) {
-    // create message with 'in progress' status
-    var resultArray =
-        new ResultDTO(
-            taskId,
-            taskCreationDateTime,
-            Instant.now(),
-            TaskStatus.IN_PROGRESS,
-            executorProperties.getCancelQueueName(),
-            30,
-            null,
-            "");
-    return new Message<>(resultArray, new HashMap<>(), Instant.now());
+  private static GetTaskStatusRequest buildGetTaskStatusRequest(String taskId) {
+    log.info("Building get task status request for task {}", taskId);
+    var requestBuilder = GetTaskStatusRequest.newBuilder().setTaskId(taskId);
+    return requestBuilder.build();
   }
 
-  private static SolveRequest buildSolveRequest(TaskDTO payload) {
-    log.info("Building solve request for task {}", payload.getId());
+  private static SubmitTaskRequest buildSubmitTaskRequest(TaskDTO payload) {
+    log.info("Building submit solve task request for task {}", payload.getId());
     // set solving method for gRPC request
     var requestBuilder =
-        SolveRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());
+        SubmitTaskRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());
 
     // set matrix for gRPC request
     for (var row : payload.getMatrix()) {
@@ -150,123 +285,16 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO>, AutoClos
     return requestBuilder.build();
   }
 
-  private Message<ResultDTO> solvedMessage(
-      SolveRequest solveRequest, String taskId, Instant taskCreationDateTime) {
-    log.info("Processing solve request for task {}", taskId);
-    var future = solverStub.solve(solveRequest);
-    activeCalls.put(taskId, future);
-    try {
-      // RPC call
-      var response = future.get();
-      // extract solution from response
-      var solution = response.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
-      // create message with solution and publish to result queue
-      var resultArray =
-          new ResultDTO(
-              taskId,
-              taskCreationDateTime,
-              Instant.now(),
-              TaskStatus.DONE,
-              executorProperties.getCancelQueueName(),
-              100,
-              solution,
-              "");
-      log.info("Solved system of linear algebraic equations task {}", taskId);
-      return new Message<>(resultArray, new HashMap<>(), Instant.now());
-    } catch (StatusRuntimeException | ExecutionException e) {
-      // create error message
-      var errorResult =
-          new ResultDTO(
-              taskId,
-              taskCreationDateTime,
-              Instant.now(),
-              TaskStatus.ERROR,
-              executorProperties.getCancelQueueName(),
-              70,
-              new double[] {},
-              e.getMessage());
-      log.error("gRPC call failed for task {}", taskId, e);
-      return new Message<>(errorResult, new HashMap<>(), Instant.now());
-    } catch (CancellationException e) {
-      var cancelled =
-          new ResultDTO(
-              taskId,
-              taskCreationDateTime,
-              Instant.now(),
-              TaskStatus.CANCELLED,
-              executorProperties.getCancelQueueName(),
-              70,
-              new double[] {},
-              "Cancelled");
-      log.warn("gRPC call cancelled for task {}", taskId, e);
-      return new Message<>(cancelled, new HashMap<>(), Instant.now());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      // create interrupted message
-      var errorResult =
-          new ResultDTO(
-              taskId,
-              taskCreationDateTime,
-              Instant.now(),
-              TaskStatus.CANCELLED,
-              executorProperties.getCancelQueueName(),
-              70,
-              new double[] {},
-              e.getMessage());
-      log.error("gRPC call interrupted for task {}", taskId, e);
-      return new Message<>(errorResult, new HashMap<>(), Instant.now());
-    } finally {
-      activeCalls.remove(taskId, future);
-    }
-  }
-
-  public boolean cancelTask(String taskId) {
-    var future = activeCalls.get(taskId);
-    return future != null && future.cancel(true);
-  }
-
-  @Override
-  @PreDestroy
-  public void close() {
-    channel.shutdown();
-    threadExecutor.shutdown();
-    try {
-      if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
-        channel.shutdownNow();
-      }
-      if (!threadExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-        threadExecutor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      log.error("Error during shutdown", e);
-      Thread.currentThread().interrupt();
-    }
-    log.info("All gRPC resources stopped cleanly.");
-  }
-
   @Override
   public String toString() {
     return "ExecutorMessageHandler[gRPC="
-        + grpcServerProperties.getHost()
+        + grpcChannel.getHost()
         + ":"
-        + grpcServerProperties.getPort()
+        + grpcChannel.getPort()
         + ", '"
         + commonProperties.getResultQueueName()
         + "',"
         + resultQueue
         + "]";
-  }
-
-  private ManagedChannel buildGrpcChannel() {
-    var grpcServerHost = grpcServerProperties.getHost();
-    var grpcServerPort = grpcServerProperties.getPort();
-    var grpcChannel =
-        NettyChannelBuilder.forAddress(grpcServerHost, grpcServerPort)
-            .usePlaintext()
-            .executor(threadExecutor)
-            .offloadExecutor(threadExecutor)
-            .build();
-    log.info("Created gRPC channel for {}:{}", grpcServerHost, grpcServerPort);
-    return grpcChannel;
   }
 }

@@ -6,9 +6,11 @@ package com.mdds.executor;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.offset;
 
 import com.mdds.common.CommonProperties;
+import com.mdds.dto.CancelTaskDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskDTO;
@@ -27,6 +29,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
@@ -57,6 +60,10 @@ class TestExecutorApplication {
   @Autowired
   @Qualifier("resultQueue")
   private Queue resultQueue;
+
+  @Autowired
+  @Qualifier("cancelQueue")
+  private Queue cancelQueue;
 
   @Autowired private CommonProperties commonProperties;
 
@@ -106,6 +113,7 @@ class TestExecutorApplication {
     registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
     registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
     registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
+    registry.add("mdds.rabbitmq.max-inbound-message-body-size", () -> 1048576000);
     registry.add("mdds.executor.grpc.server.host", grpcServer::getHost);
     registry.add(
         "mdds.executor.grpc.server.port",
@@ -265,7 +273,73 @@ class TestExecutorApplication {
 
     assertSolution(expected, actual);
     assertThat(actual.getErrorMessage())
-        .contains("Unexpected <class 'ValueError'>: setting an array element with a sequence.");
+        .contains("ValueError: setting an array element with a sequence.");
+  }
+
+  @Test
+  void testCancelTask() throws InterruptedException {
+    String taskId;
+    var duration = Duration.ofMillis(4000);
+    Duration currentDuration;
+    var size = 500;
+    var maxSize = 2900;
+    double[][] matrix;
+    double[] rhs;
+    do {
+      size = Math.toIntExact(Math.round(size * 1.05));
+      if (size > maxSize) {
+        fail("Can not cancel task after maximum size is " + maxSize);
+      }
+      matrix = matrix(size);
+      rhs = rhs(size);
+      taskId = UUID.randomUUID().toString();
+      var startTime = Instant.now();
+      var task = new TaskDTO(taskId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
+      var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+      taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
+      log.info("Submitted task for SLAE size {} x {}. Waiting for solution...", size, size);
+      var actual = waitForResult(taskId, resultQueue);
+      var endTime = actual.getDateTimeTaskFinished();
+      currentDuration = Duration.between(startTime, endTime);
+      log.info("Solved SLAE with size {} x {} for {}", size, size, currentDuration);
+    } while (currentDuration.compareTo(duration) < 0);
+
+    matrix = matrix(size);
+    rhs = rhs(size);
+    taskId = UUID.randomUUID().toString();
+    var startTime = Instant.now();
+    var task = new TaskDTO(taskId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
+    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+    taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
+    log.info(
+        "Submitted task {} for SLAE size {} x {}. Waiting for cancellation...", taskId, size, size);
+    var result = waitForStatus(taskId, resultQueue, TaskStatus.IN_PROGRESS);
+    log.info("Started processing task {}", taskId);
+    var cancelQueueName = result.getCancelQueueName();
+    var cancelTask = new CancelTaskDTO(taskId);
+    var cancelMessage = new Message<>(cancelTask, new HashMap<>(), Instant.now());
+    cancelQueue.publish(cancelQueueName, cancelMessage);
+    log.info("Submitting cancel message for task {} to cancel queue {}", taskId, cancelQueueName);
+    result = waitForStatus(taskId, resultQueue, TaskStatus.CANCELLED);
+    assertThat(result.getTaskStatus()).isEqualTo(TaskStatus.CANCELLED);
+  }
+
+  private static double[][] matrix(int size) {
+    var matrix = new double[size][size];
+    for (int i = 0; i < size; i++) {
+      for (int j = 0; j < size; j++) {
+        matrix[i][j] = Math.random();
+      }
+    }
+    return matrix;
+  }
+
+  private static double[] rhs(int size) {
+    var rhs = new double[size];
+    for (int i = 0; i < size; i++) {
+      rhs[i] = Math.random();
+    }
+    return rhs;
   }
 
   private ResultDTO waitForResult(String taskId, Queue resultQueue) {
@@ -282,10 +356,28 @@ class TestExecutorApplication {
               }
               ack.ack();
             })) {
-
-      Awaitility.await().atMost(Duration.ofSeconds(5)).until(() -> results.size() == 2);
+      Awaitility.await().atMost(Duration.ofSeconds(60)).until(() -> results.size() == 2);
       return results.getLast();
+    } catch (Exception e) {
+      throw new AssertionError("Failed to receive result for taskId = " + taskId, e);
+    }
+  }
 
+  private ResultDTO waitForStatus(String taskId, Queue resultQueue, TaskStatus status) {
+    AtomicReference<ResultDTO> result = new AtomicReference<>();
+    try (var ignored =
+        resultQueue.subscribe(
+            commonProperties.getResultQueueName(),
+            ResultDTO.class,
+            (message, ack) -> {
+              var payload = message.payload();
+              if (taskId.equals(payload.getTaskId()) && status.equals(payload.getTaskStatus())) {
+                result.set(payload);
+              }
+              ack.ack();
+            })) {
+      Awaitility.await().atMost(Duration.ofSeconds(60)).until(() -> result.get() != null);
+      return result.get();
     } catch (Exception e) {
       throw new AssertionError("Failed to receive result for taskId = " + taskId, e);
     }
