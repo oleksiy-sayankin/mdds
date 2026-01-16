@@ -15,6 +15,8 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
+MAX_MESSAGE_LENGTH = 1000 * 1024 * 1024
+
 
 class GrpcServer:
     """
@@ -42,7 +44,13 @@ class GrpcServer:
             grpc_host = os.getenv("MDDS_EXECUTOR_GRPC_SERVER_HOST", "localhost")
             grpc_port = int(os.getenv("MDDS_EXECUTOR_GRPC_SERVER_PORT", 50051))
             self.SERVER_ADDRESS = f"{grpc_host}:{grpc_port}"
-            self.server = aio.server(futures.ThreadPoolExecutor(max_workers=10))
+            self.server = aio.server(
+                futures.ThreadPoolExecutor(max_workers=10),
+                options=[
+                    ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
+                    ("grpc.max_receive_message_length", MAX_MESSAGE_LENGTH),
+                ],
+            )
             self.server.add_insecure_port(self.SERVER_ADDRESS)
             self.health_servicer = health.HealthServicer()
             self.initialized = True

@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
-
+import time
 import unittest
 import grpc
 from unittest.mock import MagicMock
@@ -33,20 +33,46 @@ def test_all_solvers(solving_method):
     matrix = [solver_pb2.Row(values=[4.0, 1.0]), solver_pb2.Row(values=[1.0, 3.0])]
     rhs = [1.0, 2.0]
 
+    task_id = "66ded247-2ab5-45b4-9c8e-d5812ee283df"
+
     # Create gRPC request
-    request = solver_pb2.SolveRequest(method=solving_method, matrix=matrix, rhs=rhs)
+    request = solver_pb2.SubmitTaskRequest(
+        method=solving_method, matrix=matrix, rhs=rhs, taskId=task_id
+    )
 
     # Mock gRPC context
     mock_context = MagicMock(spec=grpc.ServicerContext)
 
     # Call Solve
-    response = service.Solve(request, mock_context)
+    response = service.SubmitTask(request, mock_context)
+    assert isinstance(response, solver_pb2.SubmitTaskResponse)
+    assert response.requestStatus == solver_pb2.RequestStatus.COMPLETED
+
+    request = solver_pb2.GetTaskStatusRequest(taskId=task_id)
+
+    valid_statuses = {
+        solver_pb2.GrpcTaskStatus.DONE,
+        solver_pb2.GrpcTaskStatus.ERROR,
+        solver_pb2.GrpcTaskStatus.CANCELLED,
+    }
+
+    response = service.GetTaskStatus(request, mock_context)
+    grpc_task_status = response.grpcTaskStatus
+    attempts = 1
+    max_attempts = 20
+    while grpc_task_status not in valid_statuses and attempts <= max_attempts:
+        response = service.GetTaskStatus(request, mock_context)
+        assert response.requestStatus == solver_pb2.RequestStatus.COMPLETED
+        grpc_task_status = response.grpcTaskStatus
+        time.sleep(1)
+        attempts += 1
+
+    assert grpc_task_status == solver_pb2.GrpcTaskStatus.DONE
 
     # Expected result from manual calculation
     expected_solution = [1 / 11, 7 / 11]
 
     # Validate response type and values
-    assert isinstance(response, solver_pb2.SolveResponse)
     assert abs(response.solution[0] - expected_solution[0]) < 1e-7
     assert abs(response.solution[1] - expected_solution[1]) < 1e-7
 
@@ -58,15 +84,16 @@ def test_all_solvers(solving_method):
 def test_solve_unknown_method():
     """Test SolverService.Solve when method name is invalid."""
     service = SolverService()
-    request = solver_pb2.SolveRequest(method="unknown_solver", matrix=[], rhs=[])
+    task_id = "76ded247-2ab5-45b4-9c8e-d5822ee283dg"
+    request = solver_pb2.SubmitTaskRequest(
+        method="unknown_solver", matrix=[], rhs=[], taskId=task_id
+    )
 
     mock_context = MagicMock(spec=grpc.ServicerContext)
-    response = service.Solve(request, mock_context)
-
-    # The response should be empty and context should be set to INVALID_ARGUMENT
-    mock_context.set_code.assert_called_once_with(grpc.StatusCode.INVALID_ARGUMENT)
-    mock_context.set_details.assert_called_once()
-    assert len(response.solution) == 0
+    response = service.SubmitTask(request, mock_context)
+    assert isinstance(response, solver_pb2.SubmitTaskResponse)
+    assert response.requestStatus == solver_pb2.RequestStatus.DECLINED
+    assert "Unknown method" in response.requestStatusDetails
 
 
 if __name__ == "__main__":

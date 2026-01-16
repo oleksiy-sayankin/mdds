@@ -11,15 +11,55 @@ option java_multiple_files = true;
 
 // gRPC service for solving system of linear equations.
 service SolverService {
-  rpc Solve(SolveRequest) returns (SolveResponse);
+  rpc SubmitTask(SubmitTaskRequest) returns (SubmitTaskResponse);
+  rpc GetTaskStatus(GetTaskStatusRequest) returns (GetTaskStatusResponse);
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
 }
 
 // Request for solving SLAE
-message SolveRequest {
-  string method = 1;            // method name (e.g: "numpy_exact_solver")
-  repeated Row matrix = 2;      // matrix A
-  repeated double rhs = 3;      // right hand side b
-  string taskId = 4;            // unique task id
+message SubmitTaskRequest {
+  string taskId = 1;            // unique task id
+  string method = 2;            // method name (e.g: "numpy_exact_solver")
+  repeated Row matrix = 3;      // matrix A
+  repeated double rhs = 4;      // right hand side b
+
+}
+
+// Request for getting task status
+message GetTaskStatusRequest {
+  string taskId = 1;
+}
+
+// Request for cancelling of running solving process for SLAE
+message CancelTaskRequest {
+  string taskId = 1;
+}
+
+enum GrpcTaskStatus {
+  UNKNOWN = 0;
+  DONE = 1;
+  ERROR = 2;
+  CANCELLED = 3;
+  IN_PROGRESS = 4;
+}
+
+enum RequestStatus {
+  UNSPECIFIED = 0;
+  COMPLETED = 1;
+  DECLINED = 2;
+}
+
+message CancelTaskResponse {
+  RequestStatus requestStatus = 1;
+  string requestStatusDetails = 2;
+}
+
+message GetTaskStatusResponse {
+  RequestStatus requestStatus = 1;
+  string requestStatusDetails = 2;
+  GrpcTaskStatus grpcTaskStatus = 3;
+  string taskMessage = 4;
+  repeated double solution = 5; // solution of SLAE
 }
 
 // Matrix for SLAE as repeated row
@@ -28,6 +68,7 @@ message Row {
 }
 
 // Solution
-message SolveResponse {
-  repeated double solution = 1; // solution of SLAE
+message SubmitTaskResponse {
+  RequestStatus requestStatus = 1;
+  string requestStatusDetails = 2;
 }
