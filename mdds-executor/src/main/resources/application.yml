@@ -14,6 +14,7 @@ mdds:
     grpc.server:
       host: localhost
       port: 50051
+      max-inbound-message-size: 1048576000
 server:
   address: ${mdds.executor.host}
   port: ${mdds.executor.port}

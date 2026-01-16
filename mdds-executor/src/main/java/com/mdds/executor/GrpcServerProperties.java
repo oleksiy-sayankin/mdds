@@ -18,4 +18,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class GrpcServerProperties {
   private String host;
   private int port;
+  private int maxInboundMessageSize;
 }
