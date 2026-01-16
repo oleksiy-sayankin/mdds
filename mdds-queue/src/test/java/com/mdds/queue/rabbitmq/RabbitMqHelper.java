@@ -11,10 +11,11 @@ import java.util.Properties;
 public final class RabbitMqHelper {
   private RabbitMqHelper() {}
 
-  private static final String DEFAULT_HOST = "localhost";
+  private static final String DEFAULT_HOST = "localhost444";
   private static final int DEFAULT_PORT = 5672;
-  private static final String DEFAULT_USER = "guest";
+  private static final String DEFAULT_USER = "guest444";
   private static final char[] DEFAULT_PASSWORD = {'g', 'u', 'e', 's', 't'};
+  private static final int DEFAULT_MAX_INBOUND_MESSAGE_BODY_SIZE = 67_108_864;
 
   /**
    * Reads RabbitMq connection parameters from properties file in classpath. File is searched inside
@@ -48,6 +49,13 @@ public final class RabbitMqHelper {
         System.getProperty(
             "rabbitmq.user.password",
             properties.getProperty("rabbitmq.user.password", new String(DEFAULT_PASSWORD)));
-    return new RabbitMqProperties(host, port, user, password);
+    var maxInboundMessageBodySize =
+        Integer.parseInt(
+            System.getProperty(
+                "rabbitmq.max.inbound.message.body.size",
+                properties.getProperty(
+                    "rabbitmq.max.inbound.message.body.size",
+                    String.valueOf(DEFAULT_MAX_INBOUND_MESSAGE_BODY_SIZE))));
+    return new RabbitMqProperties(host, port, user, password, maxInboundMessageBodySize);
   }
 }

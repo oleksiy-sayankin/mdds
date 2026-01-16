@@ -15,18 +15,30 @@ public class QueueConfig {
   @Bean(name = "taskQueue")
   public Queue taskQueue(RabbitMqProperties properties) {
     return new RabbitMqQueue(
-        properties.getHost(), properties.getPort(), properties.getUser(), properties.getPassword());
+        properties.getHost(),
+        properties.getPort(),
+        properties.getUser(),
+        properties.getPassword(),
+        properties.getMaxInboundMessageBodySize());
   }
 
   @Bean(name = "resultQueue")
   public Queue resultQueue(RabbitMqProperties properties) {
     return new RabbitMqQueue(
-        properties.getHost(), properties.getPort(), properties.getUser(), properties.getPassword());
+        properties.getHost(),
+        properties.getPort(),
+        properties.getUser(),
+        properties.getPassword(),
+        properties.getMaxInboundMessageBodySize());
   }
 
   @Bean(name = "cancelQueue")
   public Queue cancelQueue(RabbitMqProperties properties) {
     return new RabbitMqQueue(
-        properties.getHost(), properties.getPort(), properties.getUser(), properties.getPassword());
+        properties.getHost(),
+        properties.getPort(),
+        properties.getUser(),
+        properties.getPassword(),
+        properties.getMaxInboundMessageBodySize());
   }
 }

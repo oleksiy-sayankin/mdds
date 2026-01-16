@@ -4,23 +4,9 @@
  */
 package com.mdds.queue.rabbitmq;
 
-import org.springframework.amqp.rabbit.annotation.EnableRabbit;
-import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableRabbit
 @EnableConfigurationProperties(RabbitMqProperties.class)
-public class RabbitMqAutoConfiguration {
-
-  @Bean(destroyMethod = "destroy")
-  public CachingConnectionFactory rabbitConnectionFactory(RabbitMqProperties properties) {
-    var ccf = new CachingConnectionFactory(properties.getHost(), properties.getPort());
-    ccf.setUsername(properties.getUser());
-    ccf.setPassword(properties.getPassword());
-    ccf.setPublisherReturns(true);
-    return ccf;
-  }
-}
+public class RabbitMqAutoConfiguration {}

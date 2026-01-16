@@ -52,6 +52,7 @@ class TestRabbitMqQueue {
   private static int port;
   private static String user;
   private static String password;
+  private static int maxInboundMessageBodySize = 67_108_864;
 
   @BeforeAll
   static void init() {
@@ -342,7 +343,7 @@ class TestRabbitMqQueue {
     expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedTask, headers, Instant.now());
-    var properties = new RabbitMqProperties(host, port, user, password);
+    var properties = new RabbitMqProperties(host, port, user, password, maxInboundMessageBodySize);
     try (var queue = new RabbitMqQueue(properties)) {
       queue.publish(TASK_QUEUE_NAME, message);
       var actualTask = new AtomicReference<>();

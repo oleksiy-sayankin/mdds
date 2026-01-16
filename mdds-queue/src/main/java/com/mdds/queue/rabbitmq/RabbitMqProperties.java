@@ -21,4 +21,5 @@ public class RabbitMqProperties {
   private int port;
   private String user;
   private String password;
+  private int maxInboundMessageBodySize = 67_108_864;
 }

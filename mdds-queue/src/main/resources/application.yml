@@ -6,7 +6,8 @@ spring:
 
 mdds:
   rabbitmq:
-    host: localhost
+    host: localhost111
     port: 5672
-    user: guest
-    password: guest
+    user: guest111
+    password: guest111
+    max-inbound-message-body-size: 1048576000

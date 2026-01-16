@@ -37,22 +37,51 @@ public class RabbitMqQueue implements Queue {
   private final @Nonnull Connection connection;
 
   public RabbitMqQueue(@Nonnull RabbitMqProperties conf) {
-    this(conf.getHost(), conf.getPort(), conf.getUser(), conf.getPassword());
+    this(
+        conf.getHost(),
+        conf.getPort(),
+        conf.getUser(),
+        conf.getPassword(),
+        conf.getMaxInboundMessageBodySize());
   }
 
   public RabbitMqQueue(@Nonnull RabbitMqProperties conf, Duration timeOut) {
-    this(conf.getHost(), conf.getPort(), conf.getUser(), conf.getPassword(), timeOut);
+    this(
+        conf.getHost(),
+        conf.getPort(),
+        conf.getUser(),
+        conf.getPassword(),
+        conf.getMaxInboundMessageBodySize(),
+        timeOut);
+  }
+
+  public RabbitMqQueue(
+      @Nonnull String host, int port, String user, String password, int maxInboundMessageBodySize) {
+    this(host, port, user, password, maxInboundMessageBodySize, Duration.ofSeconds(60));
   }
 
   public RabbitMqQueue(@Nonnull String host, int port, String user, String password) {
-    this(host, port, user, password, Duration.ofSeconds(60));
+    this(host, port, user, password, 67_108_864, Duration.ofSeconds(60));
   }
 
   public RabbitMqQueue(
       @Nonnull String host, int port, String user, String password, Duration timeOut) {
+    this(host, port, user, password, 67_108_864, timeOut);
+  }
+
+  public RabbitMqQueue(
+      @Nonnull String host,
+      int port,
+      String user,
+      String password,
+      int maxInboundMessageBodySize,
+      Duration timeOut) {
     this(
         createConnectionWithRetry(
-            createConnectionFactory(host, port, user, password), host, port, timeOut));
+            createConnectionFactory(host, port, user, password, maxInboundMessageBodySize),
+            host,
+            port,
+            timeOut));
   }
 
   public RabbitMqQueue(@Nonnull Connection connection) {
@@ -235,12 +264,13 @@ public class RabbitMqQueue implements Queue {
   }
 
   private static @Nonnull ConnectionFactory createConnectionFactory(
-      @Nonnull String host, int port, String user, String password) {
+      @Nonnull String host, int port, String user, String password, int maxInboundMessageBodySize) {
     var factory = new ConnectionFactory();
     factory.setHost(host);
     factory.setPort(port);
     factory.setUsername(user);
     factory.setPassword(password);
+    factory.setMaxInboundMessageBodySize(maxInboundMessageBodySize);
     return factory;
   }
 }
