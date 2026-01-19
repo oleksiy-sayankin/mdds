@@ -19,6 +19,7 @@
     <module>mdds-dto</module>
     <module>mdds-data-sources</module>
     <module>mdds-tests</module>
+    <module>mdds-grpc-client</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

@@ -32,6 +32,11 @@
       <version>1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
+      <groupId>com.mdds</groupId>
+      <artifactId>mdds-grpc-client</artifactId>
+      <version>1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter</artifactId>
     </dependency>
@@ -109,75 +114,6 @@
             </goals>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>io.github.ascopes</groupId>
-        <artifactId>protobuf-maven-plugin</artifactId>
-        <version>3.9.1</version>
-        <configuration>
-          <sourceDirectories>${protobuf.sources.root.dir}</sourceDirectories>
-          <protocVersion>${protobuf-java.version}</protocVersion>
-          <outputDirectory>${protobuf.java.output.dir}</outputDirectory>
-          <binaryMavenPlugins>
-            <binaryMavenPlugin>
-              <groupId>io.grpc</groupId>
-              <artifactId>protoc-gen-grpc-java</artifactId>
-              <version>${grpc.version}</version>
-            </binaryMavenPlugin>
-          </binaryMavenPlugins>
-        </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>generate</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.5.1</version>
-        <executions>
-          <execution>
-            <id>generate-python-grpc</id>
-            <phase>generate-sources</phase>
-            <goals>
-              <goal>exec</goal>
-            </goals>
-            <configuration>
-              <executable>python</executable>
-              <arguments>
-                <argument>-m</argument>
-                <argument>grpc_tools.protoc</argument>
-                <argument>--proto_path=${protobuf.sources.root.dir}</argument>
-                <argument>--python_out=${protobuf.python.output.dir}</argument>
-                <argument>--pyi_out=${protobuf.python.output.dir}</argument>
-                <argument>--grpc_python_out=${protobuf.python.output.dir}</argument>
-                <argument>${protobuf.sources.root.dir}/generated/solver.proto</argument>
-              </arguments>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-clean-plugin</artifactId>
-        <version>3.5.0</version>
-        <configuration>
-          <excludeDefaultDirectories>true</excludeDefaultDirectories>
-          <filesets>
-            <fileset>
-              <directory>${protobuf.python.output.dir}/generated</directory>
-              <includes>
-                <include>**/*</include>
-              </includes>
-              <excludes>
-                <exclude>__init__.py</exclude>
-              </excludes>
-            </fileset>
-          </filesets>
-        </configuration>
       </plugin>
     </plugins>
   </build>
