@@ -18,12 +18,11 @@ import com.mdds.dto.CancelTaskDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskDTO;
-import com.mdds.dto.TaskStatus;
 import com.mdds.grpc.solver.GetTaskStatusResponse;
-import com.mdds.grpc.solver.GrpcTaskStatus;
 import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.SolverServiceGrpc;
 import com.mdds.grpc.solver.SubmitTaskResponse;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
@@ -179,10 +178,12 @@ class TestExecutorApplicationService {
         .thenReturn(
             SubmitTaskResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
 
+    when(mockedSolverStub.withDeadlineAfter(any())).thenReturn(mockedSolverStub);
+
     when(mockedSolverStub.getTaskStatus(any()))
         .thenReturn(
             GetTaskStatusResponse.newBuilder()
-                .setGrpcTaskStatus(GrpcTaskStatus.DONE)
+                .setTaskStatus(TaskStatus.DONE)
                 .addSolution(1.371)
                 .addSolution(3.283)
                 .addSolution(3.243)
@@ -231,10 +232,12 @@ class TestExecutorApplicationService {
         .thenReturn(
             SubmitTaskResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
 
+    when(mockedSolverStub.withDeadlineAfter(any())).thenReturn(mockedSolverStub);
+
     when(mockedSolverStub.getTaskStatus(any()))
         .thenReturn(
             GetTaskStatusResponse.newBuilder()
-                .setGrpcTaskStatus(GrpcTaskStatus.CANCELLED)
+                .setTaskStatus(TaskStatus.CANCELLED)
                 .setRequestStatus(RequestStatus.COMPLETED)
                 .build());
 

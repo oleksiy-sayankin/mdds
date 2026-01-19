@@ -8,25 +8,25 @@ import com.google.common.annotations.VisibleForTesting;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskDTO;
-import com.mdds.dto.TaskStatus;
 import com.mdds.grpc.solver.GetTaskStatusRequest;
 import com.mdds.grpc.solver.GetTaskStatusResponse;
-import com.mdds.grpc.solver.GrpcTaskStatus;
 import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.Row;
 import com.mdds.grpc.solver.SolverServiceGrpc;
 import com.mdds.grpc.solver.SubmitTaskRequest;
+import com.mdds.grpc.solver.SubmitTaskResponse;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.Queue;
+import io.grpc.StatusRuntimeException;
 import jakarta.annotation.Nonnull;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
@@ -43,6 +43,12 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
   private final GrpcChannel grpcChannel;
   private final CommonProperties commonProperties;
   private final ExecutorProperties executorProperties;
+  private static final Duration TASK_TIMEOUT = Duration.ofSeconds(600);
+  private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
+  private static final Duration POLL_DELAY = Duration.ZERO;
+  private static final Duration GRPC_REQUEST_TIMEOUT = Duration.ofSeconds(5);
+  private static final Set<TaskStatus> VALID_STATUSES =
+      Set.of(TaskStatus.DONE, TaskStatus.CANCELLED, TaskStatus.ERROR);
 
   @Autowired
   public ExecutorMessageHandler(
@@ -79,169 +85,134 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
 
   @Override
   public void handle(@Nonnull Message<TaskDTO> message, @Nonnull Acknowledger ack) {
-    var payload = message.payload();
+    var task = message.payload();
+    try {
+      log.info("Start handling task {}", task.getId());
+      var submitResponse = submit(task);
+      if (!completed(submitResponse)) {
+        publishErrorFor(task, "Error submitting task: " + submitResponse.getRequestStatusDetails());
+        return;
+      }
+      publishInProgressFor(task);
+      var result = awaitForResultFrom(task);
+      publishResponse(result);
+    } catch (ConditionTimeoutException e) {
+      publishErrorFor(task, "Timeout waiting for task status");
+    } catch (StatusRuntimeException e) {
+      publishErrorFor(task, "Internal gRPC error: " + e.getStatus());
+    } catch (Exception e) {
+      publishErrorFor(
+          task, "Unexpected error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+    } finally {
+      ack.ack();
+    }
+  }
+
+  private SubmitTaskResponse submit(TaskDTO payload) {
+    var submitTaskRequest = buildSubmitTaskRequest(payload);
+    return solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).submitTask(submitTaskRequest);
+  }
+
+  private void publishInProgressFor(TaskDTO payload) {
+    // create message with 'in progress' status
     var taskId = payload.getId();
     var taskCreationDateTime = payload.getDateTime();
-    log.info("Start handling task {}", taskId);
-    var submitTaskRequest = buildSubmitTaskRequest(payload);
-    var submitTaskResponse = solverStub.submitTask(submitTaskRequest);
-    var submitTaskResponseStatus = submitTaskResponse.getRequestStatus();
+    var inProgress =
+        new ResultDTO(
+            taskId,
+            taskCreationDateTime,
+            Instant.now(),
+            TaskStatus.IN_PROGRESS,
+            executorProperties.getCancelQueueName(),
+            30,
+            new double[] {},
+            "");
+    log.info("Publishing in-progress status for task {}", taskId);
+    publish(new Message<>(inProgress, Map.of(), Instant.now()));
+  }
+
+  private void publishErrorFor(TaskDTO payload, String message) {
+    // create error message
+    var errorResult =
+        new ResultDTO(
+            payload.getId(),
+            payload.getDateTime(),
+            Instant.now(),
+            TaskStatus.ERROR,
+            executorProperties.getCancelQueueName(),
+            70,
+            new double[] {},
+            message);
+    log.error("Error for task {} with message '{}'", payload.getId(), message);
+    publish(new Message<>(errorResult, Map.of(), Instant.now()));
+  }
+
+  private static Instant toInstant(com.google.protobuf.Timestamp timestamp) {
+    return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
+  }
+
+  private void publishResponse(GetTaskStatusResponse response) {
+    // create message with solution and publish to result queue
+    var solution = response.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
+    var resultArray =
+        new ResultDTO(
+            response.getTaskId(),
+            toInstant(response.getStartTime()),
+            toInstant(response.getEndTime()),
+            response.getTaskStatus(),
+            executorProperties.getCancelQueueName(),
+            response.getProgress(),
+            solution,
+            response.getTaskMessage());
     log.info(
-        "Got response to submit solve task request. Task id = {}, request status = {}, details ="
-            + " {}",
-        taskId,
-        submitTaskResponseStatus,
-        submitTaskResponse.getRequestStatusDetails());
+        "Published response for task {} with message '{}'",
+        response.getTaskId(),
+        response.getTaskMessage());
+    publish(new Message<>(resultArray, Map.of(), Instant.now()));
+  }
 
-    if (RequestStatus.COMPLETED.equals(submitTaskResponseStatus)) {
-      // create message with 'in progress' status
-      var inProgress =
-          new ResultDTO(
-              taskId,
-              taskCreationDateTime,
-              Instant.now(),
-              TaskStatus.IN_PROGRESS,
-              executorProperties.getCancelQueueName(),
-              30,
-              null,
-              "");
-      log.info("Publishing in-progress status for task {}", taskId);
-      publish(new Message<>(inProgress, new HashMap<>(), Instant.now()));
-      var getTaskStatusRequest = buildGetTaskStatusRequest(taskId);
-      var timeOut = Duration.ofSeconds(600);
-      AtomicInteger retryCount = new AtomicInteger(1);
-      var validStatuses =
-          Set.of(GrpcTaskStatus.DONE, GrpcTaskStatus.CANCELLED, GrpcTaskStatus.ERROR);
-      AtomicReference<GetTaskStatusResponse> getTaskStatusResponse = new AtomicReference<>();
-      try {
-        Awaitility.await()
-            .atMost(timeOut)
-            .pollInterval(Duration.ofSeconds(1))
-            .pollDelay(Duration.ZERO)
-            .logging((s -> log.info("Requesting for task status. Retry count {}", retryCount)))
-            .ignoreExceptions()
-            .until(
-                () -> {
-                  retryCount.incrementAndGet();
-                  getTaskStatusResponse.set(solverStub.getTaskStatus(getTaskStatusRequest));
+  private GetTaskStatusResponse awaitForResultFrom(TaskDTO task) {
+    var request = buildGetTaskStatusRequest(task.getId());
+    var attempts = new AtomicInteger(0);
+    return Awaitility.await()
+        .atMost(TASK_TIMEOUT)
+        .pollInterval(POLL_INTERVAL)
+        .pollDelay(POLL_DELAY)
+        .ignoreExceptionsMatching(
+            // Here we ignore "temporary" problems related to gRPC connection.
+            // We expect they can be fixed during next iteration of polling.
+            throwable ->
+                throwable instanceof StatusRuntimeException sre
+                    && switch (sre.getStatus().getCode()) {
+                      case UNAVAILABLE, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED -> true;
+                      default -> false;
+                    })
+        .until(
+            () -> {
+              var response =
+                  solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).getTaskStatus(request);
+              log.debug(
+                  "Task status attempt {}: id {}, requestStatus {}, taskStatus {}, msg '{}'",
+                  attempts.incrementAndGet(),
+                  task.getId(),
+                  response.getRequestStatus(),
+                  response.getTaskStatus(),
+                  response.getTaskMessage());
+              return response;
+            },
+            response -> completed(response) && taskIsInTerminalState(response));
+  }
 
-                  var getTaskStatusResponseStatus = getTaskStatusResponse.get().getRequestStatus();
-                  log.info(
-                      "Task status response: id {}, status {}, message '{}'",
-                      taskId,
-                      getTaskStatusResponse.get().getGrpcTaskStatus(),
-                      getTaskStatusResponse.get().getTaskMessage());
-                  if (RequestStatus.COMPLETED.equals(getTaskStatusResponseStatus)) {
-                    return validStatuses.contains(getTaskStatusResponse.get().getGrpcTaskStatus());
-                  }
-                  log.warn(
-                      "Task status request completed with status {} for task id {}",
-                      getTaskStatusResponseStatus,
-                      taskId);
-                  return false;
-                });
+  private static boolean taskIsInTerminalState(GetTaskStatusResponse response) {
+    return VALID_STATUSES.contains(response.getTaskStatus());
+  }
 
-        var taskResponse = getTaskStatusResponse.get();
-        var status = taskResponse.getGrpcTaskStatus();
-        var taskMessage = taskResponse.getTaskMessage();
-        switch (status) {
-          case DONE -> {
-            // create message with solution and publish to result queue
-            var solution =
-                taskResponse.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
-            var resultArray =
-                new ResultDTO(
-                    taskId,
-                    taskCreationDateTime,
-                    Instant.now(),
-                    TaskStatus.DONE,
-                    executorProperties.getCancelQueueName(),
-                    100,
-                    solution,
-                    taskMessage);
-            log.info("Solved system of linear algebraic equations task {}", taskId);
-            publish(new Message<>(resultArray, new HashMap<>(), Instant.now()));
-          }
-          case CANCELLED -> {
-            // create cancel message
-            var cancelled =
-                new ResultDTO(
-                    taskId,
-                    taskCreationDateTime,
-                    Instant.now(),
-                    TaskStatus.CANCELLED,
-                    executorProperties.getCancelQueueName(),
-                    70,
-                    new double[] {},
-                    taskMessage);
-            log.warn("Successfully cancelled task {}", taskId);
-            publish(new Message<>(cancelled, new HashMap<>(), Instant.now()));
-          }
-          case ERROR -> {
-            // create error message
-            var errorResult =
-                new ResultDTO(
-                    taskId,
-                    taskCreationDateTime,
-                    Instant.now(),
-                    TaskStatus.ERROR,
-                    executorProperties.getCancelQueueName(),
-                    70,
-                    new double[] {},
-                    taskMessage);
-            log.error("Internal error for task {}", taskId);
-            publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
-          }
-          default -> {
-            // create error message
-            var errorResult =
-                new ResultDTO(
-                    taskId,
-                    taskCreationDateTime,
-                    Instant.now(),
-                    TaskStatus.ERROR,
-                    executorProperties.getCancelQueueName(),
-                    70,
-                    new double[] {},
-                    taskMessage);
-            log.error("Unexpected status '{}' for task {}", status, taskId);
-            publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
-          }
-        }
-      } catch (ConditionTimeoutException e) {
-        // create error message
-        var errorResult =
-            new ResultDTO(
-                taskId,
-                taskCreationDateTime,
-                Instant.now(),
-                TaskStatus.ERROR,
-                executorProperties.getCancelQueueName(),
-                70,
-                new double[] {},
-                "Timeout exception");
-        log.error("Timeout exception for task {}", taskId);
-        publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
-      }
-    } else {
-      var errorResult =
-          new ResultDTO(
-              taskId,
-              taskCreationDateTime,
-              Instant.now(),
-              TaskStatus.ERROR,
-              executorProperties.getCancelQueueName(),
-              70,
-              new double[] {},
-              "Error submitting task");
-      log.error(
-          "Error submitting task {}, details = {}",
-          taskId,
-          submitTaskResponse.getRequestStatusDetails());
-      publish(new Message<>(errorResult, new HashMap<>(), Instant.now()));
-    }
-    // inform queue that message was processed
-    ack.ack();
+  private static boolean completed(SubmitTaskResponse response) {
+    return RequestStatus.COMPLETED.equals(response.getRequestStatus());
+  }
+
+  private static boolean completed(GetTaskStatusResponse response) {
+    return RequestStatus.COMPLETED.equals(response.getRequestStatus());
   }
 
   private void publish(Message<ResultDTO> resultMessage) {

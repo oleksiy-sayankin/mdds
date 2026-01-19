@@ -27,11 +27,14 @@ public class ServerResultController {
 
   @GetMapping("/{taskId}")
   public ResultDTO result(@PathVariable("taskId") String taskId) {
-    log.info("Processing request in result controller for {}...", taskId);
+    log.info("Processing request in result controller for task {}...", taskId);
     var result = storage.get(taskId, ResultDTO.class);
     result.ifPresentOrElse(
-        value -> log.info("Found result for task {} with status {}", taskId, value.getTaskStatus()),
-        () -> log.info("No result found for {}", taskId));
+        value ->
+            log.info(
+                "Found result for task {} with status {}, percent done {}%",
+                taskId, value.getTaskStatus(), value.getProgress()),
+        () -> log.info("No result found for task {}", taskId));
     if (result.isPresent()) {
       return result.get();
     } else {

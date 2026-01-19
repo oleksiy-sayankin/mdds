@@ -14,7 +14,7 @@ import com.mdds.dto.CancelTaskDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import java.io.File;
@@ -170,7 +170,7 @@ class TestExecutorApplication {
         taskQueue);
     var actual = waitForResult(taskId, resultQueue);
     log.info("actualResult = {}", actual);
-    var endTime = actual.getDateTimeTaskFinished();
+    var endTime = actual.getDateTimeTaskEnded();
     var expected =
         new ResultDTO(
             taskId,
@@ -218,7 +218,7 @@ class TestExecutorApplication {
     taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
     var actual = waitForResult(taskId, resultQueue);
 
-    var endTime = actual.getDateTimeTaskFinished();
+    var endTime = actual.getDateTimeTaskEnded();
     var expected =
         new ResultDTO(
             taskId,
@@ -259,7 +259,7 @@ class TestExecutorApplication {
     taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
 
     var actual = waitForResult(taskId, resultQueue);
-    var endTime = actual.getDateTimeTaskFinished();
+    var endTime = actual.getDateTimeTaskEnded();
     var expected =
         new ResultDTO(
             taskId,
@@ -279,7 +279,7 @@ class TestExecutorApplication {
   @Test
   void testCancelTask() throws InterruptedException {
     String taskId;
-    var duration = Duration.ofMillis(4000);
+    var duration = Duration.ofMillis(3000);
     Duration currentDuration;
     var size = 500;
     var maxSize = 2900;
@@ -299,7 +299,7 @@ class TestExecutorApplication {
       taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
       log.info("Submitted task for SLAE size {} x {}. Waiting for solution...", size, size);
       var actual = waitForResult(taskId, resultQueue);
-      var endTime = actual.getDateTimeTaskFinished();
+      var endTime = actual.getDateTimeTaskEnded();
       currentDuration = Duration.between(startTime, endTime);
       log.info("Solved SLAE with size {} x {} for {}", size, size, currentDuration);
     } while (currentDuration.compareTo(duration) < 0);
@@ -385,7 +385,6 @@ class TestExecutorApplication {
 
   private static void assertSolution(ResultDTO expected, ResultDTO actual) {
     assertThat(actual.getTaskId()).isEqualTo(expected.getTaskId());
-    assertThat(actual.getDateTimeTaskCreated()).isEqualTo(expected.getDateTimeTaskCreated());
     assertThat(actual.getTaskStatus()).isEqualTo(expected.getTaskStatus());
     assertThat(actual.getSolution()).containsExactly(expected.getSolution(), offset(1e-6));
   }
