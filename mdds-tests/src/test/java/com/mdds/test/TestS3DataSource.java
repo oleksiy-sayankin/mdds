@@ -11,7 +11,7 @@ import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;

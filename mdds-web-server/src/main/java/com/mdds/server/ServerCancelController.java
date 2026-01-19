@@ -4,12 +4,12 @@
  */
 package com.mdds.server;
 
-import static com.mdds.dto.TaskStatus.IN_PROGRESS;
-import static com.mdds.dto.TaskStatus.NEW;
+import static com.mdds.grpc.solver.TaskStatus.IN_PROGRESS;
+import static com.mdds.grpc.solver.TaskStatus.NEW;
 
 import com.mdds.dto.CancelTaskDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;

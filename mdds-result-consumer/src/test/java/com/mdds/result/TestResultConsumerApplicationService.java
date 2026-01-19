@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;

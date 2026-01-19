@@ -14,7 +14,7 @@ import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ErrorResponseDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.storage.redis.RedisDataStorage;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -168,8 +168,8 @@ class TestServerApplication {
     // Create Result and put it to storage manually
     var expected = new ResultDTO();
     expected.setTaskId(taskId);
-    expected.setDateTimeTaskCreated(Instant.now());
-    expected.setDateTimeTaskFinished(Instant.now());
+    expected.setDateTimeTaskStarted(Instant.now());
+    expected.setDateTimeTaskEnded(Instant.now());
     expected.setTaskStatus(TaskStatus.DONE);
     expected.setProgress(100);
     expected.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});

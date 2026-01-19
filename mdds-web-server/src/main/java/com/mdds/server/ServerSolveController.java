@@ -14,7 +14,7 @@ import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SolveRequestDTO;
 import com.mdds.dto.TaskDTO;
 import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;

@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
 import java.time.Instant;

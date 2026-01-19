@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.rabbitmq.RabbitMqQueue;
 import com.mdds.storage.redis.RedisDataStorage;
@@ -106,8 +106,8 @@ class TestResultConsumerApplication {
     var expected = new ResultDTO();
     var taskId = "test";
     expected.setTaskId(taskId);
-    expected.setDateTimeTaskCreated(Instant.now());
-    expected.setDateTimeTaskFinished(Instant.now());
+    expected.setDateTimeTaskStarted(Instant.now());
+    expected.setDateTimeTaskEnded(Instant.now());
     expected.setTaskStatus(TaskStatus.DONE);
     expected.setProgress(100);
     expected.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});

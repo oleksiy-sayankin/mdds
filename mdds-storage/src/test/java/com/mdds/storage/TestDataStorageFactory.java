@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import java.io.IOException;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;
@@ -56,8 +56,8 @@ class TestDataStorageFactory {
     var result = new ResultDTO();
     var taskId = "test";
     result.setTaskId(taskId);
-    result.setDateTimeTaskCreated(Instant.now());
-    result.setDateTimeTaskFinished(Instant.now());
+    result.setDateTimeTaskStarted(Instant.now());
+    result.setDateTimeTaskEnded(Instant.now());
     result.setTaskStatus(TaskStatus.DONE);
     result.setProgress(100);
     result.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
@@ -70,8 +70,8 @@ class TestDataStorageFactory {
     var expectedResult = new ResultDTO();
     var taskId = "test";
     expectedResult.setTaskId(taskId);
-    expectedResult.setDateTimeTaskCreated(Instant.now());
-    expectedResult.setDateTimeTaskFinished(Instant.now());
+    expectedResult.setDateTimeTaskStarted(Instant.now());
+    expectedResult.setDateTimeTaskEnded(Instant.now());
     expectedResult.setTaskStatus(TaskStatus.DONE);
     expectedResult.setProgress(100);
     expectedResult.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
