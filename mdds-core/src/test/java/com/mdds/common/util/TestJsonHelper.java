@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.TaskDTO;
 import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.dto.TaskStatus;
+import com.mdds.grpc.solver.TaskStatus;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
@@ -53,8 +53,8 @@ class TestJsonHelper {
     var expectedJson =
         "{"
             + "\"taskId\":\"testId\","
-            + "\"dateTimeTaskCreated\":1725466860.000000000,"
-            + "\"dateTimeTaskFinished\":1725466860.000000000,"
+            + "\"dateTimeTaskStarted\":1725466860.000000000,"
+            + "\"dateTimeTaskEnded\":1725466860.000000000,"
             + "\"taskStatus\":\"DONE\","
             + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
             + "\"progress\":100,"
@@ -69,8 +69,8 @@ class TestJsonHelper {
     var json =
         "{"
             + "\"taskId\":\"testId\","
-            + "\"dateTimeTaskCreated\":1725466860.000000000,"
-            + "\"dateTimeTaskFinished\":1725466860.000000000,"
+            + "\"dateTimeTaskStarted\":1725466860.000000000,"
+            + "\"dateTimeTaskEnded\":1725466860.000000000,"
             + "\"taskStatus\":\"DONE\","
             + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
             + "\"progress\":100,"
