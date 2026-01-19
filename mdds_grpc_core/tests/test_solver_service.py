@@ -2,6 +2,8 @@
 # Refer to the LICENSE file in the root directory for full license details.
 import time
 import unittest
+import uuid
+
 import grpc
 from unittest.mock import MagicMock
 
@@ -33,7 +35,7 @@ def test_all_solvers(solving_method):
     matrix = [solver_pb2.Row(values=[4.0, 1.0]), solver_pb2.Row(values=[1.0, 3.0])]
     rhs = [1.0, 2.0]
 
-    task_id = "66ded247-2ab5-45b4-9c8e-d5812ee283df"
+    task_id = str(uuid.uuid4())
 
     # Create gRPC request
     request = solver_pb2.SubmitTaskRequest(
@@ -51,23 +53,23 @@ def test_all_solvers(solving_method):
     request = solver_pb2.GetTaskStatusRequest(taskId=task_id)
 
     valid_statuses = {
-        solver_pb2.GrpcTaskStatus.DONE,
-        solver_pb2.GrpcTaskStatus.ERROR,
-        solver_pb2.GrpcTaskStatus.CANCELLED,
+        solver_pb2.TaskStatus.DONE,
+        solver_pb2.TaskStatus.ERROR,
+        solver_pb2.TaskStatus.CANCELLED,
     }
 
     response = service.GetTaskStatus(request, mock_context)
-    grpc_task_status = response.grpcTaskStatus
+    task_status = response.taskStatus
     attempts = 1
     max_attempts = 20
-    while grpc_task_status not in valid_statuses and attempts <= max_attempts:
+    while task_status not in valid_statuses and attempts <= max_attempts:
         response = service.GetTaskStatus(request, mock_context)
         assert response.requestStatus == solver_pb2.RequestStatus.COMPLETED
-        grpc_task_status = response.grpcTaskStatus
+        task_status = response.taskStatus
         time.sleep(1)
         attempts += 1
 
-    assert grpc_task_status == solver_pb2.GrpcTaskStatus.DONE
+    assert task_status == solver_pb2.TaskStatus.DONE
 
     # Expected result from manual calculation
     expected_solution = [1 / 11, 7 / 11]
@@ -84,7 +86,7 @@ def test_all_solvers(solving_method):
 def test_solve_unknown_method():
     """Test SolverService.Solve when method name is invalid."""
     service = SolverService()
-    task_id = "76ded247-2ab5-45b4-9c8e-d5822ee283dg"
+    task_id = str(uuid.uuid4())
     request = solver_pb2.SubmitTaskRequest(
         method="unknown_solver", matrix=[], rhs=[], taskId=task_id
     )

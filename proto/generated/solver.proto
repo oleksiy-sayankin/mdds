@@ -4,6 +4,8 @@
  */
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 package solver;
 
 option java_package = "com.mdds.grpc.solver";
@@ -35,12 +37,13 @@ message CancelTaskRequest {
   string taskId = 1;
 }
 
-enum GrpcTaskStatus {
+enum TaskStatus {
   UNKNOWN = 0;
-  DONE = 1;
-  ERROR = 2;
-  CANCELLED = 3;
-  IN_PROGRESS = 4;
+  NEW = 1;
+  DONE = 2;
+  ERROR = 3;
+  CANCELLED = 4;
+  IN_PROGRESS = 5;
 }
 
 enum RequestStatus {
@@ -50,16 +53,22 @@ enum RequestStatus {
 }
 
 message CancelTaskResponse {
-  RequestStatus requestStatus = 1;
-  string requestStatusDetails = 2;
+  string taskId = 1;
+  RequestStatus requestStatus = 2;
+  string requestStatusDetails = 3;
 }
 
+// Solution
 message GetTaskStatusResponse {
-  RequestStatus requestStatus = 1;
-  string requestStatusDetails = 2;
-  GrpcTaskStatus grpcTaskStatus = 3;
-  string taskMessage = 4;
-  repeated double solution = 5; // solution of SLAE
+  string taskId = 1;
+  RequestStatus requestStatus = 2;
+  string requestStatusDetails = 3;
+  google.protobuf.Timestamp startTime = 4;
+  google.protobuf.Timestamp endTime = 5;
+  TaskStatus taskStatus = 6;
+  int32 progress = 7;
+  string taskMessage = 8;
+  repeated double solution = 9; // solution of SLAE
 }
 
 // Matrix for SLAE as repeated row
@@ -67,8 +76,8 @@ message Row {
   repeated double values = 1;
 }
 
-// Solution
 message SubmitTaskResponse {
-  RequestStatus requestStatus = 1;
-  string requestStatusDetails = 2;
+  string taskId = 1;
+  RequestStatus requestStatus = 2;
+  string requestStatusDetails = 3;
 }
