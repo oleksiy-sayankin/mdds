@@ -9,7 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 from generated import solver_pb2
+from job_registry import JobRegistry
 from service import SolverService
+
+
+registry = JobRegistry()
+registry.start()
 
 
 @pytest.mark.parametrize(
@@ -27,7 +32,7 @@ def test_all_solvers(solving_method):
     Test SolverService.Solve with all solving methods.
     Checks that the response solution matches exact solution.
     """
-    service = SolverService()
+    service = SolverService(registry.active)
     # Prepare input system:
     #  4x + 1y = 1
     #  1x + 3y = 2
@@ -85,7 +90,7 @@ def test_all_solvers(solving_method):
 
 def test_solve_unknown_method():
     """Test SolverService.Solve when method name is invalid."""
-    service = SolverService()
+    service = SolverService(registry.active)
     task_id = str(uuid.uuid4())
     request = solver_pb2.SubmitTaskRequest(
         method="unknown_solver", matrix=[], rhs=[], taskId=task_id

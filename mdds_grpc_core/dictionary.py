@@ -29,3 +29,8 @@ class ThreadSafeDictionary:
     def size(self):
         with self._lock:
             return len(self._dict)
+
+    def keys(self):
+        with self._lock:
+            # create copy of keys to avoid modification during iterating the list
+            return list(self._dict.keys())

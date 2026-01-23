@@ -8,6 +8,7 @@ from grpc import aio
 from concurrent import futures
 from grpc_health.v1 import health, health_pb2_grpc, health_pb2
 from grpc_reflection.v1alpha import reflection
+from job_registry import JobRegistry
 
 logging.basicConfig(
     filename="Server.log",
@@ -53,6 +54,7 @@ class GrpcServer:
             )
             self.server.add_insecure_port(self.SERVER_ADDRESS)
             self.health_servicer = health.HealthServicer()
+            self.job_registry = JobRegistry()
             self.initialized = True
 
     def register(self) -> None:
@@ -61,7 +63,7 @@ class GrpcServer:
         Register SolverService in gRPC server.
         """
         solver_pb2_grpc.add_SolverServiceServicer_to_server(
-            SolverService(), self.server
+            SolverService(self.job_registry.active), self.server
         )
         # Register Health service
         health_pb2_grpc.add_HealthServicer_to_server(self.health_servicer, self.server)
@@ -83,6 +85,7 @@ class GrpcServer:
         Register services and starts gRPC server. Logs information about gRPC server start.
         """
         self.register()
+        self.job_registry.start()
         await self.server.start()
         logging.info(f"Solver gRPC server started on: {self.SERVER_ADDRESS}")
         await self.server.wait_for_termination()
