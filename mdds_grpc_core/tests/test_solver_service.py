@@ -3,18 +3,21 @@
 import time
 import unittest
 import uuid
-
 import grpc
-from unittest.mock import MagicMock
-
 import pytest
+
+from unittest.mock import MagicMock
 from generated import solver_pb2
 from job_registry import JobRegistry
 from service import SolverService
 
 
-registry = JobRegistry()
-registry.start()
+@pytest.fixture(scope="module")
+def setup_registry():
+    registry = JobRegistry()
+    registry.start()
+    yield registry.active
+    registry.stop()
 
 
 @pytest.mark.parametrize(
@@ -27,12 +30,13 @@ registry.start()
         "scipy_gmres_solver",
     ],
 )
-def test_all_solvers(solving_method):
+def test_all_solvers(solving_method, setup_registry):
     """
     Test SolverService.Solve with all solving methods.
     Checks that the response solution matches exact solution.
     """
-    service = SolverService(registry.active)
+    active = setup_registry
+    service = SolverService(active)
     # Prepare input system:
     #  4x + 1y = 1
     #  1x + 3y = 2
@@ -88,9 +92,10 @@ def test_all_solvers(solving_method):
     mock_context.set_details.assert_not_called()
 
 
-def test_solve_unknown_method():
+def test_solve_unknown_method(setup_registry):
     """Test SolverService.Solve when method name is invalid."""
-    service = SolverService(registry.active)
+    active = setup_registry
+    service = SolverService(active)
     task_id = str(uuid.uuid4())
     request = solver_pb2.SubmitTaskRequest(
         method="unknown_solver", matrix=[], rhs=[], taskId=task_id

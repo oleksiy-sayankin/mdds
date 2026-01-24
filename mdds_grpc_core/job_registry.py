@@ -2,6 +2,8 @@
 # Refer to the LICENSE file in the root directory for full license details.
 import threading
 import time
+
+from threading import Event
 from constants import IN_PROGRESS, ERROR, TERMINAL
 from dictionary import ThreadSafeDictionary
 from job import Job
@@ -21,13 +23,14 @@ def finalize_job(job: Job):
 
 def clean_delivered_job(
     active: ThreadSafeDictionary,
+    stop_event: Event,
     poll_interval_seconds: float = 0.2,
     ttl_sec: float = 300.0,
 ):
     """
     Runs in a background thread to clean delivered jobs.
     """
-    while True:
+    while not stop_event.is_set():
         for task_id in active.keys():
             job = active.get(task_id)
 
@@ -52,15 +55,18 @@ def clean_delivered_job(
                         active.pop(task_id, None)
                         finalize_job(job)
 
-        time.sleep(poll_interval_seconds)
+        if stop_event.wait(poll_interval_seconds):
+            break
 
 
-def watch_job_result(active: ThreadSafeDictionary, poll_interval_seconds: float = 0.2):
+def watch_job_result(
+    active: ThreadSafeDictionary, stop_event: Event, poll_interval_seconds: float = 0.2
+):
     """
     Runs in a background thread.
     Reads worker result from Pipe and updates Job in `active`.
     """
-    while True:
+    while not stop_event.is_set():
         for task_id in active.keys():
             job = active.get(task_id)
 
@@ -99,7 +105,8 @@ def watch_job_result(active: ThreadSafeDictionary, poll_interval_seconds: float 
                             job.taskStatus = ERROR
                             job.taskMessage = f"Watcher error: {type(e).__name__}: {e}"
 
-        time.sleep(poll_interval_seconds)
+        if stop_event.wait(poll_interval_seconds):
+            break
 
 
 class JobRegistry:
@@ -111,6 +118,7 @@ class JobRegistry:
     active = None
     _started = False
     _initialized = False
+    _stop_event = threading.Event()
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -124,24 +132,38 @@ class JobRegistry:
         self.active = ThreadSafeDictionary()
         self._started = False
         self._initialized = True
+        self._watcher = threading.Thread(
+            target=watch_job_result,
+            args=(
+                self.active,
+                self._stop_event,
+            ),
+            daemon=False,
+        )
+        self._cleaner = threading.Thread(
+            target=clean_delivered_job,
+            args=(
+                self.active,
+                self._stop_event,
+            ),
+            daemon=False,
+        )
 
     def start(self):
-        # Start watcher thread. In this watcher we periodically update `active` dictionary, getting
-        # results (if any) from the solve process.
         if self._started:
             return
-        _watcher = threading.Thread(
-            target=watch_job_result,
-            args=(self.active,),
-            daemon=True,
-        )
 
-        _watcher.start()
+        # Start watcher thread. In this watcher we periodically update `active` dictionary, getting
+        # results (if any) from the solve process.
+        self._watcher.start()
 
         # This cleaner watches if a task result was delivered and if so, removes job from dictionary
-        _cleaner = threading.Thread(
-            target=clean_delivered_job, args=(self.active,), daemon=True
-        )
-        _cleaner.start()
+        self._cleaner.start()
 
         self._started = True
+
+    def stop(self):
+        if self._started:
+            self._stop_event.set()
+            self._watcher.join()
+            self._cleaner.join()

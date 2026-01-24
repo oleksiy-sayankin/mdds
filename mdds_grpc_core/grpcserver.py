@@ -97,4 +97,5 @@ class GrpcServer:
         Stops gRPC server without grace period. Logs information about gRPC server stop.
         """
         logging.info("gRPC server is stopped")
+        self.job_registry.stop()
         await self.server.stop(grace=False)
