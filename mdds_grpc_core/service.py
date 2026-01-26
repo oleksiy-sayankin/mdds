@@ -23,11 +23,7 @@ SOLVER_MAP = {
 
 JOB_TIMEOUT = 600  # in seconds
 
-logging.basicConfig(
-    filename="SolverService.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+logger = logging.getLogger(__name__)
 
 
 def ts_from_unix(sec: float) -> Timestamp:
@@ -111,12 +107,14 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
     def SubmitTask(self, request, context):
         task_id = request.taskId
         if not task_id:
+            logger.warning("No task id provided")
             return solver_pb2.SubmitTaskResponse(
                 requestStatus=DECLINED,
                 requestStatusDetails="Task id is invalid: empty or null",
             )
 
         if self.active.get(task_id):
+            logger.warning(f"Task {task_id} is already submitted")
             return solver_pb2.SubmitTaskResponse(
                 taskId=task_id,
                 requestStatus=DECLINED,
@@ -125,6 +123,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
 
         method = request.method
         if method not in SOLVER_MAP:
+            logger.warning(f"Method {method} not supported")
             return solver_pb2.SubmitTaskResponse(
                 taskId=task_id,
                 requestStatus=DECLINED,
@@ -154,6 +153,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             ),
         )
 
+        logger.info(f"Task {task_id} submitted and is in progress")
         return solver_pb2.SubmitTaskResponse(
             taskId=task_id,
             requestStatus=COMPLETED,
@@ -163,12 +163,14 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
     def CancelTask(self, request, context):
         task_id = request.taskId
         if not task_id:
+            logger.warning("No task id provided")
             return solver_pb2.CancelTaskResponse(
                 requestStatus=DECLINED,
                 requestStatusDetails="Task id is empty",
             )
         job = self.active.get(task_id, None)
         if job is None:
+            logger.warning(f"Task {task_id} does not exist")
             return solver_pb2.CancelTaskResponse(
                 taskId=task_id,
                 requestStatus=DECLINED,
@@ -176,16 +178,20 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             )
         with job.lock:
             if job.taskStatus != IN_PROGRESS:
+                logger.warning(
+                    f"Task {task_id} is not in progress. Task status is {solver_pb2.TaskStatus.Name(job.taskStatus)}"
+                )
                 return solver_pb2.CancelTaskResponse(
                     taskId=task_id,
                     requestStatus=DECLINED,
-                    requestStatusDetails=f"Task {task_id} is not in IN_PROGRESS state. Task status is {job.taskStatus}",
+                    requestStatusDetails=f"Task {task_id} is not in IN_PROGRESS state. Task status is {solver_pb2.TaskStatus.Name(job.taskStatus)}",
                 )
             # mark that process is terminated intentionally and not by error
             job.taskStatus = CANCELLED
             job.taskMessage = "Cancelled by request"
 
         terminate_process(job.process)
+        logger.info(f"Task {task_id} is cancelled")
         return solver_pb2.CancelTaskResponse(
             taskId=task_id,
             requestStatus=COMPLETED,
@@ -195,12 +201,14 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
     def GetTaskStatus(self, request, context):
         task_id = request.taskId
         if not task_id:
+            logger.warning("No task id provided")
             return solver_pb2.GetTaskStatusResponse(
                 requestStatus=DECLINED,
                 requestStatusDetails="Task id is empty or null",
             )
         job = self.active.get(task_id, None)
         if job is None:
+            logger.warning(f"Task {task_id} does not exist")
             return solver_pb2.GetTaskStatusResponse(
                 taskId=task_id,
                 requestStatus=DECLINED,
@@ -216,6 +224,9 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
 
         progress = get_progress(task_status, start_time)
 
+        logger.debug(
+            f"Found task {task_id} with status: {solver_pb2.TaskStatus.Name(task_status)}"
+        )
         return solver_pb2.GetTaskStatusResponse(
             requestStatus=COMPLETED,
             requestStatusDetails="Found task status",

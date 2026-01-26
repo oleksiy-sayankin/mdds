@@ -6,6 +6,7 @@ Entry point for running gRPC web server with chosen solver
 
 import asyncio
 from grpcserver import GrpcServer
+from logging_config import setup_logging
 
 
 async def main():
@@ -20,4 +21,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    setup_logging()
     asyncio.run(main())

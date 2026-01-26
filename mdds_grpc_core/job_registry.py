@@ -1,5 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
+import logging
 import threading
 import time
 
@@ -7,6 +8,8 @@ from threading import Event
 from constants import IN_PROGRESS, ERROR, TERMINAL
 from dictionary import ThreadSafeDictionary
 from job import Job
+
+logger = logging.getLogger(__name__)
 
 
 def finalize_job(job: Job):
@@ -56,6 +59,7 @@ def clean_delivered_job(
                         finalize_job(job)
 
         if stop_event.wait(poll_interval_seconds):
+            logger.info("Job cleaner is stopped")
             break
 
 
@@ -106,6 +110,7 @@ def watch_job_result(
                             job.taskMessage = f"Watcher error: {type(e).__name__}: {e}"
 
         if stop_event.wait(poll_interval_seconds):
+            logger.info("Job result watcher is stopped")
             break
 
 
@@ -148,6 +153,7 @@ class JobRegistry:
             ),
             daemon=False,
         )
+        logger.info("Initialized job registry")
 
     def start(self):
         if self._started:
@@ -161,9 +167,12 @@ class JobRegistry:
         self._cleaner.start()
 
         self._started = True
+        logger.info("Started job registry")
 
     def stop(self):
         if self._started:
             self._stop_event.set()
             self._watcher.join()
             self._cleaner.join()
+            self._started = False
+            logger.info("Stopped job registry")

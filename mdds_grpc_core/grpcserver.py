@@ -10,11 +10,7 @@ from grpc_health.v1 import health, health_pb2_grpc, health_pb2
 from grpc_reflection.v1alpha import reflection
 from job_registry import JobRegistry
 
-logging.basicConfig(
-    filename="Server.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 1000 * 1024 * 1024
 
@@ -56,6 +52,7 @@ class GrpcServer:
             self.health_servicer = health.HealthServicer()
             self.job_registry = JobRegistry()
             self.initialized = True
+            logger.info(f"Initialized gRPC server on {self.SERVER_ADDRESS}")
 
     def register(self) -> None:
         """
@@ -77,6 +74,7 @@ class GrpcServer:
             reflection.SERVICE_NAME,
         )
         reflection.enable_server_reflection(service_names, self.server)
+        logger.info(f"Registered gRPC server on {self.SERVER_ADDRESS}")
 
     async def start(self) -> None:
         """
@@ -86,8 +84,9 @@ class GrpcServer:
         """
         self.register()
         self.job_registry.start()
+        logger.info("Job registry started")
         await self.server.start()
-        logging.info(f"Solver gRPC server started on: {self.SERVER_ADDRESS}")
+        logger.info(f"Solver gRPC server started on: {self.SERVER_ADDRESS}")
         await self.server.wait_for_termination()
 
     async def stop(self) -> None:
@@ -96,6 +95,7 @@ class GrpcServer:
 
         Stops gRPC server without grace period. Logs information about gRPC server stop.
         """
-        logging.info("gRPC server is stopped")
         self.job_registry.stop()
+        logger.info("Job registry stopped")
         await self.server.stop(grace=False)
+        logger.info("gRPC server is stopped")

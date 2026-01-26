@@ -1,5 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
+import logging
 import time
 import unittest
 import uuid
@@ -9,7 +10,12 @@ import pytest
 from unittest.mock import MagicMock
 from generated import solver_pb2
 from job_registry import JobRegistry
+from logging_config import setup_logging
 from service import SolverService
+
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -35,6 +41,7 @@ def test_all_solvers(solving_method, setup_registry):
     Test SolverService.Solve with all solving methods.
     Checks that the response solution matches exact solution.
     """
+    logger.info(f"Testing {solving_method}")
     active = setup_registry
     service = SolverService(active)
     # Prepare input system:
