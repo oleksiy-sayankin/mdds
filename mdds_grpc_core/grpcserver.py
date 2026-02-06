@@ -2,9 +2,9 @@
 # Refer to the LICENSE file in the root directory for full license details.
 import os
 import logging
+import grpc
 from service import SolverService
 from generated import solver_pb2_grpc
-from grpc import aio
 from concurrent import futures
 from grpc_health.v1 import health, health_pb2_grpc, health_pb2
 from grpc_reflection.v1alpha import reflection
@@ -41,7 +41,7 @@ class GrpcServer:
             grpc_host = os.getenv("MDDS_EXECUTOR_GRPC_SERVER_HOST", "localhost")
             grpc_port = int(os.getenv("MDDS_EXECUTOR_GRPC_SERVER_PORT", 50051))
             self.SERVER_ADDRESS = f"{grpc_host}:{grpc_port}"
-            self.server = aio.server(
+            self.server = grpc.server(
                 futures.ThreadPoolExecutor(max_workers=10),
                 options=[
                     ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
@@ -76,7 +76,7 @@ class GrpcServer:
         reflection.enable_server_reflection(service_names, self.server)
         logger.info(f"Registered gRPC server on {self.SERVER_ADDRESS}")
 
-    async def start(self) -> None:
+    def start(self) -> None:
         """
         Runs gRPC server and waits for its termination.
 
@@ -85,11 +85,11 @@ class GrpcServer:
         self.register()
         self.job_registry.start()
         logger.info("Job registry started")
-        await self.server.start()
+        self.server.start()
         logger.info(f"Solver gRPC server started on: {self.SERVER_ADDRESS}")
-        await self.server.wait_for_termination()
+        self.server.wait_for_termination()
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         """
         Stops gRPC server.
 
@@ -97,5 +97,5 @@ class GrpcServer:
         """
         self.job_registry.stop()
         logger.info("Job registry stopped")
-        await self.server.stop(grace=False)
+        self.server.stop(grace=False)
         logger.info("gRPC server is stopped")
