@@ -18,6 +18,7 @@ class Job:
     solution: list[float]
     taskMessage: str
     startTime: float  # unix timestamp
+    endTime: float | None
     connection: Connection
     delivered: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock, repr=False)

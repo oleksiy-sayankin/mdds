@@ -16,3 +16,4 @@ DECLINED = RequestStatus.DECLINED
 COMPLETED = RequestStatus.COMPLETED
 
 JOB_TIMEOUT = 600  # in seconds
+RESULT_TIME_TO_LIVE = 300  # in seconds

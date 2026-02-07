@@ -157,6 +157,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
                 [],
                 "Task submitted and is in progress",
                 time.time(),
+                None,
                 parent_conn,
             ),
         )
@@ -197,6 +198,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             # mark that process is terminated intentionally and not by error
             job.taskStatus = CANCELLED
             job.taskMessage = "Cancelled by request"
+            job.endTime = time.time()
 
         terminate_process(job.process)
         logger.info(f"Task {task_id} is cancelled")
@@ -227,6 +229,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             solution = job.solution
             task_message = job.taskMessage
             start_time = job.startTime
+            end_time = job.endTime or time.time()
             if task_status in TERMINAL:
                 job.delivered = True
 
@@ -240,7 +243,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             requestStatusDetails="Found task status",
             taskId=task_id,
             startTime=ts_from_unix(start_time),
-            endTime=ts_from_unix(time.time()),
+            endTime=ts_from_unix(end_time),
             progress=progress,
             taskStatus=task_status,
             solution=solution,

@@ -5,7 +5,7 @@ import threading
 import time
 
 from threading import Event
-from constants import IN_PROGRESS, ERROR, TERMINAL
+from constants import IN_PROGRESS, ERROR, TERMINAL, JOB_TIMEOUT, RESULT_TIME_TO_LIVE
 from dictionary import ThreadSafeDictionary
 from job import Job
 
@@ -56,7 +56,6 @@ def clean_delivered_job(
     active: ThreadSafeDictionary,
     stop_event: Event,
     poll_interval_seconds: float = 0.2,
-    ttl_sec: float = 300.0,
 ):
     """
     Runs in a background thread to clean delivered jobs.
@@ -71,6 +70,7 @@ def clean_delivered_job(
                     status = job.taskStatus
                     process = job.process
                     start_time = job.startTime
+                    end_time = job.endTime
 
                 # If job result is delivered, and its status is terminal
                 # statuses list, we can safely remove job item from the dictionary
@@ -78,13 +78,25 @@ def clean_delivered_job(
                 if delivered and status in TERMINAL and not process.is_alive():
                     active.pop(task_id, None)
                     finalize_job(job)
+                    continue
 
                 # skip infinite loops if client did not ask for result
-                if time.time() - start_time > ttl_sec:
-                    # delete jobs with terminal statuses
-                    if status in TERMINAL and not process.is_alive():
-                        active.pop(task_id, None)
-                        finalize_job(job)
+                if (
+                    status in TERMINAL
+                    and end_time is not None
+                    and time.time() - end_time > RESULT_TIME_TO_LIVE
+                ):
+                    active.pop(task_id, None)
+                    finalize_job(job)
+                    continue
+
+                # kill job if we reach timeout and mar job as error
+                if status == IN_PROGRESS and time.time() - start_time > JOB_TIMEOUT:
+                    with job.lock:
+                        job.taskStatus = ERROR
+                        job.taskMessage = f"Timeout for task {task_id}"
+                        job.endTime = time.time()
+                    terminate_job(job)
 
         if stop_event.wait(poll_interval_seconds):
             logger.info("Job cleaner is stopped")
@@ -104,8 +116,7 @@ def watch_job_result(
 
             if job:
                 try:
-                    # We have data from process -> read and update Job,
-                    # and then exit thread
+                    # We have data from process -> read and update Job
                     with job.lock:
                         last_status = job.taskStatus
                         connection = job.connection
@@ -117,10 +128,10 @@ def watch_job_result(
                             job.taskStatus = status
                             job.solution = solution
                             job.taskMessage = msg
-                            continue
+                            job.endTime = time.time()
+                        continue
 
                     # Process is dead, but we have no results -> let's find out why
-                    # and exit watch job thread
                     if not process.is_alive():
                         # If task is in progress but process is dead, mark it as error
                         if last_status == IN_PROGRESS:
@@ -129,6 +140,7 @@ def watch_job_result(
                                 job.taskMessage = (
                                     f"Worker exited, exitcode={process.exitcode}"
                                 )
+                                job.endTime = time.time()
 
                 except Exception as e:
                     with job.lock:
@@ -136,6 +148,7 @@ def watch_job_result(
                         if job.taskStatus == IN_PROGRESS:
                             job.taskStatus = ERROR
                             job.taskMessage = f"Watcher error: {type(e).__name__}: {e}"
+                            job.endTime = time.time()
 
         if stop_event.wait(poll_interval_seconds):
             logger.info("Job result watcher is stopped")
