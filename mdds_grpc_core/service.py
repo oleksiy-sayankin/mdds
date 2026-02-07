@@ -8,7 +8,16 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from datetime import datetime, timezone
 from dictionary import ThreadSafeDictionary
 from generated import solver_pb2, solver_pb2_grpc
-from constants import IN_PROGRESS, DONE, ERROR, CANCELLED, TERMINAL, DECLINED, COMPLETED
+from constants import (
+    IN_PROGRESS,
+    DONE,
+    ERROR,
+    CANCELLED,
+    TERMINAL,
+    DECLINED,
+    COMPLETED,
+    JOB_TIMEOUT,
+)
 from job import Job
 
 
@@ -21,7 +30,6 @@ SOLVER_MAP = {
     "scipy_gmres_solver": "ScipyGmresSolver",
 }
 
-JOB_TIMEOUT = 600  # in seconds
 
 logger = logging.getLogger(__name__)
 

@@ -14,3 +14,5 @@ TERMINAL = {DONE, ERROR, CANCELLED}
 RequestStatus = solver_pb2.RequestStatus
 DECLINED = RequestStatus.DECLINED
 COMPLETED = RequestStatus.COMPLETED
+
+JOB_TIMEOUT = 600  # in seconds
