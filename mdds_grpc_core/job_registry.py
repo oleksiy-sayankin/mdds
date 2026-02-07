@@ -148,10 +148,6 @@ class JobRegistry:
     """
 
     _instance = None
-    active = None
-    _started = False
-    _initialized = False
-    _stop_event = threading.Event()
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -160,11 +156,23 @@ class JobRegistry:
         return cls._instance
 
     def __init__(self):
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
+        self._watcher = None
+        self._cleaner = None
+        self._stop_event = None
         self.active = ThreadSafeDictionary()
         self._started = False
         self._initialized = True
+        logger.info("Initialized job registry")
+
+    def start(self):
+        if self._started:
+            return
+
+        self._stop_event = threading.Event()
+
+        self.active.clear()
         self._watcher = threading.Thread(
             target=watch_job_result,
             args=(
@@ -173,6 +181,7 @@ class JobRegistry:
             ),
             daemon=False,
         )
+
         self._cleaner = threading.Thread(
             target=clean_delivered_job,
             args=(
@@ -181,11 +190,6 @@ class JobRegistry:
             ),
             daemon=False,
         )
-        logger.info("Initialized job registry")
-
-    def start(self):
-        if self._started:
-            return
 
         # Start watcher thread. In this watcher we periodically update `active` dictionary, getting
         # results (if any) from the solve process.
@@ -200,8 +204,8 @@ class JobRegistry:
     def stop(self):
         if self._started:
             self._stop_event.set()
-            self._watcher.join()
-            self._cleaner.join()
+            self._watcher.join(timeout=1)
+            self._cleaner.join(timeout=1)
             self._started = False
             terminate_all_jobs(active=self.active)
             logger.info("Stopped job registry")
