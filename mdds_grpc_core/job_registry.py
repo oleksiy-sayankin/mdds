@@ -24,6 +24,34 @@ def finalize_job(job: Job):
         pass
 
 
+def terminate_job(job: Job):
+    """Here we close job connection and finalize job process with `kill`"""
+    try:
+        job.connection.close()
+    except Exception:
+        pass
+    proc = job.process
+    if proc is None:
+        return
+    if proc.is_alive():
+        proc.terminate()  # SIGTERM
+        proc.join(timeout=1)
+    if proc.is_alive():
+        proc.kill()  # SIGKILL
+        proc.join(timeout=1)
+
+
+def terminate_all_jobs(
+    active: ThreadSafeDictionary,
+):
+    """Terminate all active jobs by force and clear list of active jobs"""
+    for task_id in active.keys():
+        job = active.get(task_id)
+        if job:
+            terminate_job(job)
+    active.clear()
+
+
 def clean_delivered_job(
     active: ThreadSafeDictionary,
     stop_event: Event,
@@ -175,4 +203,5 @@ class JobRegistry:
             self._watcher.join()
             self._cleaner.join()
             self._started = False
+            terminate_all_jobs(active=self.active)
             logger.info("Stopped job registry")

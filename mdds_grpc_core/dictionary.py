@@ -34,3 +34,7 @@ class ThreadSafeDictionary:
         with self._lock:
             # create copy of keys to avoid modification during iterating the list
             return list(self._dict.keys())
+
+    def clear(self):
+        with self._lock:
+            self._dict.clear()
