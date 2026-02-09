@@ -4,7 +4,7 @@ import os
 import logging
 import grpc
 from service import SolverService
-from generated import solver_pb2_grpc
+from generated import solver_pb2_grpc, solver_pb2
 from concurrent import futures
 from grpc_health.v1 import health, health_pb2_grpc, health_pb2
 from grpc_reflection.v1alpha import reflection
@@ -69,7 +69,7 @@ class GrpcServer:
             "SolverService", health_pb2.HealthCheckResponse.SERVING
         )
         service_names = (
-            solver_pb2_grpc.SolverServiceServicer.__name__,
+            solver_pb2.DESCRIPTOR.services_by_name["SolverService"].full_name,
             health_pb2.DESCRIPTOR.services_by_name["Health"].full_name,
             reflection.SERVICE_NAME,
         )
