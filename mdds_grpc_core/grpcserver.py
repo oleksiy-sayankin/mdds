@@ -3,6 +3,8 @@
 import os
 import logging
 import grpc
+
+from constants import MAX_MESSAGE_LENGTH
 from service import SolverService
 from generated import solver_pb2_grpc, solver_pb2
 from concurrent import futures
@@ -11,8 +13,6 @@ from grpc_reflection.v1alpha import reflection
 from job_registry import JobRegistry
 
 logger = logging.getLogger(__name__)
-
-MAX_MESSAGE_LENGTH = 1000 * 1024 * 1024
 
 
 class GrpcServer:
