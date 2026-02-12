@@ -12,6 +12,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Getter
 @Setter
 public class CommonProperties {
-  private String taskQueueName = "default_mdds_task_queue";
+  private String jobQueueName = "default_mdds_job_queue";
   private String resultQueueName = "default_mdds_result_queue";
 }

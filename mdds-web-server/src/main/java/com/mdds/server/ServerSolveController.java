@@ -10,11 +10,11 @@ import static com.mdds.server.ServerHelper.extractSolvingMethod;
 import static com.mdds.server.ServerHelper.unwrapOrSendError;
 
 import com.mdds.common.CommonProperties;
+import com.mdds.dto.JobDTO;
+import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SolveRequestDTO;
-import com.mdds.dto.TaskDTO;
-import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
@@ -39,14 +39,14 @@ public class ServerSolveController {
 
   @Autowired
   public ServerSolveController(
-      DataStorage storage, @Qualifier("taskQueue") Queue queue, CommonProperties commonProperties) {
+      DataStorage storage, @Qualifier("jobQueue") Queue queue, CommonProperties commonProperties) {
     this.storage = storage;
     this.queue = queue;
     this.commonProperties = commonProperties;
     log.info(
         "Created Server Solve controller with storage {}, queue '{}' = {}",
         storage,
-        commonProperties.getTaskQueueName(),
+        commonProperties.getJobQueueName(),
         queue);
   }
 
@@ -54,7 +54,7 @@ public class ServerSolveController {
       path = "/solve",
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
-  public TaskIdResponseDTO solve(@RequestBody SolveRequestDTO request) {
+  public JobIdResponseDTO solve(@RequestBody SolveRequestDTO request) {
     var rawType = request.getDataSourceType();
     var rawMethod = request.getSlaeSolvingMethod();
     var params = request.getParams();
@@ -72,20 +72,20 @@ public class ServerSolveController {
     var method = unwrapOrSendError(extractSolvingMethod(rawMethod));
 
     // store initial result
-    var taskId = UUID.randomUUID().toString();
+    var jobId = UUID.randomUUID().toString();
     var now = Instant.now();
     // Put result to storage
-    storage.put(taskId, new ResultDTO(taskId, now, null, TaskStatus.NEW, null, 10, null, null));
+    storage.put(jobId, new ResultDTO(jobId, now, null, JobStatus.NEW, null, 10, null, null));
 
-    // create TaskDTO and publish to queue
+    // create JobDTO and publish to queue
     queue.publish(
-        commonProperties.getTaskQueueName(),
-        new Message<>(new TaskDTO(taskId, now, matrix, rhs, method), Collections.emptyMap(), now));
+        commonProperties.getJobQueueName(),
+        new Message<>(new JobDTO(jobId, now, matrix, rhs, method), Collections.emptyMap(), now));
     log.info(
-        "Published task with taskId = {}, to queue '{}' = {}",
-        taskId,
-        commonProperties.getTaskQueueName(),
+        "Published job with jobId = {}, to queue '{}' = {}",
+        jobId,
+        commonProperties.getJobQueueName(),
         queue);
-    return new TaskIdResponseDTO(taskId);
+    return new JobIdResponseDTO(jobId);
   }
 }

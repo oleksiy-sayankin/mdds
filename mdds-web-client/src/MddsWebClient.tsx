@@ -25,7 +25,7 @@ export default function App() {
 
   const [progress, setProgress] = useState(0);
   const [isSolving, setIsSolving] = useState(false);
-  const [taskId, setTaskId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [solutionBlob, setSolutionBlob] = useState<Blob | null>(null);
   const [isDownloadingAllowed, setIsDownloadingAllowed] = useState(false);
 
@@ -156,7 +156,7 @@ export default function App() {
     setIsSolving(true);
     setProgress(0);
     setIsDownloadingAllowed(false);
-    setTaskId(null);
+    setJobId(null);
     setSolutionBlob(null);
 
     try {
@@ -193,9 +193,9 @@ export default function App() {
       const resultJson = await response.json();
       console.log("Solve response:", resultJson);
 
-      const returnedTaskId = resultJson.id;
-      setTaskId(returnedTaskId);
-      pollForResult(returnedTaskId);
+      const returnedJobId = resultJson.id;
+      setJobId(returnedJobId);
+      pollForResult(returnedJobId);
     } catch (error) {
       console.error(error);
       alert("Error sending files");
@@ -203,7 +203,7 @@ export default function App() {
     }
   };
 
-  const pollForResult = async (taskId: string) => {
+  const pollForResult = async (jobId: string) => {
     const timeoutMs = 30000;
     const pollingInterval = 1000;
     const start = Date.now();
@@ -215,12 +215,12 @@ export default function App() {
       }
 
       try {
-        const resp = await fetch(`/result/${taskId}`);
+        const resp = await fetch(`/result/${jobId}`);
         const json = await resp.json();
 
         console.log("Polling result:", json);
 
-        if (json.taskStatus === "DONE") {
+        if (json.jobStatus === "DONE") {
           setProgress(100);
           setIsDownloadingAllowed(true);
 
@@ -232,7 +232,7 @@ export default function App() {
           return;
         }
 
-        if (json.taskStatus === "ERROR") {
+        if (json.jobStatus === "ERROR") {
           alert("Error: " + json.errorMessage);
           return;
         }

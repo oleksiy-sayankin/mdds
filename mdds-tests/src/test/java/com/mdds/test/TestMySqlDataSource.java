@@ -5,8 +5,8 @@
 package com.mdds.test;
 
 import com.mdds.common.util.JsonHelper;
+import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.SlaeSolver;
-import com.mdds.dto.TaskIdResponseDTO;
 import java.io.IOException;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -64,9 +64,9 @@ class TestMySqlDataSource extends BaseEnvironment {
     var response = webServerClient.postSolve("mysql", solver.getName(), params);
     var json = response.body();
 
-    var taskId = JsonHelper.fromJson(json, TaskIdResponseDTO.class).getId();
-    Assertions.assertThat(taskId).as("Task id should not be null").isNotNull();
-    var actual = awaitForResult(taskId);
+    var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getId();
+    Assertions.assertThat(jobId).as("Job id should not be null").isNotNull();
+    var actual = awaitForResult(jobId);
 
     double[] expected = {
       3.8673716012084592145015, -1.8960725075528700906344, 0.8996978851963746223565

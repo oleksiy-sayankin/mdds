@@ -18,7 +18,7 @@ class TestCommonProperties {
 
   @Test
   void testSimpleRead() {
-    assertThat(commonProperties.getTaskQueueName()).isEqualTo("mdds_task_queue");
+    assertThat(commonProperties.getJobQueueName()).isEqualTo("mdds_job_queue");
     assertThat(commonProperties.getResultQueueName()).isEqualTo("mdds_result_queue");
   }
 }

@@ -13,31 +13,31 @@ option java_multiple_files = true;
 
 // gRPC service for solving system of linear equations.
 service SolverService {
-  rpc SubmitTask(SubmitTaskRequest) returns (SubmitTaskResponse);
-  rpc GetTaskStatus(GetTaskStatusRequest) returns (GetTaskStatusResponse);
-  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+  rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse);
+  rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
 }
 
 // Request for solving SLAE
-message SubmitTaskRequest {
-  string taskId = 1;            // unique task id
+message SubmitJobRequest {
+  string jobId = 1;             // unique job id
   string method = 2;            // method name (e.g: "numpy_exact_solver")
   repeated Row matrix = 3;      // matrix A
   repeated double rhs = 4;      // right hand side b
 
 }
 
-// Request for getting task status
-message GetTaskStatusRequest {
-  string taskId = 1;
+// Request for getting job status
+message GetJobStatusRequest {
+  string jobId = 1;
 }
 
 // Request for cancelling of running solving process for SLAE
-message CancelTaskRequest {
-  string taskId = 1;
+message CancelJobRequest {
+  string jobId = 1;
 }
 
-enum TaskStatus {
+enum JobStatus {
   UNKNOWN = 0;
   NEW = 1;
   DONE = 2;
@@ -52,22 +52,22 @@ enum RequestStatus {
   DECLINED = 2;
 }
 
-message CancelTaskResponse {
-  string taskId = 1;
+message CancelJobResponse {
+  string jobId = 1;
   RequestStatus requestStatus = 2;
   string requestStatusDetails = 3;
 }
 
 // Solution
-message GetTaskStatusResponse {
-  string taskId = 1;
+message GetJobStatusResponse {
+  string jobId = 1;
   RequestStatus requestStatus = 2;
   string requestStatusDetails = 3;
   google.protobuf.Timestamp startTime = 4;
   google.protobuf.Timestamp endTime = 5;
-  TaskStatus taskStatus = 6;
+  JobStatus jobStatus = 6;
   int32 progress = 7;
-  string taskMessage = 8;
+  string jobMessage = 8;
   repeated double solution = 9; // solution of SLAE
 }
 
@@ -76,8 +76,8 @@ message Row {
   repeated double values = 1;
 }
 
-message SubmitTaskResponse {
-  string taskId = 1;
+message SubmitJobResponse {
+  string jobId = 1;
   RequestStatus requestStatus = 2;
   string requestStatusDetails = 3;
 }

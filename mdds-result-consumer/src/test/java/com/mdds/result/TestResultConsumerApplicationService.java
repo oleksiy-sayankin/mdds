@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
@@ -85,13 +85,13 @@ class TestResultConsumerApplicationService {
   @Test
   void testResultConsumerService() {
     // Prepare and put data to result queue
-    var taskId = UUID.randomUUID().toString();
+    var jobId = UUID.randomUUID().toString();
     var expectedResult =
         new ResultDTO(
-            taskId,
+            jobId,
             Instant.now(),
             Instant.now(),
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {1.1, 2.2, 3.3, 4.4},
@@ -103,7 +103,7 @@ class TestResultConsumerApplicationService {
         .atMost(Duration.ofSeconds(10))
         .untilAsserted(
             () -> {
-              var actualResult = storage.get(taskId, ResultDTO.class);
+              var actualResult = storage.get(jobId, ResultDTO.class);
               assertThat(actualResult).isPresent();
               actualResult.ifPresent(ar -> assertThat(expectedResult).isEqualTo(ar));
             });

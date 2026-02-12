@@ -5,8 +5,8 @@
 package com.mdds.test;
 
 import com.mdds.common.util.JsonHelper;
+import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.SlaeSolver;
-import com.mdds.dto.TaskIdResponseDTO;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -28,9 +28,9 @@ class TestHttpRequestDataSource extends BaseEnvironment {
     var response = webServerClient.postSolve("http_request", solver.getName(), params);
     var json = response.body();
 
-    var taskId = JsonHelper.fromJson(json, TaskIdResponseDTO.class).getId();
-    Assertions.assertThat(taskId).as("Task id should not be null").isNotNull();
-    var actual = awaitForResult(taskId);
+    var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getId();
+    Assertions.assertThat(jobId).as("Job id should not be null").isNotNull();
+    var actual = awaitForResult(jobId);
 
     double[] expected = {
       -0.3291566787737896398658, 0.7293212011512698153684, -0.0072474839861680725996

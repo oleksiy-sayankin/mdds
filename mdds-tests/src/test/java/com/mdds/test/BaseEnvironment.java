@@ -11,7 +11,7 @@ import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.rabbitmq.client.ConnectionFactory;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.health.v1.HealthCheckRequest;
@@ -206,21 +206,21 @@ public class BaseEnvironment {
     return result;
   }
 
-  protected static ResultDTO awaitForResult(String taskId) {
+  protected static ResultDTO awaitForResult(String jobId) {
     // Request result using endpoint
     return Awaitility.await()
         .atMost(Duration.ofSeconds(30))
         .ignoreExceptions()
         .until(
             () -> {
-              var response = webServerClient.get("/result/" + taskId);
+              var response = webServerClient.get("/result/" + jobId);
               return JsonHelper.fromJson(response.body(), ResultDTO.class);
             },
-            result -> TaskStatus.DONE.equals(result.getTaskStatus()));
+            result -> JobStatus.DONE.equals(result.getJobStatus()));
   }
 
   protected static void assertDoneAndEquals(double[] expected, ResultDTO actual) {
-    assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
+    assertThat(actual.getJobStatus()).isEqualTo(JobStatus.DONE);
     var delta = 0.00000001;
     assertThat(actual.getSolution()).containsExactly(expected, offset(delta));
   }

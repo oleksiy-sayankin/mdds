@@ -2,5 +2,5 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 mdds.common:
-  task-queue-name: mdds_task_queue
+  job-queue-name: mdds_job_queue
   result-queue-name: mdds_result_queue

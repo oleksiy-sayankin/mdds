@@ -6,16 +6,16 @@ package com.mdds.executor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.mdds.common.CommonProperties;
+import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskDTO;
-import com.mdds.grpc.solver.GetTaskStatusRequest;
-import com.mdds.grpc.solver.GetTaskStatusResponse;
+import com.mdds.grpc.solver.GetJobStatusRequest;
+import com.mdds.grpc.solver.GetJobStatusResponse;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.Row;
 import com.mdds.grpc.solver.SolverServiceGrpc;
-import com.mdds.grpc.solver.SubmitTaskRequest;
-import com.mdds.grpc.solver.SubmitTaskResponse;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.SubmitJobRequest;
+import com.mdds.grpc.solver.SubmitJobResponse;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
@@ -37,18 +37,18 @@ import org.springframework.stereotype.Component;
 /** Solves system of linear algebraic equations. */
 @Slf4j
 @Component
-public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
+public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   private final SolverServiceGrpc.SolverServiceBlockingStub solverStub;
   private final Queue resultQueue;
   private final GrpcChannel grpcChannel;
   private final CommonProperties commonProperties;
   private final ExecutorProperties executorProperties;
-  private static final Duration TASK_TIMEOUT = Duration.ofSeconds(600);
+  private static final Duration JOB_TIMEOUT = Duration.ofSeconds(600);
   private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
   private static final Duration POLL_DELAY = Duration.ZERO;
   private static final Duration GRPC_REQUEST_TIMEOUT = Duration.ofSeconds(5);
-  private static final Set<TaskStatus> VALID_STATUSES =
-      Set.of(TaskStatus.DONE, TaskStatus.CANCELLED, TaskStatus.ERROR);
+  private static final Set<JobStatus> VALID_STATUSES =
+      Set.of(JobStatus.DONE, JobStatus.CANCELLED, JobStatus.ERROR);
 
   @Autowired
   public ExecutorMessageHandler(
@@ -84,66 +84,66 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
   }
 
   @Override
-  public void handle(@Nonnull Message<TaskDTO> message, @Nonnull Acknowledger ack) {
-    var task = message.payload();
+  public void handle(@Nonnull Message<JobDTO> message, @Nonnull Acknowledger ack) {
+    var job = message.payload();
     try {
-      log.info("Start handling task {}", task.getId());
-      var submitResponse = submit(task);
+      log.info("Start handling job {}", job.getId());
+      var submitResponse = submit(job);
       if (!completed(submitResponse)) {
-        publishErrorFor(task, "Error submitting task: " + submitResponse.getRequestStatusDetails());
+        publishErrorFor(job, "Error submitting job: " + submitResponse.getRequestStatusDetails());
         return;
       }
-      publishInProgressFor(task);
-      var result = awaitForResultFrom(task);
+      publishInProgressFor(job);
+      var result = awaitForResultFrom(job);
       publishResponse(result);
     } catch (ConditionTimeoutException e) {
-      publishErrorFor(task, "Timeout waiting for task status");
+      publishErrorFor(job, "Timeout waiting for job status");
     } catch (StatusRuntimeException e) {
-      publishErrorFor(task, "Internal gRPC error: " + e.getStatus());
+      publishErrorFor(job, "Internal gRPC error: " + e.getStatus());
     } catch (Exception e) {
       publishErrorFor(
-          task, "Unexpected error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+          job, "Unexpected error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
     } finally {
       ack.ack();
     }
   }
 
-  private SubmitTaskResponse submit(TaskDTO payload) {
-    var submitTaskRequest = buildSubmitTaskRequest(payload);
-    return solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).submitTask(submitTaskRequest);
+  private SubmitJobResponse submit(JobDTO payload) {
+    var submitJobRequest = buildSubmitJobRequest(payload);
+    return solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).submitJob(submitJobRequest);
   }
 
-  private void publishInProgressFor(TaskDTO payload) {
+  private void publishInProgressFor(JobDTO payload) {
     // create message with 'in progress' status
-    var taskId = payload.getId();
-    var taskCreationDateTime = payload.getDateTime();
+    var jobId = payload.getId();
+    var jobCreationDateTime = payload.getDateTime();
     var inProgress =
         new ResultDTO(
-            taskId,
-            taskCreationDateTime,
+            jobId,
+            jobCreationDateTime,
             Instant.now(),
-            TaskStatus.IN_PROGRESS,
+            JobStatus.IN_PROGRESS,
             executorProperties.getCancelQueueName(),
             30,
             new double[] {},
             "");
-    log.info("Publishing in-progress status for task {}", taskId);
+    log.info("Publishing in-progress status for job {}", jobId);
     publish(new Message<>(inProgress, Map.of(), Instant.now()));
   }
 
-  private void publishErrorFor(TaskDTO payload, String message) {
+  private void publishErrorFor(JobDTO payload, String message) {
     // create error message
     var errorResult =
         new ResultDTO(
             payload.getId(),
             payload.getDateTime(),
             Instant.now(),
-            TaskStatus.ERROR,
+            JobStatus.ERROR,
             executorProperties.getCancelQueueName(),
             70,
             new double[] {},
             message);
-    log.error("Error for task {} with message '{}'", payload.getId(), message);
+    log.error("Error for job {} with message '{}'", payload.getId(), message);
     publish(new Message<>(errorResult, Map.of(), Instant.now()));
   }
 
@@ -151,31 +151,31 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
     return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
   }
 
-  private void publishResponse(GetTaskStatusResponse response) {
+  private void publishResponse(GetJobStatusResponse response) {
     // create message with solution and publish to result queue
     var solution = response.getSolutionList().stream().mapToDouble(Double::doubleValue).toArray();
     var resultArray =
         new ResultDTO(
-            response.getTaskId(),
+            response.getJobId(),
             toInstant(response.getStartTime()),
             toInstant(response.getEndTime()),
-            response.getTaskStatus(),
+            response.getJobStatus(),
             executorProperties.getCancelQueueName(),
             response.getProgress(),
             solution,
-            response.getTaskMessage());
+            response.getJobMessage());
     log.info(
-        "Published response for task {} with message '{}'",
-        response.getTaskId(),
-        response.getTaskMessage());
+        "Published response for job {} with message '{}'",
+        response.getJobId(),
+        response.getJobMessage());
     publish(new Message<>(resultArray, Map.of(), Instant.now()));
   }
 
-  private GetTaskStatusResponse awaitForResultFrom(TaskDTO task) {
-    var request = buildGetTaskStatusRequest(task.getId());
+  private GetJobStatusResponse awaitForResultFrom(JobDTO job) {
+    var request = buildGetJobStatusRequest(job.getId());
     var attempts = new AtomicInteger(0);
     return Awaitility.await()
-        .atMost(TASK_TIMEOUT)
+        .atMost(JOB_TIMEOUT)
         .pollInterval(POLL_INTERVAL)
         .pollDelay(POLL_DELAY)
         .ignoreExceptionsMatching(
@@ -190,52 +190,52 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
         .until(
             () -> {
               var response =
-                  solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).getTaskStatus(request);
+                  solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).getJobStatus(request);
               log.debug(
-                  "Task status attempt {}: id {}, requestStatus {}, taskStatus {}, msg '{}'",
+                  "Job status attempt {}: id {}, requestStatus {}, jobStatus {}, msg '{}'",
                   attempts.incrementAndGet(),
-                  task.getId(),
+                  job.getId(),
                   response.getRequestStatus(),
-                  response.getTaskStatus(),
-                  response.getTaskMessage());
+                  response.getJobStatus(),
+                  response.getJobMessage());
               return response;
             },
-            response -> completed(response) && taskIsInTerminalState(response));
+            response -> completed(response) && jobIsInTerminalState(response));
   }
 
-  private static boolean taskIsInTerminalState(GetTaskStatusResponse response) {
-    return VALID_STATUSES.contains(response.getTaskStatus());
+  private static boolean jobIsInTerminalState(GetJobStatusResponse response) {
+    return VALID_STATUSES.contains(response.getJobStatus());
   }
 
-  private static boolean completed(SubmitTaskResponse response) {
+  private static boolean completed(SubmitJobResponse response) {
     return RequestStatus.COMPLETED.equals(response.getRequestStatus());
   }
 
-  private static boolean completed(GetTaskStatusResponse response) {
+  private static boolean completed(GetJobStatusResponse response) {
     return RequestStatus.COMPLETED.equals(response.getRequestStatus());
   }
 
   private void publish(Message<ResultDTO> resultMessage) {
     resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
     log.info(
-        "Published result for task with id {} and status {} to queue '{}', {}",
-        resultMessage.payload().getTaskId(),
-        resultMessage.payload().getTaskStatus(),
+        "Published result for job with id {} and status {} to queue '{}', {}",
+        resultMessage.payload().getJobId(),
+        resultMessage.payload().getJobStatus(),
         commonProperties.getResultQueueName(),
         resultQueue);
   }
 
-  private static GetTaskStatusRequest buildGetTaskStatusRequest(String taskId) {
-    log.info("Building get task status request for task {}", taskId);
-    var requestBuilder = GetTaskStatusRequest.newBuilder().setTaskId(taskId);
+  private static GetJobStatusRequest buildGetJobStatusRequest(String jobId) {
+    log.info("Building get job status request for job {}", jobId);
+    var requestBuilder = GetJobStatusRequest.newBuilder().setJobId(jobId);
     return requestBuilder.build();
   }
 
-  private static SubmitTaskRequest buildSubmitTaskRequest(TaskDTO payload) {
-    log.info("Building submit solve task request for task {}", payload.getId());
+  private static SubmitJobRequest buildSubmitJobRequest(JobDTO payload) {
+    log.info("Building submit solve job request for job {}", payload.getId());
     // set solving method for gRPC request
     var requestBuilder =
-        SubmitTaskRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());
+        SubmitJobRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());
 
     // set matrix for gRPC request
     for (var row : payload.getMatrix()) {
@@ -251,8 +251,8 @@ public class ExecutorMessageHandler implements MessageHandler<TaskDTO> {
       requestBuilder.addRhs(value);
     }
 
-    // set task id
-    requestBuilder.setTaskId(payload.getId());
+    // set job id
+    requestBuilder.setJobId(payload.getId());
     return requestBuilder.build();
   }
 

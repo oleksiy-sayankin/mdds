@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.mdds.dto.ResultDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,33 +40,33 @@ class TestRedisDataStorage {
   @Test
   void testPut() {
     var result = new ResultDTO();
-    var taskId = "test";
-    result.setTaskId(taskId);
-    result.setDateTimeTaskStarted(Instant.now());
-    result.setDateTimeTaskEnded(Instant.now());
-    result.setTaskStatus(TaskStatus.DONE);
+    var jobId = "test";
+    result.setJobId(jobId);
+    result.setDateTimeJobStarted(Instant.now());
+    result.setDateTimeJobEnded(Instant.now());
+    result.setJobStatus(JobStatus.DONE);
     result.setProgress(100);
     result.setSolution(new double[] {9.3, 6.278, 6.783, 3.874});
     result.setErrorMessage("");
     try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
-      assertThatCode(() -> dataStorage.put(taskId, result)).doesNotThrowAnyException();
+      assertThatCode(() -> dataStorage.put(jobId, result)).doesNotThrowAnyException();
     }
   }
 
   @Test
   void testGet() {
     var expectedResult = new ResultDTO();
-    var taskId = "test";
-    expectedResult.setTaskId(taskId);
-    expectedResult.setDateTimeTaskStarted(Instant.now());
-    expectedResult.setDateTimeTaskEnded(Instant.now());
-    expectedResult.setTaskStatus(TaskStatus.DONE);
+    var jobId = "test";
+    expectedResult.setJobId(jobId);
+    expectedResult.setDateTimeJobStarted(Instant.now());
+    expectedResult.setDateTimeJobEnded(Instant.now());
+    expectedResult.setJobStatus(JobStatus.DONE);
     expectedResult.setProgress(100);
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
     expectedResult.setErrorMessage("");
     try (var dataStorage = new RedisDataStorage(DEFAULT_HOST, REDIS_SERVER_PORT)) {
-      assertThatCode(() -> dataStorage.put(taskId, expectedResult)).doesNotThrowAnyException();
-      var actualResult = dataStorage.get(taskId, ResultDTO.class);
+      assertThatCode(() -> dataStorage.put(jobId, expectedResult)).doesNotThrowAnyException();
+      var actualResult = dataStorage.get(jobId, ResultDTO.class);
       assertThat(actualResult.isPresent() ? actualResult.get() : actualResult)
           .isEqualTo(expectedResult);
     }

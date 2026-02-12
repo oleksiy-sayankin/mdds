@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.mdds.dto.ResultDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
 import java.time.Instant;
@@ -36,19 +36,19 @@ class TestServerApplicationCancelController {
   @Test
   void testCancel() {
     var scc = new ServerCancelController(dataStorage, cancelQueue);
-    var taskId = "testTaskId";
+    var jobId = "testJobId";
     var result =
         new ResultDTO(
-            taskId,
+            jobId,
             Instant.now(),
             Instant.now(),
-            TaskStatus.IN_PROGRESS,
+            JobStatus.IN_PROGRESS,
             "cancel.queue",
             10,
             null,
             "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
-    var actual = scc.cancel(taskId);
+    var actual = scc.cancel(jobId);
     assertThat(actual.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
     verify(cancelQueue).publish(eq("cancel.queue"), any());
   }
@@ -56,36 +56,35 @@ class TestServerApplicationCancelController {
   @Test
   void testCancelNoQueueName() {
     var scc = new ServerCancelController(dataStorage, cancelQueue);
-    var taskId = "testTaskId";
+    var jobId = "testJobId";
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> scc.cancel(taskId))
-        .isInstanceOf(CanNotCancelTaskException.class)
-        .hasMessageContaining("Can not cancel task");
+    assertThatThrownBy(() -> scc.cancel(jobId))
+        .isInstanceOf(CanNotCancelJobException.class)
+        .hasMessageContaining("Can not cancel job");
   }
 
   @Test
-  void testCancelDoneTask() {
+  void testCancelDoneJob() {
     var scc = new ServerCancelController(dataStorage, cancelQueue);
-    var taskId = "testTaskId";
+    var jobId = "testJobId";
     var result =
         new ResultDTO(
-            taskId, Instant.now(), Instant.now(), TaskStatus.DONE, "cancel.queue", 100, null, "");
+            jobId, Instant.now(), Instant.now(), JobStatus.DONE, "cancel.queue", 100, null, "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
-    assertThatThrownBy(() -> scc.cancel(taskId))
-        .isInstanceOf(CanNotCancelTaskException.class)
-        .hasMessageContaining("Task " + taskId + " is already DONE");
+    assertThatThrownBy(() -> scc.cancel(jobId))
+        .isInstanceOf(CanNotCancelJobException.class)
+        .hasMessageContaining("Job " + jobId + " is already DONE");
   }
 
   @Test
   void testCancelEmptyQueueName() {
     var scc = new ServerCancelController(dataStorage, cancelQueue);
-    var taskId = "testTaskId";
+    var jobId = "testJobId";
     var result =
-        new ResultDTO(
-            taskId, Instant.now(), Instant.now(), TaskStatus.IN_PROGRESS, "", 10, null, "");
+        new ResultDTO(jobId, Instant.now(), Instant.now(), JobStatus.IN_PROGRESS, "", 10, null, "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
-    assertThatThrownBy(() -> scc.cancel(taskId))
-        .isInstanceOf(CanNotCancelTaskException.class)
+    assertThatThrownBy(() -> scc.cancel(jobId))
+        .isInstanceOf(CanNotCancelJobException.class)
         .hasMessageContaining("Cancel queue name is empty");
   }
 }

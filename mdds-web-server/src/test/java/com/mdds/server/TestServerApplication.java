@@ -14,7 +14,7 @@ import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ErrorResponseDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.storage.redis.RedisDataStorage;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -152,39 +152,39 @@ class TestServerApplication {
   }
 
   @Test
-  void testNoResultForTaskId() throws IOException, InterruptedException {
-    var taskId = "wrong_task_id";
+  void testNoResultForJobId() throws IOException, InterruptedException {
+    var jobId = "wrong_job_id";
     // Request result using endpoint
     var http = new HttpTestClient(HOST, PORT);
-    var response = http.get("/result/" + taskId);
+    var response = http.get("/result/" + jobId);
     assertThat(response.statusCode()).isEqualTo(404);
     var body = JsonHelper.fromJson(response.body(), ErrorResponseDTO.class);
-    assertThat(body.message()).isEqualTo("No result found for " + taskId);
+    assertThat(body.message()).isEqualTo("No result found for " + jobId);
   }
 
   @Test
   void testResultReturnsDataFromDataStorage() throws IOException, InterruptedException {
-    var taskId = "test_task_id";
+    var jobId = "test_job_id";
     // Create Result and put it to storage manually
     var expected = new ResultDTO();
-    expected.setTaskId(taskId);
-    expected.setDateTimeTaskStarted(Instant.now());
-    expected.setDateTimeTaskEnded(Instant.now());
-    expected.setTaskStatus(TaskStatus.DONE);
+    expected.setJobId(jobId);
+    expected.setDateTimeJobStarted(Instant.now());
+    expected.setDateTimeJobEnded(Instant.now());
+    expected.setJobStatus(JobStatus.DONE);
     expected.setProgress(100);
     expected.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});
 
     // We expect Redis service is up and running here
     try (var storage = new RedisDataStorage(HOST, REDIS_PORT)) {
-      storage.put(taskId, expected);
+      storage.put(jobId, expected);
       // Test that data is in data storage
-      var actual = storage.get(taskId, ResultDTO.class);
+      var actual = storage.get(jobId, ResultDTO.class);
       assertThat(actual.isPresent() ? actual.get() : actual).isEqualTo(expected);
     }
 
     // Request result using endpoint
     var http = new HttpTestClient(HOST, PORT);
-    var response = http.get("/result/" + taskId);
+    var response = http.get("/result/" + jobId);
     var actual = JsonHelper.fromJson(response.body(), ResultDTO.class);
     assertThat(actual).isEqualTo(expected);
   }

@@ -22,8 +22,8 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDTO(ex.getMessage()));
   }
 
-  @ExceptionHandler(CanNotCancelTaskException.class)
-  public ResponseEntity<ErrorResponseDTO> handleCanNotCancelTask(CanNotCancelTaskException ex) {
+  @ExceptionHandler(CanNotCancelJobException.class)
+  public ResponseEntity<ErrorResponseDTO> handleCanNotCancelJob(CanNotCancelJobException ex) {
     return ResponseEntity.status(ex.getHttpStatus()).body(new ErrorResponseDTO(ex.getMessage()));
   }
 }

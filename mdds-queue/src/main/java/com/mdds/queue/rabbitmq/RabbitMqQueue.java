@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 
-/** Queue that delivers tasks to Executors. */
+/** Queue that delivers jobs to Executors. */
 @Slf4j
 public class RabbitMqQueue implements Queue {
   private final @Nonnull Channel channel;

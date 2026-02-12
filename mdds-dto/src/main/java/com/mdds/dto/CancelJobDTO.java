@@ -9,10 +9,10 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Represents request for cancelling a task */
+/** Represents request for cancelling a job */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CancelTaskDTO {
-  private @Nonnull String taskId;
+public class CancelJobDTO {
+  private @Nonnull String jobId;
 }

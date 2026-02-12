@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.rabbitmq.RabbitMqQueue;
 import com.mdds.storage.redis.RedisDataStorage;
@@ -104,11 +104,11 @@ class TestResultConsumerApplication {
   void testResultConsumerTakesResultFromQueue() {
     // Prepare and put data to result queue
     var expected = new ResultDTO();
-    var taskId = "test";
-    expected.setTaskId(taskId);
-    expected.setDateTimeTaskStarted(Instant.now());
-    expected.setDateTimeTaskEnded(Instant.now());
-    expected.setTaskStatus(TaskStatus.DONE);
+    var jobId = "test";
+    expected.setJobId(jobId);
+    expected.setDateTimeJobStarted(Instant.now());
+    expected.setDateTimeJobEnded(Instant.now());
+    expected.setJobStatus(JobStatus.DONE);
     expected.setProgress(100);
     expected.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     var message = new Message<>(expected, new HashMap<>(), Instant.now());
@@ -127,7 +127,7 @@ class TestResultConsumerApplication {
         .untilAsserted(
             () -> {
               try (var storage = new RedisDataStorage("localhost", REDIS_PORT)) {
-                var actualResult = storage.get(taskId, ResultDTO.class);
+                var actualResult = storage.get(jobId, ResultDTO.class);
                 assertThat(actualResult).isPresent();
                 actualResult.ifPresent(ar -> assertThat(ar).isEqualTo(expected));
               }
@@ -137,39 +137,39 @@ class TestResultConsumerApplication {
   @Test
   void testResultConsumerTakesThreeResultItemsFromQueue() {
     // Prepare and put data to result queue
-    var taskId1 = UUID.randomUUID().toString();
+    var jobId1 = UUID.randomUUID().toString();
     var expectedResult1 =
         new ResultDTO(
-            taskId1,
+            jobId1,
             Instant.now(),
             Instant.now(),
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
     var message1 = new Message<>(expectedResult1, new HashMap<>(), Instant.now());
 
-    var taskId2 = UUID.randomUUID().toString();
+    var jobId2 = UUID.randomUUID().toString();
     var expectedResult2 =
         new ResultDTO(
-            taskId2,
+            jobId2,
             Instant.now(),
             Instant.now(),
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {2.1, 3.2, 3.3, 4.4},
             "");
     var message2 = new Message<>(expectedResult2, new HashMap<>(), Instant.now());
 
-    var taskId3 = UUID.randomUUID().toString();
+    var jobId3 = UUID.randomUUID().toString();
     var expectedResult3 =
         new ResultDTO(
-            taskId3,
+            jobId3,
             Instant.now(),
             Instant.now(),
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {3.1, 4.2, 3.3, 4.4},
@@ -193,15 +193,15 @@ class TestResultConsumerApplication {
         .untilAsserted(
             () -> {
               try (var storage = new RedisDataStorage("localhost", REDIS_PORT)) {
-                var actualResult1 = storage.get(taskId1, ResultDTO.class);
+                var actualResult1 = storage.get(jobId1, ResultDTO.class);
                 assertThat(actualResult1).isPresent();
                 actualResult1.ifPresent(ar -> assertThat(ar).isEqualTo(expectedResult1));
 
-                var actualResult2 = storage.get(taskId2, ResultDTO.class);
+                var actualResult2 = storage.get(jobId2, ResultDTO.class);
                 assertThat(actualResult2).isPresent();
                 actualResult2.ifPresent(ar -> assertThat(ar).isEqualTo(expectedResult2));
 
-                var actualResult3 = storage.get(taskId3, ResultDTO.class);
+                var actualResult3 = storage.get(jobId3, ResultDTO.class);
                 assertThat(actualResult3).isPresent();
                 actualResult3.ifPresent(ar -> assertThat(ar).isEqualTo(expectedResult3));
               }

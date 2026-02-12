@@ -3,11 +3,11 @@
 from generated import solver_pb2
 
 
-TaskStatus = solver_pb2.TaskStatus
-DONE = int(TaskStatus.DONE)
-ERROR = int(TaskStatus.ERROR)
-CANCELLED = int(TaskStatus.CANCELLED)
-IN_PROGRESS = int(TaskStatus.IN_PROGRESS)
+JobStatus = solver_pb2.JobStatus
+DONE = int(JobStatus.DONE)
+ERROR = int(JobStatus.ERROR)
+CANCELLED = int(JobStatus.CANCELLED)
+IN_PROGRESS = int(JobStatus.IN_PROGRESS)
 
 TERMINAL = {DONE, ERROR, CANCELLED}
 

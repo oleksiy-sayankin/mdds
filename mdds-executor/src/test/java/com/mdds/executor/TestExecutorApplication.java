@@ -10,11 +10,11 @@ import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.offset;
 
 import com.mdds.common.CommonProperties;
-import com.mdds.dto.CancelTaskDTO;
+import com.mdds.dto.CancelJobDTO;
+import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
-import com.mdds.dto.TaskDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import java.io.File;
@@ -54,8 +54,8 @@ import org.testcontainers.utility.MountableFile;
     webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class TestExecutorApplication {
   @Autowired
-  @Qualifier("taskQueue")
-  private Queue taskQueue;
+  @Qualifier("jobQueue")
+  private Queue jobQueue;
 
   @Autowired
   @Qualifier("resultQueue")
@@ -145,12 +145,12 @@ class TestExecutorApplication {
 
   @Test
   void testExecutor() {
-    // Prepare and put data to task queue
-    var taskId = UUID.randomUUID().toString();
+    // Prepare and put data to job queue
+    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task =
-        new TaskDTO(
-            taskId,
+    var job =
+        new JobDTO(
+            jobId,
             startTime,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4},
@@ -161,22 +161,22 @@ class TestExecutorApplication {
             new double[] {4.3, 3.23, 5.324, 4.553},
             SlaeSolver.NUMPY_EXACT_SOLVER);
 
-    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
-    taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
+    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
     log.info(
-        "Published taskMessage = {} to '{}', {}",
-        taskMessage,
-        commonProperties.getTaskQueueName(),
-        taskQueue);
-    var actual = waitForResult(taskId, resultQueue);
+        "Published jobMessage = {} to '{}', {}",
+        jobMessage,
+        commonProperties.getJobQueueName(),
+        jobQueue);
+    var actual = waitForResult(jobId, resultQueue);
     log.info("actualResult = {}", actual);
-    var endTime = actual.getDateTimeTaskEnded();
+    var endTime = actual.getDateTimeJobEnded();
     var expected =
         new ResultDTO(
-            taskId,
+            jobId,
             startTime,
             endTime,
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {
@@ -198,12 +198,12 @@ class TestExecutorApplication {
   @ParameterizedTest
   @MethodSource("solvers")
   void testExecutorAllSolvers(SlaeSolver slaeSolver) {
-    // Prepare and put data to task queue
-    var taskId = UUID.randomUUID().toString();
+    // Prepare and put data to job queue
+    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task =
-        new TaskDTO(
-            taskId,
+    var job =
+        new JobDTO(
+            jobId,
             startTime,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4},
@@ -214,17 +214,17 @@ class TestExecutorApplication {
             new double[] {4.3, 3.23, 5.324, 4.553},
             slaeSolver);
 
-    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
-    taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
-    var actual = waitForResult(taskId, resultQueue);
+    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+    var actual = waitForResult(jobId, resultQueue);
 
-    var endTime = actual.getDateTimeTaskEnded();
+    var endTime = actual.getDateTimeJobEnded();
     var expected =
         new ResultDTO(
-            taskId,
+            jobId,
             startTime,
             endTime,
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {
@@ -237,12 +237,12 @@ class TestExecutorApplication {
 
   @Test
   void testExecutorWithErrorInInputData() {
-    // Prepare and put data to task queue
-    var taskId = UUID.randomUUID().toString();
+    // Prepare and put data to job queue
+    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task =
-        new TaskDTO(
-            taskId,
+    var job =
+        new JobDTO(
+            jobId,
             startTime,
             new double[][] {
               {
@@ -255,17 +255,17 @@ class TestExecutorApplication {
             new double[] {4.3, 3.23, 5.324, 4.553},
             SlaeSolver.NUMPY_EXACT_SOLVER);
 
-    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
-    taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
+    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
 
-    var actual = waitForResult(taskId, resultQueue);
-    var endTime = actual.getDateTimeTaskEnded();
+    var actual = waitForResult(jobId, resultQueue);
+    var endTime = actual.getDateTimeJobEnded();
     var expected =
         new ResultDTO(
-            taskId,
+            jobId,
             startTime,
             endTime,
-            TaskStatus.ERROR,
+            JobStatus.ERROR,
             "cancel.queue-executor-001",
             50,
             new double[] {},
@@ -277,8 +277,8 @@ class TestExecutorApplication {
   }
 
   @Test
-  void testCancelTask() throws InterruptedException {
-    String taskId;
+  void testCancelJob() throws InterruptedException {
+    String jobId;
     var duration = Duration.ofMillis(3000);
     Duration currentDuration;
     var size = 500;
@@ -288,40 +288,40 @@ class TestExecutorApplication {
     do {
       size = Math.toIntExact(Math.round(size * 1.05));
       if (size > maxSize) {
-        fail("Can not cancel task after maximum size is " + maxSize);
+        fail("Can not cancel job after maximum size is " + maxSize);
       }
       matrix = matrix(size);
       rhs = rhs(size);
-      taskId = UUID.randomUUID().toString();
+      jobId = UUID.randomUUID().toString();
       var startTime = Instant.now();
-      var task = new TaskDTO(taskId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
-      var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
-      taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
-      log.info("Submitted task for SLAE size {} x {}. Waiting for solution...", size, size);
-      var actual = waitForResult(taskId, resultQueue);
-      var endTime = actual.getDateTimeTaskEnded();
+      var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
+      var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+      jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+      log.info("Submitted job for SLAE size {} x {}. Waiting for solution...", size, size);
+      var actual = waitForResult(jobId, resultQueue);
+      var endTime = actual.getDateTimeJobEnded();
       currentDuration = Duration.between(startTime, endTime);
       log.info("Solved SLAE with size {} x {} for {}", size, size, currentDuration);
     } while (currentDuration.compareTo(duration) < 0);
 
     matrix = matrix(size);
     rhs = rhs(size);
-    taskId = UUID.randomUUID().toString();
+    jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task = new TaskDTO(taskId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
-    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
-    taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
+    var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
+    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
     log.info(
-        "Submitted task {} for SLAE size {} x {}. Waiting for cancellation...", taskId, size, size);
-    var result = waitForStatus(taskId, resultQueue, TaskStatus.IN_PROGRESS);
-    log.info("Started processing task {}", taskId);
+        "Submitted job {} for SLAE size {} x {}. Waiting for cancellation...", jobId, size, size);
+    var result = waitForStatus(jobId, resultQueue, JobStatus.IN_PROGRESS);
+    log.info("Started processing job {}", jobId);
     var cancelQueueName = result.getCancelQueueName();
-    var cancelTask = new CancelTaskDTO(taskId);
-    var cancelMessage = new Message<>(cancelTask, new HashMap<>(), Instant.now());
+    var cancelJob = new CancelJobDTO(jobId);
+    var cancelMessage = new Message<>(cancelJob, new HashMap<>(), Instant.now());
     cancelQueue.publish(cancelQueueName, cancelMessage);
-    log.info("Submitting cancel message for task {} to cancel queue {}", taskId, cancelQueueName);
-    result = waitForStatus(taskId, resultQueue, TaskStatus.CANCELLED);
-    assertThat(result.getTaskStatus()).isEqualTo(TaskStatus.CANCELLED);
+    log.info("Submitting cancel message for job {} to cancel queue {}", jobId, cancelQueueName);
+    result = waitForStatus(jobId, resultQueue, JobStatus.CANCELLED);
+    assertThat(result.getJobStatus()).isEqualTo(JobStatus.CANCELLED);
   }
 
   private static double[][] matrix(int size) {
@@ -342,7 +342,7 @@ class TestExecutorApplication {
     return rhs;
   }
 
-  private ResultDTO waitForResult(String taskId, Queue resultQueue) {
+  private ResultDTO waitForResult(String jobId, Queue resultQueue) {
     var results = new CopyOnWriteArrayList<ResultDTO>();
 
     try (var ignored =
@@ -351,7 +351,7 @@ class TestExecutorApplication {
             ResultDTO.class,
             (message, ack) -> {
               var payload = message.payload();
-              if (taskId.equals(payload.getTaskId())) {
+              if (jobId.equals(payload.getJobId())) {
                 results.add(payload);
               }
               ack.ack();
@@ -359,11 +359,11 @@ class TestExecutorApplication {
       Awaitility.await().atMost(Duration.ofSeconds(60)).until(() -> results.size() == 2);
       return results.getLast();
     } catch (Exception e) {
-      throw new AssertionError("Failed to receive result for taskId = " + taskId, e);
+      throw new AssertionError("Failed to receive result for jobId = " + jobId, e);
     }
   }
 
-  private ResultDTO waitForStatus(String taskId, Queue resultQueue, TaskStatus status) {
+  private ResultDTO waitForStatus(String jobId, Queue resultQueue, JobStatus status) {
     AtomicReference<ResultDTO> result = new AtomicReference<>();
     try (var ignored =
         resultQueue.subscribe(
@@ -371,7 +371,7 @@ class TestExecutorApplication {
             ResultDTO.class,
             (message, ack) -> {
               var payload = message.payload();
-              if (taskId.equals(payload.getTaskId()) && status.equals(payload.getTaskStatus())) {
+              if (jobId.equals(payload.getJobId()) && status.equals(payload.getJobStatus())) {
                 result.set(payload);
               }
               ack.ack();
@@ -379,13 +379,13 @@ class TestExecutorApplication {
       Awaitility.await().atMost(Duration.ofSeconds(60)).until(() -> result.get() != null);
       return result.get();
     } catch (Exception e) {
-      throw new AssertionError("Failed to receive result for taskId = " + taskId, e);
+      throw new AssertionError("Failed to receive result for jobId = " + jobId, e);
     }
   }
 
   private static void assertSolution(ResultDTO expected, ResultDTO actual) {
-    assertThat(actual.getTaskId()).isEqualTo(expected.getTaskId());
-    assertThat(actual.getTaskStatus()).isEqualTo(expected.getTaskStatus());
+    assertThat(actual.getJobId()).isEqualTo(expected.getJobId());
+    assertThat(actual.getJobStatus()).isEqualTo(expected.getJobStatus());
     assertThat(actual.getSolution()).containsExactly(expected.getSolution(), offset(1e-6));
   }
 }

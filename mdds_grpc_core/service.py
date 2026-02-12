@@ -90,13 +90,13 @@ def terminate_process(proc: mp.Process, timeout: float = 3.0) -> None:
 ctx = mp.get_context("spawn")  # Create multi process context
 
 
-def get_progress(task_status: int, start_time: float) -> int:
-    if task_status == IN_PROGRESS:
+def get_progress(job_status: int, start_time: float) -> int:
+    if job_status == IN_PROGRESS:
         p = int((time.time() - start_time) / JOB_TIMEOUT * 100)
         return max(0, min(99, p))
-    if task_status == DONE:
+    if job_status == DONE:
         return 100
-    if task_status in (ERROR, CANCELLED):
+    if job_status in (ERROR, CANCELLED):
         return 70
     return 0
 
@@ -112,28 +112,28 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
         super().__init__()
         self.active = active
 
-    def SubmitTask(self, request, context):
-        task_id = request.taskId
-        if not task_id:
-            logger.warning("No task id provided")
-            return solver_pb2.SubmitTaskResponse(
+    def SubmitJob(self, request, context):
+        job_id = request.jobId
+        if not job_id:
+            logger.warning("No job id provided")
+            return solver_pb2.SubmitJobResponse(
                 requestStatus=DECLINED,
-                requestStatusDetails="Task id is invalid: empty or null",
+                requestStatusDetails="Job id is invalid: empty or null",
             )
 
-        if self.active.get(task_id):
-            logger.warning(f"Task {task_id} is already submitted")
-            return solver_pb2.SubmitTaskResponse(
-                taskId=task_id,
+        if self.active.get(job_id):
+            logger.warning(f"Job {job_id} is already submitted")
+            return solver_pb2.SubmitJobResponse(
+                jobId=job_id,
                 requestStatus=DECLINED,
-                requestStatusDetails="Task already submitted",
+                requestStatusDetails="Job already submitted",
             )
 
         method = request.method
         if method not in SOLVER_MAP:
             logger.warning(f"Method {method} not supported")
-            return solver_pb2.SubmitTaskResponse(
-                taskId=task_id,
+            return solver_pb2.SubmitJobResponse(
+                jobId=job_id,
                 requestStatus=DECLINED,
                 requestStatusDetails=f"Unknown method: {method}",
             )
@@ -150,102 +150,102 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
 
         # Save job to dictionary
         self.active.put(
-            task_id,
+            job_id,
             Job(
                 process,
                 IN_PROGRESS,
                 [],
-                "Task submitted and is in progress",
+                "Job submitted and is in progress",
                 time.time(),
                 None,
                 parent_conn,
             ),
         )
 
-        logger.info(f"Task {task_id} submitted and is in progress")
-        return solver_pb2.SubmitTaskResponse(
-            taskId=task_id,
+        logger.info(f"Job {job_id} submitted and is in progress")
+        return solver_pb2.SubmitJobResponse(
+            jobId=job_id,
             requestStatus=COMPLETED,
-            requestStatusDetails=f"Successfully submitted job for task: {task_id}",
+            requestStatusDetails=f"Successfully submitted job for job: {job_id}",
         )
 
-    def CancelTask(self, request, context):
-        task_id = request.taskId
-        if not task_id:
-            logger.warning("No task id provided")
-            return solver_pb2.CancelTaskResponse(
+    def CancelJob(self, request, context):
+        job_id = request.jobId
+        if not job_id:
+            logger.warning("No job id provided")
+            return solver_pb2.CancelJobResponse(
                 requestStatus=DECLINED,
-                requestStatusDetails="Task id is empty",
+                requestStatusDetails="Job id is empty",
             )
-        job = self.active.get(task_id, None)
+        job = self.active.get(job_id, None)
         if job is None:
-            logger.warning(f"Task {task_id} does not exist")
-            return solver_pb2.CancelTaskResponse(
-                taskId=task_id,
+            logger.warning(f"Job {job_id} does not exist")
+            return solver_pb2.CancelJobResponse(
+                jobId=job_id,
                 requestStatus=DECLINED,
-                requestStatusDetails=f"Task {task_id} is not found. Total active tasks count: {self.active.size()}",
+                requestStatusDetails=f"Job {job_id} is not found. Total active jobs count: {self.active.size()}",
             )
         with job.lock:
-            if job.taskStatus != IN_PROGRESS:
+            if job.jobStatus != IN_PROGRESS:
                 logger.warning(
-                    f"Task {task_id} is not in progress. Task status is {solver_pb2.TaskStatus.Name(job.taskStatus)}"
+                    f"Job {job_id} is not in progress. Job status is {solver_pb2.JobStatus.Name(job.jobStatus)}"
                 )
-                return solver_pb2.CancelTaskResponse(
-                    taskId=task_id,
+                return solver_pb2.CancelJobResponse(
+                    jobId=job_id,
                     requestStatus=DECLINED,
-                    requestStatusDetails=f"Task {task_id} is not in IN_PROGRESS state. Task status is {solver_pb2.TaskStatus.Name(job.taskStatus)}",
+                    requestStatusDetails=f"Job {job_id} is not in IN_PROGRESS state. Job status is {solver_pb2.JobStatus.Name(job.jobStatus)}",
                 )
             # mark that process is terminated intentionally and not by error
-            job.taskStatus = CANCELLED
-            job.taskMessage = "Cancelled by request"
+            job.jobStatus = CANCELLED
+            job.jobMessage = "Cancelled by request"
             job.endTime = time.time()
 
         terminate_process(job.process)
-        logger.info(f"Task {task_id} is cancelled")
-        return solver_pb2.CancelTaskResponse(
-            taskId=task_id,
+        logger.info(f"Job {job_id} is cancelled")
+        return solver_pb2.CancelJobResponse(
+            jobId=job_id,
             requestStatus=COMPLETED,
-            requestStatusDetails=f"Task {task_id} is cancelled",
+            requestStatusDetails=f"Job {job_id} is cancelled",
         )
 
-    def GetTaskStatus(self, request, context):
-        task_id = request.taskId
-        if not task_id:
-            logger.warning("No task id provided")
-            return solver_pb2.GetTaskStatusResponse(
+    def GetJobStatus(self, request, context):
+        job_id = request.jobId
+        if not job_id:
+            logger.warning("No job id provided")
+            return solver_pb2.GetJobStatusResponse(
                 requestStatus=DECLINED,
-                requestStatusDetails="Task id is empty or null",
+                requestStatusDetails="Job id is empty or null",
             )
-        job = self.active.get(task_id, None)
+        job = self.active.get(job_id, None)
         if job is None:
-            logger.warning(f"Task {task_id} does not exist")
-            return solver_pb2.GetTaskStatusResponse(
-                taskId=task_id,
+            logger.warning(f"Job {job_id} does not exist")
+            return solver_pb2.GetJobStatusResponse(
+                jobId=job_id,
                 requestStatus=DECLINED,
-                requestStatusDetails=f"Task {task_id} is not found. Total active tasks count: {self.active.size()}",
+                requestStatusDetails=f"Job {job_id} is not found. Total active jobs count: {self.active.size()}",
             )
         with job.lock:
-            task_status = job.taskStatus
+            job_status = job.jobStatus
             solution = job.solution
-            task_message = job.taskMessage
+            job_message = job.jobMessage
             start_time = job.startTime
             end_time = job.endTime or time.time()
-            if task_status in TERMINAL:
+            if job_status in TERMINAL:
                 job.delivered = True
 
-        progress = get_progress(task_status, start_time)
+        progress = get_progress(job_status, start_time)
 
         logger.debug(
-            f"Found task {task_id} with status: {solver_pb2.TaskStatus.Name(task_status)}"
+            f"Found job {job_id} with status: {solver_pb2.JobStatus.Name(job_status)}"
         )
-        return solver_pb2.GetTaskStatusResponse(
+        return solver_pb2.GetJobStatusResponse(
             requestStatus=COMPLETED,
-            requestStatusDetails="Found task status",
-            taskId=task_id,
+            requestStatusDetails="Found job status",
+            jobId=job_id,
             startTime=ts_from_unix(start_time),
             endTime=ts_from_unix(end_time),
             progress=progress,
-            taskStatus=task_status,
+            jobStatus=job_status,
             solution=solution,
-            taskMessage=task_message,
+            jobMessage=job_message,
         )

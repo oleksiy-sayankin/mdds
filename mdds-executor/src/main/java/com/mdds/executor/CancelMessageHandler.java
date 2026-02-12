@@ -4,8 +4,8 @@
  */
 package com.mdds.executor;
 
-import com.mdds.dto.CancelTaskDTO;
-import com.mdds.grpc.solver.CancelTaskRequest;
+import com.mdds.dto.CancelJobDTO;
+import com.mdds.grpc.solver.CancelJobRequest;
 import com.mdds.grpc.solver.SolverServiceGrpc;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
@@ -16,10 +16,10 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-/** Cancels task by task id. */
+/** Cancels job by job id. */
 @Slf4j
 @Component
-public class CancelMessageHandler implements MessageHandler<CancelTaskDTO> {
+public class CancelMessageHandler implements MessageHandler<CancelJobDTO> {
   private final SolverServiceGrpc.SolverServiceBlockingStub solverStub;
 
   @Autowired
@@ -28,23 +28,23 @@ public class CancelMessageHandler implements MessageHandler<CancelTaskDTO> {
   }
 
   @Override
-  public void handle(@NonNull Message<CancelTaskDTO> message, @NonNull Acknowledger ack) {
+  public void handle(@NonNull Message<CancelJobDTO> message, @NonNull Acknowledger ack) {
     var payload = message.payload();
     try {
-      var response = solverStub.cancelTask(buildCancelRequest(payload));
+      var response = solverStub.cancelJob(buildCancelRequest(payload));
       log.info(
-          "Cancel request: taskId={}, status={}, message={}",
-          payload.getTaskId(),
+          "Cancel request: jobId={}, status={}, message={}",
+          payload.getJobId(),
           response.getRequestStatus(),
           response.getRequestStatusDetails());
     } catch (StatusRuntimeException e) {
-      log.error("Cancel task failed", e);
+      log.error("Cancel job failed", e);
     }
     ack.ack();
   }
 
-  private static CancelTaskRequest buildCancelRequest(CancelTaskDTO cancelTaskDTO) {
-    log.info("Building cancel request for task {}", cancelTaskDTO.getTaskId());
-    return CancelTaskRequest.newBuilder().setTaskId(cancelTaskDTO.getTaskId()).build();
+  private static CancelJobRequest buildCancelRequest(CancelJobDTO cancelJobDTO) {
+    log.info("Building cancel request for job {}", cancelJobDTO.getJobId());
+    return CancelJobRequest.newBuilder().setJobId(cancelJobDTO.getJobId()).build();
   }
 }

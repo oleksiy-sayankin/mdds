@@ -9,10 +9,10 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Represents response of the server that certain task (with id) is submitted for processing. */
+/** Represents response of the server that certain job (with id) is submitted for processing. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class TaskIdResponseDTO {
+public class JobIdResponseDTO {
   private @Nonnull String id;
 }

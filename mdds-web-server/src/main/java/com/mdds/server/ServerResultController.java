@@ -25,20 +25,20 @@ public class ServerResultController {
     this.storage = storage;
   }
 
-  @GetMapping("/{taskId}")
-  public ResultDTO result(@PathVariable("taskId") String taskId) {
-    log.info("Processing request in result controller for task {}...", taskId);
-    var result = storage.get(taskId, ResultDTO.class);
+  @GetMapping("/{jobId}")
+  public ResultDTO result(@PathVariable("jobId") String jobId) {
+    log.info("Processing request in result controller for job {}...", jobId);
+    var result = storage.get(jobId, ResultDTO.class);
     result.ifPresentOrElse(
         value ->
             log.info(
-                "Found result for task {} with status {}, percent done {}%",
-                taskId, value.getTaskStatus(), value.getProgress()),
-        () -> log.info("No result found for task {}", taskId));
+                "Found result for job {} with status {}, percent done {}%",
+                jobId, value.getJobStatus(), value.getProgress()),
+        () -> log.info("No result found for job {}", jobId));
     if (result.isPresent()) {
       return result.get();
     } else {
-      throw new NoResultFoundException("No result found for " + taskId);
+      throw new NoResultFoundException("No result found for " + jobId);
     }
   }
 }

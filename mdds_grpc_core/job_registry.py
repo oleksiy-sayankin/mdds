@@ -45,8 +45,8 @@ def terminate_all_jobs(
     active: ThreadSafeDictionary,
 ):
     """Terminate all active jobs by force and clear list of active jobs"""
-    for task_id in active.keys():
-        job = active.get(task_id)
+    for job_id in active.keys():
+        job = active.get(job_id)
         if job:
             terminate_job(job)
     active.clear()
@@ -61,13 +61,13 @@ def clean_delivered_job(
     Runs in a background thread to clean delivered jobs.
     """
     while not stop_event.is_set():
-        for task_id in active.keys():
-            job = active.get(task_id)
+        for job_id in active.keys():
+            job = active.get(job_id)
 
             if job:
                 with job.lock:
                     delivered = job.delivered
-                    status = job.taskStatus
+                    status = job.jobStatus
                     process = job.process
                     start_time = job.startTime
                     end_time = job.endTime
@@ -76,7 +76,7 @@ def clean_delivered_job(
                 # statuses list, we can safely remove job item from the dictionary
                 # and exit clean job daemon
                 if delivered and status in TERMINAL and not process.is_alive():
-                    active.pop(task_id, None)
+                    active.pop(job_id, None)
                     finalize_job(job)
                     continue
 
@@ -86,15 +86,15 @@ def clean_delivered_job(
                     and end_time is not None
                     and time.time() - end_time > RESULT_TIME_TO_LIVE
                 ):
-                    active.pop(task_id, None)
+                    active.pop(job_id, None)
                     finalize_job(job)
                     continue
 
                 # kill job if we reach timeout and mar job as error
                 if status == IN_PROGRESS and time.time() - start_time > JOB_TIMEOUT:
                     with job.lock:
-                        job.taskStatus = ERROR
-                        job.taskMessage = f"Timeout for task {task_id}"
+                        job.jobStatus = ERROR
+                        job.jobMessage = f"Timeout for job {job_id}"
                         job.endTime = time.time()
                     terminate_job(job)
 
@@ -111,43 +111,43 @@ def watch_job_result(
     Reads worker result from Pipe and updates Job in `active`.
     """
     while not stop_event.is_set():
-        for task_id in active.keys():
-            job = active.get(task_id)
+        for job_id in active.keys():
+            job = active.get(job_id)
 
             if job:
                 try:
                     # We have data from process -> read and update Job
                     with job.lock:
-                        last_status = job.taskStatus
+                        last_status = job.jobStatus
                         connection = job.connection
                         process = job.process
 
                     if last_status == IN_PROGRESS and connection.poll(0):
                         status, solution, msg = connection.recv()
                         with job.lock:
-                            job.taskStatus = status
+                            job.jobStatus = status
                             job.solution = solution
-                            job.taskMessage = msg
+                            job.jobMessage = msg
                             job.endTime = time.time()
                         continue
 
                     # Process is dead, but we have no results -> let's find out why
                     if not process.is_alive():
-                        # If task is in progress but process is dead, mark it as error
+                        # If job is in progress but process is dead, mark it as error
                         if last_status == IN_PROGRESS:
                             with job.lock:
-                                job.taskStatus = ERROR
-                                job.taskMessage = (
+                                job.jobStatus = ERROR
+                                job.jobMessage = (
                                     f"Worker exited, exitcode={process.exitcode}"
                                 )
                                 job.endTime = time.time()
 
                 except Exception as e:
                     with job.lock:
-                        # If task is in progress, but we raise an exception, mark it as error
-                        if job.taskStatus == IN_PROGRESS:
-                            job.taskStatus = ERROR
-                            job.taskMessage = f"Watcher error: {type(e).__name__}: {e}"
+                        # If job is in progress, but we raise an exception, mark it as error
+                        if job.jobStatus == IN_PROGRESS:
+                            job.jobStatus = ERROR
+                            job.jobMessage = f"Watcher error: {type(e).__name__}: {e}"
                             job.endTime = time.time()
 
         if stop_event.wait(poll_interval_seconds):
@@ -208,7 +208,7 @@ class JobRegistry:
         # results (if any) from the solve process.
         self._watcher.start()
 
-        # This cleaner watches if a task result was delivered and if so, removes job from dictionary
+        # This cleaner watches if a job result was delivered and if so, removes job from dictionary
         self._cleaner.start()
 
         self._started = True

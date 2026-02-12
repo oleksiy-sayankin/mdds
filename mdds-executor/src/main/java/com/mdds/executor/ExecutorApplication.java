@@ -9,8 +9,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Gets a task from the Task Queue, solves a task (solves system of a liner equations) and puts
- * result to the Result Queue.
+ * Gets a job from the Job Queue, solves a job (solves system of a liner equations) and puts result
+ * to the Result Queue.
  */
 @Slf4j
 @SpringBootApplication(scanBasePackages = "com.mdds")

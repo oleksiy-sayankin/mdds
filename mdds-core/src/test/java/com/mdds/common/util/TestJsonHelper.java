@@ -8,10 +8,10 @@ import static com.mdds.dto.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.mdds.dto.JobDTO;
+import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.TaskDTO;
-import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
@@ -19,16 +19,16 @@ class TestJsonHelper {
 
   @Test
   void testToJson() {
-    var task = new TaskDTO();
-    var taskId = "testId";
+    var job = new JobDTO();
+    var jobId = "testId";
     var isoFormattedString = "2024-09-04T16:21:00Z";
     var instant = Instant.parse(isoFormattedString);
-    task.setId(taskId);
-    task.setDateTime(instant);
-    task.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    task.setMatrix(new double[][] {{2.2, 3.3}, {4.5, 6.3}});
-    task.setRhs(new double[] {4.7, 8.9});
-    var actualJson = JsonHelper.toJson(task);
+    job.setId(jobId);
+    job.setDateTime(instant);
+    job.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    job.setMatrix(new double[][] {{2.2, 3.3}, {4.5, 6.3}});
+    job.setRhs(new double[] {4.7, 8.9});
+    var actualJson = JsonHelper.toJson(job);
     var expectedJson =
         "{\"id\":\"testId\",\"dateTime\":1725466860.000000000,\"matrix\":[[2.2,3.3],[4.5,6.3]],\"rhs\":[4.7,8.9],\"slaeSolvingMethod\":\"NUMPY_EXACT_SOLVER\"}";
     assertThat(actualJson).isEqualTo(expectedJson);
@@ -36,15 +36,15 @@ class TestJsonHelper {
 
   @Test
   void testToJsonResultDto() {
-    var taskId = "testId";
+    var jobId = "testId";
     var isoFormattedString = "2024-09-04T16:21:00Z";
     var instant = Instant.parse(isoFormattedString);
     var resultDTO =
         new ResultDTO(
-            taskId,
+            jobId,
             instant,
             instant,
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {1.971, 3.213, 7.243},
@@ -52,10 +52,10 @@ class TestJsonHelper {
     var actualJson = JsonHelper.toJson(resultDTO);
     var expectedJson =
         "{"
-            + "\"taskId\":\"testId\","
-            + "\"dateTimeTaskStarted\":1725466860.000000000,"
-            + "\"dateTimeTaskEnded\":1725466860.000000000,"
-            + "\"taskStatus\":\"DONE\","
+            + "\"jobId\":\"testId\","
+            + "\"dateTimeJobStarted\":1725466860.000000000,"
+            + "\"dateTimeJobEnded\":1725466860.000000000,"
+            + "\"jobStatus\":\"DONE\","
             + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
             + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
@@ -68,25 +68,25 @@ class TestJsonHelper {
   void testFromJsonResultDto() {
     var json =
         "{"
-            + "\"taskId\":\"testId\","
-            + "\"dateTimeTaskStarted\":1725466860.000000000,"
-            + "\"dateTimeTaskEnded\":1725466860.000000000,"
-            + "\"taskStatus\":\"DONE\","
+            + "\"jobId\":\"testId\","
+            + "\"dateTimeJobStarted\":1725466860.000000000,"
+            + "\"dateTimeJobEnded\":1725466860.000000000,"
+            + "\"jobStatus\":\"DONE\","
             + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
             + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
             + "}";
     var actualResult = JsonHelper.fromJson(json, ResultDTO.class);
-    var taskId = "testId";
+    var jobId = "testId";
     var isoFormattedString = "2024-09-04T16:21:00Z";
     var instant = Instant.parse(isoFormattedString);
     var expectedResult =
         new ResultDTO(
-            taskId,
+            jobId,
             instant,
             instant,
-            TaskStatus.DONE,
+            JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {1.971, 3.213, 7.243},
@@ -95,48 +95,48 @@ class TestJsonHelper {
   }
 
   @Test
-  void testToJsonTaskIdResponseDTO() {
-    var taskIdResponse = new TaskIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
-    var actualJson = JsonHelper.toJson(taskIdResponse);
+  void testToJsonJobIdResponseDTO() {
+    var jobIdResponse = new JobIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
+    var actualJson = JsonHelper.toJson(jobIdResponse);
     var expectedJson = "{\"id\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
     assertThat(actualJson).isEqualTo(expectedJson);
   }
 
   @Test
-  void testFromJsonTaskIdResponseDTO() {
+  void testFromJsonJobIdResponseDTO() {
     var json = "{\"id\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
-    var expectedTaskIdResponseDTO = new TaskIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
-    var actualTaskIdResponseDTO = JsonHelper.fromJson(json, TaskIdResponseDTO.class);
-    assertThat(actualTaskIdResponseDTO).isEqualTo(expectedTaskIdResponseDTO);
+    var expectedJobIdResponseDTO = new JobIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
+    var actualJobIdResponseDTO = JsonHelper.fromJson(json, JobIdResponseDTO.class);
+    assertThat(actualJobIdResponseDTO).isEqualTo(expectedJobIdResponseDTO);
   }
 
   @Test
   void testFromJson() {
     var json =
         "{\"id\":\"testId\",\"dateTime\":1725466860.000000000,\"matrix\":[[2.2,3.3],[4.5,6.3]],\"rhs\":[4.7,8.9],\"slaeSolvingMethod\":\"NUMPY_EXACT_SOLVER\"}";
-    var expectedTask = new TaskDTO();
-    var taskId = "testId";
+    var expectedJob = new JobDTO();
+    var jobId = "testId";
     var isoFormattedString = "2024-09-04T16:21:00Z";
     var instant = Instant.parse(isoFormattedString);
-    expectedTask.setId(taskId);
-    expectedTask.setDateTime(instant);
-    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    expectedTask.setMatrix(new double[][] {{2.2, 3.3}, {4.5, 6.3}});
-    expectedTask.setRhs(new double[] {4.7, 8.9});
-    var actualTask = JsonHelper.fromJson(json, TaskDTO.class);
-    assertThat(actualTask).isEqualTo(expectedTask);
+    expectedJob.setId(jobId);
+    expectedJob.setDateTime(instant);
+    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    expectedJob.setMatrix(new double[][] {{2.2, 3.3}, {4.5, 6.3}});
+    expectedJob.setRhs(new double[] {4.7, 8.9});
+    var actualJob = JsonHelper.fromJson(json, JobDTO.class);
+    assertThat(actualJob).isEqualTo(expectedJob);
   }
 
   @Test
   void testFromJsonNullCheck() {
-    var actualTask = JsonHelper.fromJson(null, TaskDTO.class);
-    assertThat(actualTask).isNull();
+    var actualJob = JsonHelper.fromJson(null, JobDTO.class);
+    assertThat(actualJob).isNull();
   }
 
   @Test
   void testFromJsonWithException() {
     var corruptedJson = "{rfe}fewr";
-    assertThatThrownBy(() -> JsonHelper.fromJson(corruptedJson, TaskDTO.class))
+    assertThatThrownBy(() -> JsonHelper.fromJson(corruptedJson, JobDTO.class))
         .isInstanceOf(JsonException.class)
         .hasMessageContaining("Could not convert JSON to object");
   }

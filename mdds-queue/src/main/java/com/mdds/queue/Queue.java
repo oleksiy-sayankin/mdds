@@ -7,7 +7,7 @@ package com.mdds.queue;
 
 import jakarta.annotation.Nonnull;
 
-/** Common interface for Task Queue and Result Queue. */
+/** Common interface for Job Queue and Result Queue. */
 public interface Queue extends AutoCloseable {
   /**
    * Publishes message to queue.

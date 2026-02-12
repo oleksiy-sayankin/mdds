@@ -18,20 +18,19 @@ import org.springframework.stereotype.Service;
 @Service
 public class ServerService implements AutoCloseable {
   private final DataStorage dataStorage;
-  private final Queue taskQueue;
+  private final Queue jobQueue;
 
   @Autowired
-  public ServerService(DataStorage dataStorage, @Qualifier("taskQueue") Queue taskQueue) {
+  public ServerService(DataStorage dataStorage, @Qualifier("jobQueue") Queue jobQueue) {
     this.dataStorage = dataStorage;
-    this.taskQueue = taskQueue;
-    log.info(
-        "Constructed Server Service with task queue {} and storage {}", taskQueue, dataStorage);
+    this.jobQueue = jobQueue;
+    log.info("Constructed Server Service with job queue {} and storage {}", jobQueue, dataStorage);
   }
 
   @PreDestroy
   @Override
   public void close() {
-    taskQueue.close();
+    jobQueue.close();
     dataStorage.close();
     log.info("Web Server Service shut down cleanly");
   }

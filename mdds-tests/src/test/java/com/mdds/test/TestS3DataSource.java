@@ -9,9 +9,9 @@ import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_C
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import com.mdds.common.util.JsonHelper;
+import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.SlaeSolver;
-import com.mdds.dto.TaskIdResponseDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -68,11 +68,11 @@ class TestS3DataSource extends BaseEnvironment {
     var response = webServerClient.postSolve("s3", solver.getName(), params);
     var json = response.body();
 
-    var taskId = JsonHelper.fromJson(json, TaskIdResponseDTO.class).getId();
-    Assertions.assertThat(taskId).as("Task id should not be null").isNotNull();
-    var actual = awaitForResult(taskId);
+    var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getId();
+    Assertions.assertThat(jobId).as("Job id should not be null").isNotNull();
+    var actual = awaitForResult(jobId);
 
-    Assertions.assertThat(actual.getTaskStatus()).isEqualTo(TaskStatus.DONE);
+    Assertions.assertThat(actual.getJobStatus()).isEqualTo(JobStatus.DONE);
 
     double[] expected = {
       -0.1499382089687040253643, 0.0280711223847708241758, 0.0080775029256540625510

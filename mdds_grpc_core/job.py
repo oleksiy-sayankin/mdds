@@ -14,9 +14,9 @@ class Job:
     """
 
     process: mp.Process
-    taskStatus: int
+    jobStatus: int
     solution: list[float]
-    taskMessage: str
+    jobMessage: str
     startTime: float  # unix timestamp
     endTime: float | None
     connection: Connection

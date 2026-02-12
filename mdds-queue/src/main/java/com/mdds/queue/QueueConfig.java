@@ -12,8 +12,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class QueueConfig {
 
-  @Bean(name = "taskQueue")
-  public Queue taskQueue(RabbitMqProperties properties) {
+  @Bean(name = "jobQueue")
+  public Queue jobQueue(RabbitMqProperties properties) {
     return new RabbitMqQueue(
         properties.getHost(),
         properties.getPort(),

@@ -51,9 +51,9 @@ public class ResultConsumerService implements AutoCloseable {
             ResultDTO.class,
             (message, ack) -> {
               var payload = message.payload();
-              dataStorage.put(payload.getTaskId(), payload);
+              dataStorage.put(payload.getJobId(), payload);
               ack.ack();
-              log.info("Stored result for task {} to storage {}", payload.getTaskId(), dataStorage);
+              log.info("Stored result for job {} to storage {}", payload.getJobId(), dataStorage);
             });
     log.info(
         "Started Result Consumer Service with queue '{}' = {} and storage {}.",

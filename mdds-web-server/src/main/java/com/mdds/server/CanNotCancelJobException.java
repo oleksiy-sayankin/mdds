@@ -7,12 +7,12 @@ package com.mdds.server;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
-/** Indicates that we can not cancel task because we do not know its cancel queue name. */
+/** Indicates that we can not cancel job because we do not know its cancel queue name. */
 @Getter
-public class CanNotCancelTaskException extends RuntimeException {
+public class CanNotCancelJobException extends RuntimeException {
   private final HttpStatus httpStatus;
 
-  public CanNotCancelTaskException(HttpStatus httpStatus, String message) {
+  public CanNotCancelJobException(HttpStatus httpStatus, String message) {
     super(message);
     this.httpStatus = httpStatus;
   }

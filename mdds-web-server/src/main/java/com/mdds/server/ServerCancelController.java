@@ -4,12 +4,12 @@
  */
 package com.mdds.server;
 
-import static com.mdds.grpc.solver.TaskStatus.IN_PROGRESS;
-import static com.mdds.grpc.solver.TaskStatus.NEW;
+import static com.mdds.grpc.solver.JobStatus.IN_PROGRESS;
+import static com.mdds.grpc.solver.JobStatus.NEW;
 
-import com.mdds.dto.CancelTaskDTO;
+import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
@@ -26,14 +26,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Cancels task by task id. */
+/** Cancels job by job id. */
 @Slf4j
 @RestController
 @RequestMapping("/cancel")
 public class ServerCancelController {
   private final DataStorage storage;
   private final Queue cancelQueue;
-  private static final Set<TaskStatus> ALLOWED = Set.of(IN_PROGRESS, NEW);
+  private static final Set<JobStatus> ALLOWED = Set.of(IN_PROGRESS, NEW);
 
   @Autowired
   public ServerCancelController(DataStorage storage, @Qualifier("cancelQueue") Queue cancelQueue) {
@@ -41,29 +41,29 @@ public class ServerCancelController {
     this.cancelQueue = cancelQueue;
   }
 
-  @PostMapping("/{taskId}")
-  public ResponseEntity<Void> cancel(@PathVariable("taskId") String taskId) {
-    log.info("Processing request in cancel controller for {}...", taskId);
-    var opt = storage.get(taskId, ResultDTO.class);
+  @PostMapping("/{jobId}")
+  public ResponseEntity<Void> cancel(@PathVariable("jobId") String jobId) {
+    log.info("Processing request in cancel controller for {}...", jobId);
+    var opt = storage.get(jobId, ResultDTO.class);
     if (opt.isEmpty()) {
-      throw new CanNotCancelTaskException(
-          HttpStatus.NOT_FOUND, "Can not cancel task " + taskId + ". No cancel queue name known");
+      throw new CanNotCancelJobException(
+          HttpStatus.NOT_FOUND, "Can not cancel job " + jobId + ". No cancel queue name known");
     }
     var result = opt.get();
-    if (!ALLOWED.contains(result.getTaskStatus())) {
-      throw new CanNotCancelTaskException(
-          HttpStatus.CONFLICT, "Task " + taskId + " is already " + result.getTaskStatus());
+    if (!ALLOWED.contains(result.getJobStatus())) {
+      throw new CanNotCancelJobException(
+          HttpStatus.CONFLICT, "Job " + jobId + " is already " + result.getJobStatus());
     }
 
     var cancelQueueName = result.getCancelQueueName();
     if (cancelQueueName == null || cancelQueueName.isBlank()) {
-      throw new CanNotCancelTaskException(
+      throw new CanNotCancelJobException(
           HttpStatus.INTERNAL_SERVER_ERROR,
-          "Can not cancel task " + taskId + ". Cancel queue name is empty");
+          "Can not cancel job " + jobId + ". Cancel queue name is empty");
     }
 
     cancelQueue.publish(
-        cancelQueueName, new Message<>(new CancelTaskDTO(taskId), new HashMap<>(), Instant.now()));
+        cancelQueueName, new Message<>(new CancelJobDTO(jobId), new HashMap<>(), Instant.now()));
     return ResponseEntity.accepted().build();
   }
 }

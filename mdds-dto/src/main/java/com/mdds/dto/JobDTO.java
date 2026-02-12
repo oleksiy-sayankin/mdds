@@ -11,11 +11,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Represents Data Transfer Object for the task for Executor. */
+/** Represents Data Transfer Object for the job for Executor. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class TaskDTO {
+public class JobDTO {
   private @Nonnull String id;
   private Instant dateTime;
   private double[][] matrix;

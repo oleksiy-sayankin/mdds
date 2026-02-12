@@ -14,15 +14,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.mdds.common.CommonProperties;
-import com.mdds.dto.CancelTaskDTO;
+import com.mdds.dto.CancelJobDTO;
+import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
-import com.mdds.dto.TaskDTO;
-import com.mdds.grpc.solver.GetTaskStatusResponse;
+import com.mdds.grpc.solver.GetJobStatusResponse;
+import com.mdds.grpc.solver.JobStatus;
 import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.SolverServiceGrpc;
-import com.mdds.grpc.solver.SubmitTaskResponse;
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.SubmitJobResponse;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
@@ -52,8 +52,8 @@ import org.testcontainers.utility.MountableFile;
 @Slf4j
 class TestExecutorApplicationService {
   @Autowired
-  @Qualifier("taskQueue")
-  private Queue taskQueue;
+  @Qualifier("jobQueue")
+  private Queue jobQueue;
 
   @Autowired
   @Qualifier("resultQueue")
@@ -92,12 +92,12 @@ class TestExecutorApplicationService {
 
   @Test
   void testExecutorService() {
-    // Prepare and put data to task queue
-    var taskId = UUID.randomUUID().toString();
+    // Prepare and put data to job queue
+    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task =
-        new TaskDTO(
-            taskId,
+    var job =
+        new JobDTO(
+            jobId,
             startTime,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
@@ -107,16 +107,16 @@ class TestExecutorApplicationService {
     var endTime = Instant.now();
     var expected =
         new ResultDTO(
-            taskId,
+            jobId,
             startTime,
             endTime,
-            TaskStatus.DONE,
+            JobStatus.DONE,
             executorProperties.getCancelQueueName(),
             100,
             new double[] {1.971, 3.213, 7.243},
             "");
 
-    // Simulate that ExecutorMessageHandler solves the task
+    // Simulate that ExecutorMessageHandler solves the job
     doAnswer(
             invocation -> {
               var resultMessage = new Message<>(expected, new HashMap<>(), Instant.now());
@@ -128,19 +128,19 @@ class TestExecutorApplicationService {
 
     try (var executorService =
         new ExecutorService(
-            taskQueue,
+            jobQueue,
             resultQueue,
             cancelQueue,
             executorMessageHandler,
             cancelMessageHandler,
-            taskQueue.subscribe(
-                commonProperties.getTaskQueueName(), TaskDTO.class, executorMessageHandler),
+            jobQueue.subscribe(
+                commonProperties.getJobQueueName(), JobDTO.class, executorMessageHandler),
             cancelQueue.subscribe(
-                executorProperties.getCancelQueueName(), CancelTaskDTO.class, cancelMessageHandler),
+                executorProperties.getCancelQueueName(), CancelJobDTO.class, cancelMessageHandler),
             commonProperties,
             executorProperties)) {
-      var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
-      taskQueue.publish(commonProperties.getTaskQueueName(), taskMessage);
+      var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+      jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
 
       Awaitility.await()
           .atMost(Duration.ofSeconds(2))
@@ -174,16 +174,16 @@ class TestExecutorApplicationService {
     var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
     var mockedChanel = mock(GrpcChannel.class);
 
-    when(mockedSolverStub.submitTask(any()))
+    when(mockedSolverStub.submitJob(any()))
         .thenReturn(
-            SubmitTaskResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
+            SubmitJobResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
 
     when(mockedSolverStub.withDeadlineAfter(any())).thenReturn(mockedSolverStub);
 
-    when(mockedSolverStub.getTaskStatus(any()))
+    when(mockedSolverStub.getJobStatus(any()))
         .thenReturn(
-            GetTaskStatusResponse.newBuilder()
-                .setTaskStatus(TaskStatus.DONE)
+            GetJobStatusResponse.newBuilder()
+                .setJobStatus(JobStatus.DONE)
                 .addSolution(1.371)
                 .addSolution(3.283)
                 .addSolution(3.243)
@@ -198,12 +198,12 @@ class TestExecutorApplicationService {
             commonProperties,
             executorProperties);
 
-    // Prepare and put data to task queue
-    var taskId = UUID.randomUUID().toString();
+    // Prepare and put data to job queue
+    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task =
-        new TaskDTO(
-            taskId,
+    var job =
+        new JobDTO(
+            jobId,
             startTime,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
@@ -211,9 +211,9 @@ class TestExecutorApplicationService {
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
     var ack = mock(Acknowledger.class);
-    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
     // when
-    handler.handle(taskMessage, ack);
+    handler.handle(jobMessage, ack);
 
     // then
     verify(mockedResultQueue, times(2)).publish(anyString(), any());
@@ -222,22 +222,22 @@ class TestExecutorApplicationService {
 
   @Test
   @SuppressWarnings("unchecked")
-  void testCancelTask() {
+  void testCancelJob() {
     // given
     var mockedResultQueue = mock(Queue.class);
     var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
     var mockedChanel = mock(GrpcChannel.class);
 
-    when(mockedSolverStub.submitTask(any()))
+    when(mockedSolverStub.submitJob(any()))
         .thenReturn(
-            SubmitTaskResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
+            SubmitJobResponse.newBuilder().setRequestStatus(RequestStatus.COMPLETED).build());
 
     when(mockedSolverStub.withDeadlineAfter(any())).thenReturn(mockedSolverStub);
 
-    when(mockedSolverStub.getTaskStatus(any()))
+    when(mockedSolverStub.getJobStatus(any()))
         .thenReturn(
-            GetTaskStatusResponse.newBuilder()
-                .setTaskStatus(TaskStatus.CANCELLED)
+            GetJobStatusResponse.newBuilder()
+                .setJobStatus(JobStatus.CANCELLED)
                 .setRequestStatus(RequestStatus.COMPLETED)
                 .build());
 
@@ -249,12 +249,12 @@ class TestExecutorApplicationService {
             commonProperties,
             executorProperties);
 
-    // Prepare and put data to task queue
-    var taskId = UUID.randomUUID().toString();
+    // Prepare and put data to job queue
+    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
-    var task =
-        new TaskDTO(
-            taskId,
+    var job =
+        new JobDTO(
+            jobId,
             startTime,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
@@ -262,15 +262,15 @@ class TestExecutorApplicationService {
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
     var ack = mock(Acknowledger.class);
-    var taskMessage = new Message<>(task, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
     // when
-    handler.handle(taskMessage, ack);
+    handler.handle(jobMessage, ack);
 
     // then
     ArgumentCaptor<Message<ResultDTO>> messageCaptor = ArgumentCaptor.forClass(Message.class);
     verify(mockedResultQueue, times(2)).publish(anyString(), messageCaptor.capture());
     var capturedMessage = messageCaptor.getValue();
-    assertThat(capturedMessage.payload().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED);
+    assertThat(capturedMessage.payload().getJobStatus()).isEqualTo(JobStatus.CANCELLED);
     verify(ack).ack();
   }
 }

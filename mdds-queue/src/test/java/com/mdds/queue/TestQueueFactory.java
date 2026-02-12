@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-import com.mdds.dto.TaskDTO;
+import com.mdds.dto.JobDTO;
 import com.mdds.queue.rabbitmq.RabbitMqConnectionException;
 import com.mdds.queue.rabbitmq.RabbitMqProperties;
 import com.mdds.queue.rabbitmq.RabbitMqQueue;
@@ -29,7 +29,7 @@ import org.testcontainers.utility.MountableFile;
 
 @Testcontainers
 class TestQueueFactory {
-  private static final String TASK_QUEUE_NAME = "task_queue";
+  private static final String JOB_QUEUE_NAME = "job_queue";
 
   @Container
   private static final RabbitMQContainer rabbitMq =
@@ -85,127 +85,127 @@ class TestQueueFactory {
 
   @Test
   void testPublish() {
-    var taskId = "test_id";
+    var jobId = "test_id";
     var timeCreated = Instant.now();
-    var expectedTask = new TaskDTO();
-    expectedTask.setRhs(new double[] {3.4, 4.6});
-    expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
-    expectedTask.setId(taskId);
-    expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    var expectedJob = new JobDTO();
+    expectedJob.setRhs(new double[] {3.4, 4.6});
+    expectedJob.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
+    expectedJob.setId(jobId);
+    expectedJob.setDateTime(timeCreated);
+    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
-      queue.publish(TASK_QUEUE_NAME, message);
-      assertThatCode(() -> queue.publish(TASK_QUEUE_NAME, message)).doesNotThrowAnyException();
+      queue.publish(JOB_QUEUE_NAME, message);
+      assertThatCode(() -> queue.publish(JOB_QUEUE_NAME, message)).doesNotThrowAnyException();
     }
   }
 
   @Test
   void testDeleteQueue() {
-    var taskId = "test_id";
+    var jobId = "test_id";
     var timeCreated = Instant.now();
-    var expectedTask = new TaskDTO();
-    expectedTask.setRhs(new double[] {3.4, 4.6});
-    expectedTask.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
-    expectedTask.setId(taskId);
-    expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    var expectedJob = new JobDTO();
+    expectedJob.setRhs(new double[] {3.4, 4.6});
+    expectedJob.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
+    expectedJob.setId(jobId);
+    expectedJob.setDateTime(timeCreated);
+    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
-      queue.publish(TASK_QUEUE_NAME, message);
-      assertThatCode(() -> queue.deleteQueue(TASK_QUEUE_NAME)).doesNotThrowAnyException();
+      queue.publish(JOB_QUEUE_NAME, message);
+      assertThatCode(() -> queue.deleteQueue(JOB_QUEUE_NAME)).doesNotThrowAnyException();
     }
   }
 
   @Test
   void testRegisterConsumer() {
-    var taskId = "test_id";
+    var jobId = "test_id";
     var timeCreated = Instant.now();
-    var expectedTask = new TaskDTO();
-    expectedTask.setRhs(new double[] {1.1, 2.2});
-    expectedTask.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
-    expectedTask.setId(taskId);
-    expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    var expectedJob = new JobDTO();
+    expectedJob.setRhs(new double[] {1.1, 2.2});
+    expectedJob.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
+    expectedJob.setId(jobId);
+    expectedJob.setDateTime(timeCreated);
+    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
-      queue.publish(TASK_QUEUE_NAME, message);
-      var actualTask = new AtomicReference<>();
+      queue.publish(JOB_QUEUE_NAME, message);
+      var actualJob = new AtomicReference<>();
 
-      MessageHandler<TaskDTO> messageHandler =
+      MessageHandler<JobDTO> messageHandler =
           (receivedMessage, ack) -> {
-            actualTask.set(receivedMessage.payload());
+            actualJob.set(receivedMessage.payload());
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(JOB_QUEUE_NAME, JobDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
+            .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(expectedJob));
       }
     }
   }
 
   @Test
   void testRegisterConsumerWithoutReadingFromFile() {
-    var taskId = "test_id";
+    var jobId = "test_id";
     var timeCreated = Instant.now();
-    var expectedTask = new TaskDTO();
-    expectedTask.setRhs(new double[] {3.5, 2.21});
-    expectedTask.setMatrix(new double[][] {{55.3, 8.4}, {5.5, 7.6}});
-    expectedTask.setId(taskId);
-    expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    var expectedJob = new JobDTO();
+    expectedJob.setRhs(new double[] {3.5, 2.21});
+    expectedJob.setMatrix(new double[][] {{55.3, 8.4}, {5.5, 7.6}});
+    expectedJob.setId(jobId);
+    expectedJob.setDateTime(timeCreated);
+    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, Instant.now());
     var properties = new RabbitMqProperties(host, port, user, password, maxInboundMessageBodySize);
     try (var queue = new RabbitMqQueue(properties)) {
-      queue.publish(TASK_QUEUE_NAME, message);
-      var actualTask = new AtomicReference<>();
+      queue.publish(JOB_QUEUE_NAME, message);
+      var actualJob = new AtomicReference<>();
 
-      MessageHandler<TaskDTO> messageHandler =
+      MessageHandler<JobDTO> messageHandler =
           (receivedMessage, ack) -> {
-            actualTask.set(receivedMessage.payload());
+            actualJob.set(receivedMessage.payload());
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(JOB_QUEUE_NAME, JobDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
+            .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(expectedJob));
       }
     }
   }
 
   @Test
   void testRegisterConsumerConstructorWithParams() {
-    var taskId = "test_id";
+    var jobId = "test_id";
     var timeCreated = Instant.now();
-    var expectedTask = new TaskDTO();
-    expectedTask.setRhs(new double[] {561.1, 52.287});
-    expectedTask.setMatrix(new double[][] {{23.3, 147.44}, {5.5, 7.7}});
-    expectedTask.setId(taskId);
-    expectedTask.setDateTime(timeCreated);
-    expectedTask.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
+    var expectedJob = new JobDTO();
+    expectedJob.setRhs(new double[] {561.1, 52.287});
+    expectedJob.setMatrix(new double[][] {{23.3, 147.44}, {5.5, 7.7}});
+    expectedJob.setId(jobId);
+    expectedJob.setDateTime(timeCreated);
+    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedTask, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, Instant.now());
     try (var queue = new RabbitMqQueue(host, port, user, password)) {
-      queue.publish(TASK_QUEUE_NAME, message);
-      var actualTask = new AtomicReference<>();
+      queue.publish(JOB_QUEUE_NAME, message);
+      var actualJob = new AtomicReference<>();
 
-      MessageHandler<TaskDTO> messageHandler =
+      MessageHandler<JobDTO> messageHandler =
           (receivedMessage, ack) -> {
-            actualTask.set(receivedMessage.payload());
+            actualJob.set(receivedMessage.payload());
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var subscription = queue.subscribe(TASK_QUEUE_NAME, TaskDTO.class, messageHandler)) {
+      try (var subscription = queue.subscribe(JOB_QUEUE_NAME, JobDTO.class, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> assertThat(actualTask.get()).isEqualTo(expectedTask));
+            .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(expectedJob));
       }
     }
   }

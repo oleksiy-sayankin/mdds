@@ -4,7 +4,7 @@
  */
 package com.mdds.dto;
 
-import com.mdds.grpc.solver.TaskStatus;
+import com.mdds.grpc.solver.JobStatus;
 import jakarta.annotation.Nonnull;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
@@ -16,10 +16,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ResultDTO {
-  @Nonnull String taskId;
-  Instant dateTimeTaskStarted;
-  Instant dateTimeTaskEnded;
-  TaskStatus taskStatus;
+  @Nonnull String jobId;
+  Instant dateTimeJobStarted;
+  Instant dateTimeJobEnded;
+  JobStatus jobStatus;
   String cancelQueueName;
   int progress;
   double[] solution;
