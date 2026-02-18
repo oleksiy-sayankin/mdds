@@ -31,7 +31,7 @@ SOLVER_MAP = {
 }
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"{__name__}.SolverService")
 
 
 def ts_from_unix(sec: float) -> Timestamp:

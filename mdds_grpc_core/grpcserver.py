@@ -12,7 +12,7 @@ from grpc_health.v1 import health, health_pb2_grpc, health_pb2
 from grpc_reflection.v1alpha import reflection
 from job_registry import JobRegistry
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"{__name__}.GrpcServer")
 
 
 class GrpcServer:

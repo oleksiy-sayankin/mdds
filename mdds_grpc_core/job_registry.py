@@ -9,7 +9,7 @@ from constants import IN_PROGRESS, ERROR, TERMINAL, JOB_TIMEOUT, RESULT_TIME_TO_
 from dictionary import ThreadSafeDictionary
 from job import Job
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"{__name__}.JobRegistry")
 
 
 def finalize_job(job: Job):
