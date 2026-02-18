@@ -3,6 +3,8 @@
 spring:
   config:
     import: "classpath:mdds-common.yml"
+  application:
+    name: Queue
 
 mdds:
   rabbitmq:

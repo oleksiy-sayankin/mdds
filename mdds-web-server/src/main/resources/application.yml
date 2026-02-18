@@ -3,6 +3,8 @@
 spring:
   config:
     import: "classpath:mdds-common.yml"
+  application:
+    name: Web Server
 
 mdds.server:
   host: localhost

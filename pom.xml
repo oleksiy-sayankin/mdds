@@ -20,6 +20,7 @@
     <module>mdds-data-sources</module>
     <module>mdds-tests</module>
     <module>mdds-grpc-client</module>
+    <module>mdds-logging</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -109,6 +110,11 @@
         <groupId>io.grpc</groupId>
         <artifactId>grpc-services</artifactId>
         <version>${grpc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.logstash.logback</groupId>
+        <artifactId>logstash-logback-encoder</artifactId>
+        <version>9.0</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
