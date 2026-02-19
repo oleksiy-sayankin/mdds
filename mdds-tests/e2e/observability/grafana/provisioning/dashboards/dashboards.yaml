@@ -1,0 +1,13 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+apiVersion: 1
+providers:
+  - name: "mdds"
+    orgId: 1
+    folder: "MDDS"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

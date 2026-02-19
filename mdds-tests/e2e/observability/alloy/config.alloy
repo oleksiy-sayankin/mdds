@@ -1,0 +1,41 @@
+// Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+// Refer to the LICENSE file in the root directory for full license details.
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki.mdds.com:3100/loki/api/v1/push"
+  }
+}
+
+local.file_match "docker" {
+  path_targets = [
+    { __path__ = "/var/lib/docker/containers/*/*-json.log" },
+  ]
+}
+
+loki.source.file "docker" {
+  targets    = local.file_match.docker.targets
+  forward_to = [loki.process.docker.receiver]
+}
+
+loki.process "docker" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.docker {}
+
+  stage.json {
+    expressions = {
+      service = "service",
+      level   = "level",
+      class   = "class",
+      job_id = "job_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service = "service",
+      level   = "level",
+    }
+  }
+}
