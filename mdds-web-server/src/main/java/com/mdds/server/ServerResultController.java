@@ -7,6 +7,7 @@ package com.mdds.server;
 import com.mdds.dto.ResultDTO;
 import com.mdds.storage.DataStorage;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,18 +28,20 @@ public class ServerResultController {
 
   @GetMapping("/{jobId}")
   public ResultDTO result(@PathVariable("jobId") String jobId) {
-    log.info("Processing request in result controller for job {}...", jobId);
-    var result = storage.get(jobId, ResultDTO.class);
-    result.ifPresentOrElse(
-        value ->
-            log.info(
-                "Found result for job {} with status {}, percent done {}%",
-                jobId, value.getJobStatus(), value.getProgress()),
-        () -> log.info("No result found for job {}", jobId));
-    if (result.isPresent()) {
-      return result.get();
-    } else {
-      throw new NoResultFoundException("No result found for " + jobId);
+    try (var ignored = MDC.putCloseable("jobId", jobId)) {
+      log.info("Processing request in result controller for job");
+      var result = storage.get(jobId, ResultDTO.class);
+      result.ifPresentOrElse(
+          value ->
+              log.info(
+                  "Found result for job with status {}, percent done {}%",
+                  value.getJobStatus(), value.getProgress()),
+          () -> log.info("No result found for job"));
+      if (result.isPresent()) {
+        return result.get();
+      } else {
+        throw new NoResultFoundException("No result found for " + jobId);
+      }
     }
   }
 }

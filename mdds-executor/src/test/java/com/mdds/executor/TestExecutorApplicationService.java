@@ -180,14 +180,17 @@ class TestExecutorApplicationService {
 
     when(mockedSolverStub.withDeadlineAfter(any())).thenReturn(mockedSolverStub);
 
+    var jobId = UUID.randomUUID().toString();
     when(mockedSolverStub.getJobStatus(any()))
         .thenReturn(
             GetJobStatusResponse.newBuilder()
+                .setJobId(jobId)
                 .setJobStatus(JobStatus.DONE)
                 .addSolution(1.371)
                 .addSolution(3.283)
                 .addSolution(3.243)
                 .setRequestStatus(RequestStatus.COMPLETED)
+                .setJobMessage("Solved system of liner algebraic equation")
                 .build());
 
     var handler =
@@ -199,7 +202,6 @@ class TestExecutorApplicationService {
             executorProperties);
 
     // Prepare and put data to job queue
-    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
     var job =
         new JobDTO(
@@ -227,6 +229,7 @@ class TestExecutorApplicationService {
     var mockedResultQueue = mock(Queue.class);
     var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
     var mockedChanel = mock(GrpcChannel.class);
+    var jobId = UUID.randomUUID().toString();
 
     when(mockedSolverStub.submitJob(any()))
         .thenReturn(
@@ -237,8 +240,10 @@ class TestExecutorApplicationService {
     when(mockedSolverStub.getJobStatus(any()))
         .thenReturn(
             GetJobStatusResponse.newBuilder()
+                .setJobId(jobId)
                 .setJobStatus(JobStatus.CANCELLED)
                 .setRequestStatus(RequestStatus.COMPLETED)
+                .setJobMessage("Cancelled by user request")
                 .build());
 
     var handler =
@@ -250,7 +255,6 @@ class TestExecutorApplicationService {
             executorProperties);
 
     // Prepare and put data to job queue
-    var jobId = UUID.randomUUID().toString();
     var startTime = Instant.now();
     var job =
         new JobDTO(

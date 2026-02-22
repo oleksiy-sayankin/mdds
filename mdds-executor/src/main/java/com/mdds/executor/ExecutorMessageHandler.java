@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -86,25 +87,27 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   @Override
   public void handle(@Nonnull Message<JobDTO> message, @Nonnull Acknowledger ack) {
     var job = message.payload();
-    try {
-      log.info("Start handling job {}", job.getId());
-      var submitResponse = submit(job);
-      if (!completed(submitResponse)) {
-        publishErrorFor(job, "Error submitting job: " + submitResponse.getRequestStatusDetails());
-        return;
+    try (var ignored = MDC.putCloseable("jobId", job.getId())) {
+      try {
+        log.info("Start handling job");
+        var submitResponse = submit(job);
+        if (!completed(submitResponse)) {
+          publishErrorFor(job, "Error submitting job: " + submitResponse.getRequestStatusDetails());
+          return;
+        }
+        publishInProgressFor(job);
+        var result = awaitForResultFrom(job);
+        publishResponse(result);
+      } catch (ConditionTimeoutException e) {
+        publishErrorFor(job, "Timeout waiting for job status");
+      } catch (StatusRuntimeException e) {
+        publishErrorFor(job, "Internal gRPC error: " + e.getStatus());
+      } catch (Exception e) {
+        publishErrorFor(
+            job, "Unexpected error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+      } finally {
+        ack.ack();
       }
-      publishInProgressFor(job);
-      var result = awaitForResultFrom(job);
-      publishResponse(result);
-    } catch (ConditionTimeoutException e) {
-      publishErrorFor(job, "Timeout waiting for job status");
-    } catch (StatusRuntimeException e) {
-      publishErrorFor(job, "Internal gRPC error: " + e.getStatus());
-    } catch (Exception e) {
-      publishErrorFor(
-          job, "Unexpected error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
-    } finally {
-      ack.ack();
     }
   }
 
@@ -115,11 +118,10 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
 
   private void publishInProgressFor(JobDTO payload) {
     // create message with 'in progress' status
-    var jobId = payload.getId();
     var jobCreationDateTime = payload.getDateTime();
     var inProgress =
         new ResultDTO(
-            jobId,
+            payload.getId(),
             jobCreationDateTime,
             Instant.now(),
             JobStatus.IN_PROGRESS,
@@ -127,7 +129,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             30,
             new double[] {},
             "");
-    log.info("Publishing in-progress status for job {}", jobId);
+    log.info("Publishing in-progress status for job");
     publish(new Message<>(inProgress, Map.of(), Instant.now()));
   }
 
@@ -143,7 +145,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             70,
             new double[] {},
             message);
-    log.error("Error for job {} with message '{}'", payload.getId(), message);
+    log.error("Error for job with message '{}'", message);
     publish(new Message<>(errorResult, Map.of(), Instant.now()));
   }
 
@@ -164,10 +166,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             response.getProgress(),
             solution,
             response.getJobMessage());
-    log.info(
-        "Published response for job {} with message '{}'",
-        response.getJobId(),
-        response.getJobMessage());
+    log.info("Published response for job with message '{}'", response.getJobMessage());
     publish(new Message<>(resultArray, Map.of(), Instant.now()));
   }
 
@@ -192,9 +191,8 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
               var response =
                   solverStub.withDeadlineAfter(GRPC_REQUEST_TIMEOUT).getJobStatus(request);
               log.debug(
-                  "Job status attempt {}: id {}, requestStatus {}, jobStatus {}, msg '{}'",
+                  "Job status attempt {}: requestStatus {}, jobStatus {}, msg '{}'",
                   attempts.incrementAndGet(),
-                  job.getId(),
                   response.getRequestStatus(),
                   response.getJobStatus(),
                   response.getJobMessage());
@@ -218,21 +216,20 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   private void publish(Message<ResultDTO> resultMessage) {
     resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
     log.info(
-        "Published result for job with id {} and status {} to queue '{}', {}",
-        resultMessage.payload().getJobId(),
+        "Published result for job with status {} to queue '{}', {}",
         resultMessage.payload().getJobStatus(),
         commonProperties.getResultQueueName(),
         resultQueue);
   }
 
   private static GetJobStatusRequest buildGetJobStatusRequest(String jobId) {
-    log.info("Building get job status request for job {}", jobId);
+    log.info("Building get job status request for job");
     var requestBuilder = GetJobStatusRequest.newBuilder().setJobId(jobId);
     return requestBuilder.build();
   }
 
   private static SubmitJobRequest buildSubmitJobRequest(JobDTO payload) {
-    log.info("Building submit solve job request for job {}", payload.getId());
+    log.info("Building submit solve job request for job");
     // set solving method for gRPC request
     var requestBuilder =
         SubmitJobRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());

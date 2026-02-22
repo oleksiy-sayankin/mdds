@@ -12,6 +12,7 @@ import com.mdds.storage.DataStorage;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -51,9 +52,11 @@ public class ResultConsumerService implements AutoCloseable {
             ResultDTO.class,
             (message, ack) -> {
               var payload = message.payload();
-              dataStorage.put(payload.getJobId(), payload);
-              ack.ack();
-              log.info("Stored result for job {} to storage {}", payload.getJobId(), dataStorage);
+              try (var ignored = MDC.putCloseable("jobId", payload.getJobId())) {
+                dataStorage.put(payload.getJobId(), payload);
+                ack.ack();
+                log.info("Stored result for job to storage {}", dataStorage);
+              }
             });
     log.info(
         "Started Result Consumer Service with queue '{}' = {} and storage {}.",

@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -43,27 +44,29 @@ public class ServerCancelController {
 
   @PostMapping("/{jobId}")
   public ResponseEntity<Void> cancel(@PathVariable("jobId") String jobId) {
-    log.info("Processing request in cancel controller for {}...", jobId);
-    var opt = storage.get(jobId, ResultDTO.class);
-    if (opt.isEmpty()) {
-      throw new CanNotCancelJobException(
-          HttpStatus.NOT_FOUND, "Can not cancel job " + jobId + ". No cancel queue name known");
-    }
-    var result = opt.get();
-    if (!ALLOWED.contains(result.getJobStatus())) {
-      throw new CanNotCancelJobException(
-          HttpStatus.CONFLICT, "Job " + jobId + " is already " + result.getJobStatus());
-    }
+    try (var ignored = MDC.putCloseable("jobId", jobId)) {
+      log.info("Processing request in cancel controller for job");
+      var opt = storage.get(jobId, ResultDTO.class);
+      if (opt.isEmpty()) {
+        throw new CanNotCancelJobException(
+            HttpStatus.NOT_FOUND, "Can not cancel job " + jobId + ". No cancel queue name known");
+      }
+      var result = opt.get();
+      if (!ALLOWED.contains(result.getJobStatus())) {
+        throw new CanNotCancelJobException(
+            HttpStatus.CONFLICT, "Job " + jobId + " is already " + result.getJobStatus());
+      }
 
-    var cancelQueueName = result.getCancelQueueName();
-    if (cancelQueueName == null || cancelQueueName.isBlank()) {
-      throw new CanNotCancelJobException(
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          "Can not cancel job " + jobId + ". Cancel queue name is empty");
-    }
+      var cancelQueueName = result.getCancelQueueName();
+      if (cancelQueueName == null || cancelQueueName.isBlank()) {
+        throw new CanNotCancelJobException(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "Can not cancel job " + jobId + ". Cancel queue name is empty");
+      }
 
-    cancelQueue.publish(
-        cancelQueueName, new Message<>(new CancelJobDTO(jobId), new HashMap<>(), Instant.now()));
-    return ResponseEntity.accepted().build();
+      cancelQueue.publish(
+          cancelQueueName, new Message<>(new CancelJobDTO(jobId), new HashMap<>(), Instant.now()));
+      return ResponseEntity.accepted().build();
+    }
   }
 }

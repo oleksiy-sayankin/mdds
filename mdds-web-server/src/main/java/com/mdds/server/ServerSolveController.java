@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -73,19 +74,17 @@ public class ServerSolveController {
 
     // store initial result
     var jobId = UUID.randomUUID().toString();
-    var now = Instant.now();
-    // Put result to storage
-    storage.put(jobId, new ResultDTO(jobId, now, null, JobStatus.NEW, null, 10, null, null));
+    try (var ignored = MDC.putCloseable("jobId", jobId)) {
+      var now = Instant.now();
+      // Put result to storage
+      storage.put(jobId, new ResultDTO(jobId, now, null, JobStatus.NEW, null, 10, null, null));
 
-    // create JobDTO and publish to queue
-    queue.publish(
-        commonProperties.getJobQueueName(),
-        new Message<>(new JobDTO(jobId, now, matrix, rhs, method), Collections.emptyMap(), now));
-    log.info(
-        "Published job with jobId = {}, to queue '{}' = {}",
-        jobId,
-        commonProperties.getJobQueueName(),
-        queue);
-    return new JobIdResponseDTO(jobId);
+      // create JobDTO and publish to queue
+      queue.publish(
+          commonProperties.getJobQueueName(),
+          new Message<>(new JobDTO(jobId, now, matrix, rhs, method), Collections.emptyMap(), now));
+      log.info("Published job to queue '{}' = {}", commonProperties.getJobQueueName(), queue);
+      return new JobIdResponseDTO(jobId);
+    }
   }
 }

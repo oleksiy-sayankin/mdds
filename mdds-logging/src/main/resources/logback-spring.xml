@@ -23,13 +23,13 @@
         <threadName>
           <fieldName>thread</fieldName>
         </threadName>
+        <mdc/>
         <message>
           <fieldName>message</fieldName>
         </message>
         <stackTrace>
           <fieldName>exception</fieldName>
         </stackTrace>
-        <mdc/>
       </providers>
     </encoder>
   </appender>
