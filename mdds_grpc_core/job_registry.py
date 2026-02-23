@@ -7,6 +7,7 @@ import time
 from threading import Event
 from constants import IN_PROGRESS, ERROR, TERMINAL, JOB_TIMEOUT, RESULT_TIME_TO_LIVE
 from dictionary import ThreadSafeDictionary
+from generated import solver_pb2
 from job import Job
 
 logger = logging.getLogger(f"{__name__}.JobRegistry")
@@ -48,6 +49,7 @@ def terminate_all_jobs(
     for job_id in active.keys():
         job = active.get(job_id)
         if job:
+            logger.info("Terminating job by force", extra={"jobId": job_id})
             terminate_job(job)
     active.clear()
 
@@ -77,6 +79,10 @@ def clean_delivered_job(
                 # and exit clean job daemon
                 if delivered and status in TERMINAL and not process.is_alive():
                     active.pop(job_id, None)
+                    logger.info(
+                        f"Finalizing job with status '{solver_pb2.JobStatus.Name(status)}'",
+                        extra={"jobId": job_id},
+                    )
                     finalize_job(job)
                     continue
 
@@ -87,6 +93,10 @@ def clean_delivered_job(
                     and time.time() - end_time > RESULT_TIME_TO_LIVE
                 ):
                     active.pop(job_id, None)
+                    logger.info(
+                        f"Time to live is ended for the job. Finalizing job with status '{solver_pb2.JobStatus.Name(status)}'",
+                        extra={"jobId": job_id},
+                    )
                     finalize_job(job)
                     continue
 
@@ -96,6 +106,10 @@ def clean_delivered_job(
                         job.jobStatus = ERROR
                         job.jobMessage = f"Timeout for job {job_id}"
                         job.endTime = time.time()
+                    logger.info(
+                        f"Timeout for job. Terminating job by force with status '{solver_pb2.JobStatus.Name(status)}'",
+                        extra={"jobId": job_id},
+                    )
                     terminate_job(job)
 
         if stop_event.wait(poll_interval_seconds):
@@ -129,6 +143,10 @@ def watch_job_result(
                             job.solution = solution
                             job.jobMessage = msg
                             job.endTime = time.time()
+                        logger.info(
+                            f"Updated job status: '{solver_pb2.JobStatus.Name(job.jobStatus)}' and message '{job.jobMessage}'",
+                            extra={"jobId": job_id},
+                        )
                         continue
 
                     # Process is dead, but we have no results -> let's find out why
@@ -141,6 +159,10 @@ def watch_job_result(
                                     f"Worker exited, exitcode={process.exitcode}"
                                 )
                                 job.endTime = time.time()
+                            logger.info(
+                                f"Job process is not alive. Marking job with status '{job.jobStatus}'",
+                                extra={"jobId": job_id},
+                            )
 
                 except Exception as e:
                     with job.lock:
@@ -149,6 +171,11 @@ def watch_job_result(
                             job.jobStatus = ERROR
                             job.jobMessage = f"Watcher error: {type(e).__name__}: {e}"
                             job.endTime = time.time()
+                    logger.info(
+                        f"Job finished with exception. Marking job with status '{job.jobStatus}'",
+                        extra={"jobId": job_id},
+                        exc_info=e,
+                    )
 
         if stop_event.wait(poll_interval_seconds):
             logger.info("Job result watcher is stopped")

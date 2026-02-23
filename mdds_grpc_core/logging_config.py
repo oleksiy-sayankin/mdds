@@ -37,9 +37,9 @@ class JsonLogFormatter(logging.Formatter):
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
 
-        job_id = getattr(record, "job_id", None)
+        job_id = getattr(record, "jobId", None)
         if job_id:
-            payload["job_id"] = job_id
+            payload["jobId"] = job_id
 
         return json.dumps(payload, ensure_ascii=False)
 
