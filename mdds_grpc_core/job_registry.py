@@ -163,7 +163,7 @@ def watch_job_result(
                                 )
                                 job.endTime = time.time()
                             logger.info(
-                                f"Job process is not alive. Marking job with status '{job.jobStatus}'",
+                                f"Job process is not alive. Marking job with status '{solver_pb2.JobStatus.Name(job.jobStatus)}'",
                                 extra={"jobId": job_id, "event": "update_job_status"},
                             )
 
@@ -175,7 +175,7 @@ def watch_job_result(
                             job.jobMessage = f"Watcher error: {type(e).__name__}: {e}"
                             job.endTime = time.time()
                     logger.info(
-                        f"Job finished with exception. Marking job with status '{job.jobStatus}'",
+                        f"Job finished with exception. Marking job with status '{solver_pb2.JobStatus.Name(job.jobStatus)}'",
                         extra={"jobId": job_id, "event": "update_job_status"},
                         exc_info=e,
                     )
