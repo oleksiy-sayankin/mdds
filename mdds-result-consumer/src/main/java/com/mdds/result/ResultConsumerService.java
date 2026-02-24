@@ -52,7 +52,8 @@ public class ResultConsumerService implements AutoCloseable {
             ResultDTO.class,
             (message, ack) -> {
               var payload = message.payload();
-              try (var ignored = MDC.putCloseable("jobId", payload.getJobId())) {
+              try (var ignoredJobId = MDC.putCloseable("jobId", payload.getJobId());
+                  var ignoredEvent = MDC.putCloseable("event", "store_result")) {
                 dataStorage.put(payload.getJobId(), payload);
                 ack.ack();
                 log.info("Stored result for job to storage {}", dataStorage);
