@@ -49,7 +49,10 @@ def terminate_all_jobs(
     for job_id in active.keys():
         job = active.get(job_id)
         if job:
-            logger.info("Terminating job by force", extra={"jobId": job_id})
+            logger.info(
+                "Terminating job by force",
+                extra={"jobId": job_id, "event": "terminate_job"},
+            )
             terminate_job(job)
     active.clear()
 
@@ -81,7 +84,7 @@ def clean_delivered_job(
                     active.pop(job_id, None)
                     logger.info(
                         f"Finalizing job with status '{solver_pb2.JobStatus.Name(status)}'",
-                        extra={"jobId": job_id},
+                        extra={"jobId": job_id, "event": "finalize_job"},
                     )
                     finalize_job(job)
                     continue
@@ -95,7 +98,7 @@ def clean_delivered_job(
                     active.pop(job_id, None)
                     logger.info(
                         f"Time to live is ended for the job. Finalizing job with status '{solver_pb2.JobStatus.Name(status)}'",
-                        extra={"jobId": job_id},
+                        extra={"jobId": job_id, "event": "finalize_job"},
                     )
                     finalize_job(job)
                     continue
@@ -108,7 +111,7 @@ def clean_delivered_job(
                         job.endTime = time.time()
                     logger.info(
                         f"Timeout for job. Terminating job by force with status '{solver_pb2.JobStatus.Name(status)}'",
-                        extra={"jobId": job_id},
+                        extra={"jobId": job_id, "event": "terminate_job"},
                     )
                     terminate_job(job)
 
@@ -145,7 +148,7 @@ def watch_job_result(
                             job.endTime = time.time()
                         logger.info(
                             f"Updated job status: '{solver_pb2.JobStatus.Name(job.jobStatus)}' and message '{job.jobMessage}'",
-                            extra={"jobId": job_id},
+                            extra={"jobId": job_id, "event": "update_job_status"},
                         )
                         continue
 
@@ -161,7 +164,7 @@ def watch_job_result(
                                 job.endTime = time.time()
                             logger.info(
                                 f"Job process is not alive. Marking job with status '{job.jobStatus}'",
-                                extra={"jobId": job_id},
+                                extra={"jobId": job_id, "event": "update_job_status"},
                             )
 
                 except Exception as e:
@@ -173,7 +176,7 @@ def watch_job_result(
                             job.endTime = time.time()
                     logger.info(
                         f"Job finished with exception. Marking job with status '{job.jobStatus}'",
-                        extra={"jobId": job_id},
+                        extra={"jobId": job_id, "event": "update_job_status"},
                         exc_info=e,
                     )
 

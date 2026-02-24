@@ -115,14 +115,17 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
     def SubmitJob(self, request, context):
         job_id = request.jobId
         if not job_id:
-            logger.warning("No job id provided")
+            logger.warning("No job id provided", extra={"event": "submit_job"})
             return solver_pb2.SubmitJobResponse(
                 requestStatus=DECLINED,
                 requestStatusDetails="Job id is invalid: empty or null",
             )
 
         if self.active.get(job_id):
-            logger.warning("Job is already submitted", extra={"jobId": job_id})
+            logger.warning(
+                "Job is already submitted",
+                extra={"jobId": job_id, "event": "submit_job"},
+            )
             return solver_pb2.SubmitJobResponse(
                 jobId=job_id,
                 requestStatus=DECLINED,
@@ -131,7 +134,10 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
 
         method = request.method
         if method not in SOLVER_MAP:
-            logger.warning(f"Method {method} not supported", extra={"jobId": job_id})
+            logger.warning(
+                f"Method {method} not supported",
+                extra={"jobId": job_id, "event": "submit_job"},
+            )
             return solver_pb2.SubmitJobResponse(
                 jobId=job_id,
                 requestStatus=DECLINED,
@@ -164,7 +170,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
 
         logger.info(
             f"Job submitted and is in progress. Matrix size is {len(matrix)} x {len(matrix[0])}. Right hand side vector size is {len(rhs)}. Solving method is '{method}'",
-            extra={"jobId": job_id},
+            extra={"jobId": job_id, "event": "submit_job"},
         )
         return solver_pb2.SubmitJobResponse(
             jobId=job_id,
@@ -175,14 +181,16 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
     def CancelJob(self, request, context):
         job_id = request.jobId
         if not job_id:
-            logger.warning("No job id provided")
+            logger.warning("No job id provided", extra={"event": "cancel_job"})
             return solver_pb2.CancelJobResponse(
                 requestStatus=DECLINED,
                 requestStatusDetails="Job id is empty",
             )
         job = self.active.get(job_id, None)
         if job is None:
-            logger.warning("Job does not exist", extra={"jobId": job_id})
+            logger.warning(
+                "Job does not exist", extra={"jobId": job_id, "event": "cancel_job"}
+            )
             return solver_pb2.CancelJobResponse(
                 jobId=job_id,
                 requestStatus=DECLINED,
@@ -192,7 +200,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             if job.jobStatus != IN_PROGRESS:
                 logger.warning(
                     f"Job is not in progress. Job status is {solver_pb2.JobStatus.Name(job.jobStatus)}",
-                    extra={"jobId": job_id},
+                    extra={"jobId": job_id, "event": "cancel_job"},
                 )
                 return solver_pb2.CancelJobResponse(
                     jobId=job_id,
@@ -205,7 +213,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
             job.endTime = time.time()
 
         terminate_process(job.process)
-        logger.info("Job is cancelled", extra={"jobId": job_id})
+        logger.info("Job is cancelled", extra={"jobId": job_id, "event": "cancel_job"})
         return solver_pb2.CancelJobResponse(
             jobId=job_id,
             requestStatus=COMPLETED,
@@ -215,14 +223,16 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
     def GetJobStatus(self, request, context):
         job_id = request.jobId
         if not job_id:
-            logger.warning("No job id provided")
+            logger.warning("No job id provided", extra={"event": "get_job_status"})
             return solver_pb2.GetJobStatusResponse(
                 requestStatus=DECLINED,
                 requestStatusDetails="Job id is empty or null",
             )
         job = self.active.get(job_id, None)
         if job is None:
-            logger.warning("Job does not exist", extra={"jobId": job_id})
+            logger.warning(
+                "Job does not exist", extra={"jobId": job_id, "event": "get_job_status"}
+            )
             return solver_pb2.GetJobStatusResponse(
                 jobId=job_id,
                 requestStatus=DECLINED,
@@ -241,7 +251,7 @@ class SolverService(solver_pb2_grpc.SolverServiceServicer):
 
         logger.debug(
             f"Found job with status: {solver_pb2.JobStatus.Name(job_status)}",
-            extra={"jobId": job_id},
+            extra={"jobId": job_id, "event": "get_job_status"},
         )
         return solver_pb2.GetJobStatusResponse(
             requestStatus=COMPLETED,

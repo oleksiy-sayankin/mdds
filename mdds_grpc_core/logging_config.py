@@ -41,6 +41,10 @@ class JsonLogFormatter(logging.Formatter):
         if job_id:
             payload["jobId"] = job_id
 
+        event = getattr(record, "event", None)
+        if event:
+            payload["event"] = event
+
         return json.dumps(payload, ensure_ascii=False)
 
 
