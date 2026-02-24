@@ -87,7 +87,8 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   @Override
   public void handle(@Nonnull Message<JobDTO> message, @Nonnull Acknowledger ack) {
     var job = message.payload();
-    try (var ignored = MDC.putCloseable("jobId", job.getId())) {
+    try (var ignoredJobId = MDC.putCloseable("jobId", job.getId());
+        var ignoredEvent = MDC.putCloseable("event", "handle_request")) {
       try {
         log.info("Start handling job");
         var submitResponse = submit(job);

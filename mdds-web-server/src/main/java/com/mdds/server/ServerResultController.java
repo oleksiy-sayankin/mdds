@@ -28,7 +28,8 @@ public class ServerResultController {
 
   @GetMapping("/{jobId}")
   public ResultDTO result(@PathVariable("jobId") String jobId) {
-    try (var ignored = MDC.putCloseable("jobId", jobId)) {
+    try (var ignoredJobId = MDC.putCloseable("jobId", jobId);
+        var ignoredEvent = MDC.putCloseable("event", "result_request")) {
       log.info("Processing request in result controller for job");
       var result = storage.get(jobId, ResultDTO.class);
       result.ifPresentOrElse(

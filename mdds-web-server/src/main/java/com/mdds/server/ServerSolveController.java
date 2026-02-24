@@ -74,7 +74,8 @@ public class ServerSolveController {
 
     // store initial result
     var jobId = UUID.randomUUID().toString();
-    try (var ignored = MDC.putCloseable("jobId", jobId)) {
+    try (var ignoredJobId = MDC.putCloseable("jobId", jobId);
+        var ignoredEvent = MDC.putCloseable("event", "create_request")) {
       var now = Instant.now();
       // Put result to storage
       storage.put(jobId, new ResultDTO(jobId, now, null, JobStatus.NEW, null, 10, null, null));

@@ -44,7 +44,8 @@ public class ServerCancelController {
 
   @PostMapping("/{jobId}")
   public ResponseEntity<Void> cancel(@PathVariable("jobId") String jobId) {
-    try (var ignored = MDC.putCloseable("jobId", jobId)) {
+    try (var ignoredJobId = MDC.putCloseable("jobId", jobId);
+        var ignoredEvent = MDC.putCloseable("event", "cancel_request")) {
       log.info("Processing request in cancel controller for job");
       var opt = storage.get(jobId, ResultDTO.class);
       if (opt.isEmpty()) {
