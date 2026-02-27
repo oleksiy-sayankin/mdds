@@ -88,7 +88,8 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   public void handle(@Nonnull Message<JobDTO> message, @Nonnull Acknowledger ack) {
     var job = message.payload();
     try (var ignoredJobId = MDC.putCloseable("jobId", job.getId());
-        var ignoredEvent = MDC.putCloseable("event", "handle_request")) {
+        var ignoredEvent = MDC.putCloseable("event", "handle_request");
+        var ignoredExecutorId = MDC.putCloseable("executorId", executorProperties.getId())) {
       try {
         log.info("Start handling job");
         var submitResponse = submit(job);
@@ -126,7 +127,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             jobCreationDateTime,
             Instant.now(),
             JobStatus.IN_PROGRESS,
-            executorProperties.getCancelQueueName(),
+            executorProperties.getId(),
             30,
             new double[] {},
             "");
@@ -142,7 +143,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             payload.getDateTime(),
             Instant.now(),
             JobStatus.ERROR,
-            executorProperties.getCancelQueueName(),
+            executorProperties.getId(),
             70,
             new double[] {},
             message);
@@ -163,7 +164,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             toInstant(response.getStartTime()),
             toInstant(response.getEndTime()),
             response.getJobStatus(),
-            executorProperties.getCancelQueueName(),
+            executorProperties.getId(),
             response.getProgress(),
             solution,
             response.getJobMessage());

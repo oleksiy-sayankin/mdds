@@ -15,6 +15,7 @@ import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
 import com.mdds.grpc.solver.JobStatus;
+import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
 import com.mdds.queue.Queue;
 import java.io.File;
@@ -61,9 +62,7 @@ class TestExecutorApplication {
   @Qualifier("resultQueue")
   private Queue resultQueue;
 
-  @Autowired
-  @Qualifier("cancelQueue")
-  private Queue cancelQueue;
+  @Autowired private CancelBus cancelBus;
 
   @Autowired private CommonProperties commonProperties;
 
@@ -277,7 +276,7 @@ class TestExecutorApplication {
   }
 
   @Test
-  void testCancelJob() throws InterruptedException {
+  void testCancelJob() {
     String jobId;
     var duration = Duration.ofMillis(3000);
     Duration currentDuration;
@@ -315,11 +314,11 @@ class TestExecutorApplication {
         "Submitted job {} for SLAE size {} x {}. Waiting for cancellation...", jobId, size, size);
     var result = waitForStatus(jobId, resultQueue, JobStatus.IN_PROGRESS);
     log.info("Started processing job {}", jobId);
-    var cancelQueueName = result.getCancelQueueName();
+    var executorId = result.getExecutorId();
     var cancelJob = new CancelJobDTO(jobId);
     var cancelMessage = new Message<>(cancelJob, new HashMap<>(), Instant.now());
-    cancelQueue.publish(cancelQueueName, cancelMessage);
-    log.info("Submitting cancel message for job {} to cancel queue {}", jobId, cancelQueueName);
+    cancelBus.sendCancel(executorId, cancelMessage);
+    log.info("Submitting cancel message for job {} to executor {}", jobId, executorId);
     result = waitForStatus(jobId, resultQueue, JobStatus.CANCELLED);
     assertThat(result.getJobStatus()).isEqualTo(JobStatus.CANCELLED);
   }

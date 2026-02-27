@@ -15,7 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
-import com.mdds.queue.Queue;
+import com.mdds.queue.CancelBus;
 import com.mdds.storage.DataStorage;
 import java.time.Instant;
 import java.util.Optional;
@@ -24,18 +24,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
 class TestServerApplicationCancelController {
-  private Queue cancelQueue;
+  private CancelBus cancelBus;
   private DataStorage dataStorage;
 
   @BeforeEach
   void setUp() {
-    cancelQueue = mock(Queue.class);
+    cancelBus = mock(CancelBus.class);
     dataStorage = mock(DataStorage.class);
   }
 
   @Test
   void testCancel() {
-    var scc = new ServerCancelController(dataStorage, cancelQueue);
+    var scc = new ServerCancelController(dataStorage, cancelBus);
     var jobId = "testJobId";
     var result =
         new ResultDTO(
@@ -43,19 +43,19 @@ class TestServerApplicationCancelController {
             Instant.now(),
             Instant.now(),
             JobStatus.IN_PROGRESS,
-            "cancel.queue",
+            "test-executor-id",
             10,
             null,
             "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
     var actual = scc.cancel(jobId);
     assertThat(actual.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-    verify(cancelQueue).publish(eq("cancel.queue"), any());
+    verify(cancelBus).sendCancel(eq("test-executor-id"), any());
   }
 
   @Test
   void testCancelNoQueueName() {
-    var scc = new ServerCancelController(dataStorage, cancelQueue);
+    var scc = new ServerCancelController(dataStorage, cancelBus);
     var jobId = "testJobId";
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.empty());
     assertThatThrownBy(() -> scc.cancel(jobId))
@@ -65,7 +65,7 @@ class TestServerApplicationCancelController {
 
   @Test
   void testCancelDoneJob() {
-    var scc = new ServerCancelController(dataStorage, cancelQueue);
+    var scc = new ServerCancelController(dataStorage, cancelBus);
     var jobId = "testJobId";
     var result =
         new ResultDTO(
@@ -78,13 +78,13 @@ class TestServerApplicationCancelController {
 
   @Test
   void testCancelEmptyQueueName() {
-    var scc = new ServerCancelController(dataStorage, cancelQueue);
+    var scc = new ServerCancelController(dataStorage, cancelBus);
     var jobId = "testJobId";
     var result =
         new ResultDTO(jobId, Instant.now(), Instant.now(), JobStatus.IN_PROGRESS, "", 10, null, "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
     assertThatThrownBy(() -> scc.cancel(jobId))
         .isInstanceOf(CanNotCancelJobException.class)
-        .hasMessageContaining("Cancel queue name is empty");
+        .hasMessageContaining("Can not cancel job. executorId is empty");
   }
 }

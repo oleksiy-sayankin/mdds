@@ -14,7 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.mdds.common.CommonProperties;
-import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SlaeSolver;
@@ -24,6 +23,7 @@ import com.mdds.grpc.solver.RequestStatus;
 import com.mdds.grpc.solver.SolverServiceGrpc;
 import com.mdds.grpc.solver.SubmitJobResponse;
 import com.mdds.queue.Acknowledger;
+import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.Queue;
@@ -59,9 +59,7 @@ class TestExecutorApplicationService {
   @Qualifier("resultQueue")
   private Queue resultQueue;
 
-  @Autowired
-  @Qualifier("cancelQueue")
-  private Queue cancelQueue;
+  @Autowired private CancelBus cancelBus;
 
   @Autowired private GrpcServerProperties grpcServerConfig;
 
@@ -111,7 +109,7 @@ class TestExecutorApplicationService {
             startTime,
             endTime,
             JobStatus.DONE,
-            executorProperties.getCancelQueueName(),
+            executorProperties.getId(),
             100,
             new double[] {1.971, 3.213, 7.243},
             "");
@@ -130,13 +128,12 @@ class TestExecutorApplicationService {
         new ExecutorService(
             jobQueue,
             resultQueue,
-            cancelQueue,
+            cancelBus,
             executorMessageHandler,
             cancelMessageHandler,
             jobQueue.subscribe(
                 commonProperties.getJobQueueName(), JobDTO.class, executorMessageHandler),
-            cancelQueue.subscribe(
-                executorProperties.getCancelQueueName(), CancelJobDTO.class, cancelMessageHandler),
+            cancelBus.subscribe(executorProperties.getId(), cancelMessageHandler),
             commonProperties,
             executorProperties)) {
       var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());

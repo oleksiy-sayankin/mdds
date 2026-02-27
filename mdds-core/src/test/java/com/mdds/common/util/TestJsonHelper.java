@@ -45,7 +45,7 @@ class TestJsonHelper {
             instant,
             instant,
             JobStatus.DONE,
-            "cancel.queue-executor-0001",
+            "executor-0001",
             100,
             new double[] {1.971, 3.213, 7.243},
             "");
@@ -56,7 +56,7 @@ class TestJsonHelper {
             + "\"dateTimeJobStarted\":1725466860.000000000,"
             + "\"dateTimeJobEnded\":1725466860.000000000,"
             + "\"jobStatus\":\"DONE\","
-            + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
+            + "\"executorId\":\"executor-0001\","
             + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
@@ -72,7 +72,7 @@ class TestJsonHelper {
             + "\"dateTimeJobStarted\":1725466860.000000000,"
             + "\"dateTimeJobEnded\":1725466860.000000000,"
             + "\"jobStatus\":\"DONE\","
-            + "\"cancelQueueName\":\"cancel.queue-executor-0001\","
+            + "\"executorId\":\"executor-0001\","
             + "\"progress\":100,"
             + "\"solution\":[1.971,3.213,7.243],"
             + "\"errorMessage\":\"\""
@@ -87,7 +87,7 @@ class TestJsonHelper {
             instant,
             instant,
             JobStatus.DONE,
-            "cancel.queue-executor-0001",
+            "executor-0001",
             100,
             new double[] {1.971, 3.213, 7.243},
             "");

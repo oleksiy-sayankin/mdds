@@ -10,8 +10,8 @@ import static com.mdds.grpc.solver.JobStatus.NEW;
 import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
+import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
-import com.mdds.queue.Queue;
 import com.mdds.storage.DataStorage;
 import java.time.Instant;
 import java.util.HashMap;
@@ -19,7 +19,6 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,13 +32,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/cancel")
 public class ServerCancelController {
   private final DataStorage storage;
-  private final Queue cancelQueue;
+  private final CancelBus cancelBus;
   private static final Set<JobStatus> ALLOWED = Set.of(IN_PROGRESS, NEW);
 
   @Autowired
-  public ServerCancelController(DataStorage storage, @Qualifier("cancelQueue") Queue cancelQueue) {
+  public ServerCancelController(DataStorage storage, CancelBus cancelBus) {
     this.storage = storage;
-    this.cancelQueue = cancelQueue;
+    this.cancelBus = cancelBus;
   }
 
   @PostMapping("/{jobId}")
@@ -50,7 +49,7 @@ public class ServerCancelController {
       var opt = storage.get(jobId, ResultDTO.class);
       if (opt.isEmpty()) {
         throw new CanNotCancelJobException(
-            HttpStatus.NOT_FOUND, "Can not cancel job " + jobId + ". No cancel queue name known");
+            HttpStatus.NOT_FOUND, "Can not cancel job " + jobId + ". No executorId known");
       }
       var result = opt.get();
       if (!ALLOWED.contains(result.getJobStatus())) {
@@ -58,15 +57,14 @@ public class ServerCancelController {
             HttpStatus.CONFLICT, "Job " + jobId + " is already " + result.getJobStatus());
       }
 
-      var cancelQueueName = result.getCancelQueueName();
-      if (cancelQueueName == null || cancelQueueName.isBlank()) {
+      var executorId = result.getExecutorId();
+      if (executorId == null || executorId.isBlank()) {
         throw new CanNotCancelJobException(
-            HttpStatus.INTERNAL_SERVER_ERROR,
-            "Can not cancel job " + jobId + ". Cancel queue name is empty");
+            HttpStatus.INTERNAL_SERVER_ERROR, "Can not cancel job. executorId is empty");
       }
 
-      cancelQueue.publish(
-          cancelQueueName, new Message<>(new CancelJobDTO(jobId), new HashMap<>(), Instant.now()));
+      cancelBus.sendCancel(
+          executorId, new Message<>(new CancelJobDTO(jobId), new HashMap<>(), Instant.now()));
       return ResponseEntity.accepted().build();
     }
   }

@@ -20,7 +20,7 @@ public class ResultDTO {
   Instant dateTimeJobStarted;
   Instant dateTimeJobEnded;
   JobStatus jobStatus;
-  String cancelQueueName;
+  String executorId;
   int progress;
   double[] solution;
   String errorMessage;

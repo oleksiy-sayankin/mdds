@@ -4,8 +4,10 @@
  */
 package com.mdds.queue;
 
+import com.mdds.queue.rabbitmq.RabbitMqCancelBus;
 import com.mdds.queue.rabbitmq.RabbitMqProperties;
 import com.mdds.queue.rabbitmq.RabbitMqQueue;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -40,5 +42,11 @@ public class QueueConfig {
         properties.getUser(),
         properties.getPassword(),
         properties.getMaxInboundMessageBodySize());
+  }
+
+  @Bean
+  public CancelBus cancelBus(
+      @Qualifier("cancelQueue") Queue cancelQueue, CancelDestinationResolver resolver) {
+    return new RabbitMqCancelBus(cancelQueue, resolver);
   }
 }

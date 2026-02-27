@@ -8,6 +8,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.JobDTO;
+import com.mdds.queue.CancelBus;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.Queue;
 import com.mdds.queue.Subscription;
@@ -28,7 +29,7 @@ public class ExecutorService implements AutoCloseable {
   private final Queue jobQueue;
   private final Queue resultQueue;
   private final MessageHandler<JobDTO> messageHandler;
-  private final Queue cancelQueue;
+  private final CancelBus cancelBus;
   private final MessageHandler<CancelJobDTO> cancelMessageHandler;
   private final CommonProperties commonProperties;
   private final ExecutorProperties executorProperties;
@@ -40,14 +41,14 @@ public class ExecutorService implements AutoCloseable {
       @Qualifier("jobQueue") Queue jobQueue,
       @Qualifier("resultQueue") Queue resultQueue,
       MessageHandler<JobDTO> messageHandler,
-      @Qualifier("cancelQueue") Queue cancelQueue,
+      CancelBus cancelBus,
       MessageHandler<CancelJobDTO> cancelMessageHandler,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
     this.jobQueue = jobQueue;
     this.resultQueue = resultQueue;
     this.messageHandler = messageHandler;
-    this.cancelQueue = cancelQueue;
+    this.cancelBus = cancelBus;
     this.cancelMessageHandler = cancelMessageHandler;
     this.commonProperties = commonProperties;
     this.executorProperties = executorProperties;
@@ -58,7 +59,7 @@ public class ExecutorService implements AutoCloseable {
         commonProperties.getResultQueueName(),
         resultQueue,
         messageHandler,
-        executorProperties.getCancelQueueName(),
+        executorProperties.getId(),
         cancelMessageHandler);
   }
 
@@ -66,7 +67,7 @@ public class ExecutorService implements AutoCloseable {
   public ExecutorService(
       Queue jobQueue,
       Queue resultQueue,
-      Queue cancelQueue,
+      CancelBus cancelBus,
       MessageHandler<JobDTO> messageHandler,
       MessageHandler<CancelJobDTO> cancelMessageHandler,
       Subscription jobQueueSubscription,
@@ -75,7 +76,7 @@ public class ExecutorService implements AutoCloseable {
       ExecutorProperties executorProperties) {
     this.jobQueue = jobQueue;
     this.resultQueue = resultQueue;
-    this.cancelQueue = cancelQueue;
+    this.cancelBus = cancelBus;
     this.messageHandler = messageHandler;
     this.cancelMessageHandler = cancelMessageHandler;
     this.jobQueueSubscription = jobQueueSubscription;
@@ -89,17 +90,16 @@ public class ExecutorService implements AutoCloseable {
     this.jobQueueSubscription =
         jobQueue.subscribe(commonProperties.getJobQueueName(), JobDTO.class, messageHandler);
     this.cancelQueueSubscription =
-        cancelQueue.subscribe(
-            executorProperties.getCancelQueueName(), CancelJobDTO.class, cancelMessageHandler);
+        cancelBus.subscribe(executorProperties.getId(), cancelMessageHandler);
     log.info(
-        "Executor Service started with job queue '{}', {}, result queue '{}', {}, cancel queue"
+        "Executor Service started with job queue '{}', {}, result queue '{}', {}, executorId"
             + " '{}', {}",
         commonProperties.getJobQueueName(),
         jobQueue,
         commonProperties.getResultQueueName(),
         resultQueue,
-        executorProperties.getCancelQueueName(),
-        cancelQueue);
+        executorProperties.getId(),
+        cancelBus);
   }
 
   @PreDestroy
@@ -109,7 +109,6 @@ public class ExecutorService implements AutoCloseable {
     cancelQueueSubscription.close();
     jobQueue.close();
     resultQueue.close();
-    cancelQueue.close();
     log.info("ExecutorService shut down cleanly");
   }
 }
