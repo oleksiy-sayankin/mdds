@@ -231,9 +231,30 @@ services:
       "
     restart: "no"
 
+  postgres:
+    image: postgres:18
+    container_name: postgres.mdds.com
+    environment:
+      POSTGRES_DB: mdds
+      POSTGRES_USER: mdds
+      POSTGRES_PASSWORD: mdds123
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+
 volumes:
   loki-data:
   grafana-data:
   alloy-data:
   minio-data:
+  postgres-data:
 
