@@ -26,6 +26,18 @@ public class HttpTestClient {
     return client.send(request, HttpResponse.BodyHandlers.ofString());
   }
 
+  public HttpResponse<String> post(String path, Map<String, String> headers)
+      throws IOException, InterruptedException {
+    var request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + path))
+            .POST(HttpRequest.BodyPublishers.noBody());
+    for (var entry : headers.entrySet()) {
+      request.header(entry.getKey(), entry.getValue());
+    }
+    return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
   public HttpResponse<String> postSolve(
       String dataSourceType, String slaeSolvingMethod, Map<String, Object> params)
       throws IOException, InterruptedException {

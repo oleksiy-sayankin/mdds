@@ -82,6 +82,12 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       MDDS_SERVER_HOST: web.server.mdds.com
       MDDS_SERVER_PORT: 8000
@@ -92,6 +98,9 @@ services:
       MDDS_RABBITMQ_PASSWORD: guest
       MDDS_REDIS_HOST: redis.mdds.com
       MDDS_REDIS_PORT: 6379
+      MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres.mdds.com:5432/mdds
+      MDDS_METADATA_STORAGE_USER: mdds
+      MDDS_METADATA_STORAGE_PASSWORD: mdds123
     ports:
       - "8000:8000"
     healthcheck:

@@ -20,6 +20,8 @@ import io.grpc.health.v1.HealthGrpc;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
@@ -29,6 +31,7 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -56,6 +59,11 @@ public class BaseEnvironment {
 
   private static final String RABBITMQ_HOST = "rabbitmq";
   private static final int RABBITMQ_PORT = 5672;
+
+  private static final String POSTGRES_HOST = "postgres";
+  private static final int POSTGRES_PORT = 5432;
+  private static final String POSTGRES_USER = "mdds";
+  private static final String POSTGRES_PASSWORD = "mdds123";
 
   private static final String MDDS_GRPC_CORE = "mdds_grpc_core";
   private static final String MDDS_HOME = File.separator + "opt" + File.separator + "mdds";
@@ -135,11 +143,23 @@ public class BaseEnvironment {
 
   @SuppressWarnings("resource")
   @Container
+  static final PostgreSQLContainer<?> POSTGRES =
+      new PostgreSQLContainer<>("postgres:17")
+          .withNetwork(SHARED_NETWORK)
+          .withNetworkAliases(POSTGRES_HOST)
+          .withDatabaseName("mdds")
+          .withUsername(POSTGRES_USER)
+          .withPassword(POSTGRES_PASSWORD)
+          .waitingFor(Wait.forListeningPort())
+          .withExposedPorts(POSTGRES_PORT);
+
+  @SuppressWarnings("resource")
+  @Container
   private static final GenericContainer<?> WEB_SERVER =
       new GenericContainer<>(DockerImageName.parse("mddsproject/web-server:0.1.0"))
           .withNetwork(SHARED_NETWORK)
           .withNetworkAliases(MDDS_WEB_SERVER_HOST)
-          .dependsOn(RABBIT_MQ, REDIS, EXECUTOR, RESULT_CONSUMER)
+          .dependsOn(RABBIT_MQ, REDIS, EXECUTOR, RESULT_CONSUMER, POSTGRES)
           .withEnv("MDDS_SERVER_HOST", MDDS_WEB_SERVER_HOST)
           .withEnv("MDDS_SERVER_PORT", String.valueOf(MDDS_WEB_SERVER_PORT))
           .withEnv("MDDS_RABBITMQ_HOST", RABBITMQ_HOST)
@@ -148,6 +168,11 @@ public class BaseEnvironment {
           .withEnv("MDDS_RABBITMQ_PASSWORD", RABBIT_MQ.getAdminPassword())
           .withEnv("MDDS_REDIS_HOST", REDIS_HOST)
           .withEnv("MDDS_REDIS_PORT", String.valueOf(REDIS_PORT))
+          .withEnv(
+              "MDDS_METADATA_STORAGE_JDBC_URL",
+              "jdbc:postgresql://" + POSTGRES_HOST + ":" + POSTGRES_PORT + "/mdds")
+          .withEnv("MDDS_METADATA_STORAGE_USER", POSTGRES_USER)
+          .withEnv("MDDS_METADATA_STORAGE_PASSWORD", POSTGRES_PASSWORD)
           .waitingFor(Wait.forListeningPort())
           .withExposedPorts(MDDS_WEB_SERVER_PORT);
 
@@ -162,6 +187,7 @@ public class BaseEnvironment {
     awaitReady(BaseEnvironment::grpcServerIsReady, "gRPC Server");
     awaitReady(BaseEnvironment::queueIsReady, "RabbitMq");
     awaitReady(BaseEnvironment::redisIsReady, "Redis");
+    awaitReady(BaseEnvironment::postgresIsReady, "Postgres");
     awaitReady(() -> checkHealth(EXECUTOR, MDDS_EXECUTOR_PORT), "ExecutorApplication");
     awaitReady(() -> checkHealth(RESULT_CONSUMER, MDDS_RESULT_CONSUMER_PORT), "Result Consumer");
     awaitReady(() -> checkHealth(WEB_SERVER, MDDS_WEB_SERVER_PORT), "Web Server");
@@ -190,6 +216,15 @@ public class BaseEnvironment {
                 RABBIT_MQ.getAdminPassword())
             .newConnection()) {
       return connection.isOpen();
+    }
+  }
+
+  private static boolean postgresIsReady() {
+    try (var conn =
+        DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES_USER, POSTGRES_PASSWORD)) {
+      return conn.isValid(2);
+    } catch (SQLException e) {
+      return false;
     }
   }
 

@@ -6,6 +6,25 @@ spring:
   application:
     name: Web Server
 
+  datasource:
+    url: ${MDDS_METADATA_STORAGE_JDBC_URL}
+    username: ${MDDS_METADATA_STORAGE_USER}
+    password: ${MDDS_METADATA_STORAGE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
 mdds.server:
   host: localhost
   port: 8000

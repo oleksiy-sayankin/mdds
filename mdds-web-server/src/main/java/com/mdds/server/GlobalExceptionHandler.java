@@ -26,4 +26,10 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ErrorResponseDTO> handleCanNotCancelJob(CanNotCancelJobException ex) {
     return ResponseEntity.status(ex.getHttpStatus()).body(new ErrorResponseDTO(ex.getMessage()));
   }
+
+  @ExceptionHandler(UnknownUserException.class)
+  public ResponseEntity<ErrorResponseDTO> handleUnknownUser(UnknownUserException ex) {
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
 }

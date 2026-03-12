@@ -13,6 +13,7 @@ import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.dto.ErrorResponseDTO;
+import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.storage.redis.RedisDataStorage;
@@ -36,6 +37,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
@@ -75,6 +77,7 @@ class TestServerApplication {
   private static final RabbitMQContainer rabbitMq;
   private static final MySQLContainer<?> mysql;
   private static final S3MockContainer s3mock;
+  private static final PostgreSQLContainer<?> postgres;
 
   static {
     rabbitMq =
@@ -90,6 +93,12 @@ class TestServerApplication {
             .withUsername(USER_NAME)
             .withPassword(PASSWORD);
 
+    postgres =
+        new PostgreSQLContainer<>("postgres:17")
+            .withDatabaseName("mdds")
+            .withUsername("mdds")
+            .withPassword("mdds123");
+
     s3mock =
         new S3MockContainer("latest")
             .withExposedPorts(9090)
@@ -99,6 +108,8 @@ class TestServerApplication {
     log.info("RabbitMq container is ready {}:{}", rabbitMq.getHost(), rabbitMq.getAmqpPort());
     mysql.start();
     log.info("MySql container is ready {}", mysql.getJdbcUrl());
+    postgres.start();
+    log.info("Postgres container is ready {}", postgres.getJdbcUrl());
     s3mock.start();
     log.info("S3 container is ready {}:{}", s3mock.getHost(), s3mock.getHttpServerPort());
     try {
@@ -120,6 +131,9 @@ class TestServerApplication {
     registry.add("mdds.redis.port", () -> String.valueOf(REDIS_PORT));
     registry.add("mdds.server.host", () -> "localhost");
     registry.add("mdds.server.port", () -> String.valueOf(PORT));
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
   }
 
   @BeforeAll
@@ -187,6 +201,51 @@ class TestServerApplication {
     var response = http.get("/result/" + jobId);
     var actual = JsonHelper.fromJson(response.body(), ResultDTO.class);
     assertThat(actual).isEqualTo(expected);
+  }
+
+  @Test
+  void testInitJobReturnsSameJobIdForSameUserAndUploadSession()
+      throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, PORT);
+
+    var first = initJob(http, "guest", "session-a");
+    var second = initJob(http, "guest", "session-a");
+
+    assertThat(second).isEqualTo(first);
+  }
+
+  @Test
+  void testInitJobReturnsDifferentJobIdsForDifferentUploadSessionsOfSameUser()
+      throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, PORT);
+
+    var sessionA = initJob(http, "guest", "session-a");
+    var sessionB = initJob(http, "guest", "session-b");
+
+    assertThat(sessionB).isNotEqualTo(sessionA);
+  }
+
+  @Test
+  void testInitJobReturnsDifferentJobIdsForSameUploadSessionOfDifferentUsers()
+      throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, PORT);
+
+    var guestJob = initJob(http, "guest", "session-a");
+    var adminJob = initJob(http, "admin", "session-a");
+
+    assertThat(adminJob).isNotEqualTo(guestJob);
+  }
+
+  @Test
+  void testInitJobReturnsErrorForInvalidUser() throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, PORT);
+    var response =
+        http.post(
+            "/jobs/init-job",
+            Map.of(
+                "X-MDDS-User-Login", "invalid_user",
+                "X-MDDS-Upload-Session-Id", "session"));
+    assertThat(response.statusCode()).isEqualTo(HttpURLConnection.HTTP_UNAUTHORIZED);
   }
 
   @Test
@@ -291,5 +350,22 @@ class TestServerApplication {
           PutObjectRequest.builder().bucket(BUCKET).key("rhs.json").build(),
           RequestBody.fromByteBuffer(rhsByteBuffer));
     }
+  }
+
+  private JobIdResponseDTO initJob(HttpTestClient http, String userLogin, String uploadSessionId)
+      throws IOException, InterruptedException {
+    var response =
+        http.post(
+            "/jobs/init-job",
+            Map.of(
+                "X-MDDS-User-Login", userLogin,
+                "X-MDDS-Upload-Session-Id", uploadSessionId));
+
+    assertThat(response.statusCode()).isEqualTo(HttpURLConnection.HTTP_OK);
+
+    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    assertThat(dto).isNotNull();
+    assertThat(dto.getId()).isNotBlank();
+    return dto;
   }
 }
