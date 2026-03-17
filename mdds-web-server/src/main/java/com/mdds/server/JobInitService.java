@@ -37,7 +37,7 @@ public class JobInitService {
               job.setId(jobId);
               job.setUserId(userId);
               job.setUploadSessionId(uploadSessionId);
-              job.setStatus(JobStatus.NEW);
+              job.setStatus(JobStatus.DRAFT);
               job.setProgress(0);
               job.setCreatedAt(Instant.now());
               jobsRepository.save(job);

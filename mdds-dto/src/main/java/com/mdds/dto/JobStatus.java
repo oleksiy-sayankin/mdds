@@ -6,9 +6,11 @@ package com.mdds.dto;
 
 /** Enumeration of Job statuses. */
 public enum JobStatus {
-  NEW,
+  DRAFT,
+  SUBMITTED,
   IN_PROGRESS,
   DONE,
   ERROR,
+  CANCEL_REQUESTED,
   CANCELLED
 }
