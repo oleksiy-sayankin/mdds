@@ -55,8 +55,8 @@ The actual meaning of a job is defined by two things:
 1. the job type (`jobType`);
 2. the job manifest (`manifest.json`).
 
-This design allows the platform to support multiple job types in the future, not only solving Systems of Linear 
-Algebraic Equations (SLAE), which is the primary supported job type at the current stage.
+This design allows the platform to support multiple job types in the future. At the current stage, the primary 
+supported job type is solving Systems of Linear Algebraic Equations (SLAE).
 
 ---
 
@@ -80,7 +80,7 @@ In other words, the platform coordinates work, but the business meaning of the w
 The Web Server is responsible for:
 
 - creating jobs and assigning job identifiers;
-- reserving object storage namespaces/prefixes for jobs;
+- assigning object storage prefixes to jobs;
 - issuing pre-signed upload URLs for input artifacts;
 - validating whether a job is ready for submission;
 - generating the job manifest;
@@ -193,21 +193,25 @@ POST /jobs
   "jobType": "solving_slae"
 }
 ```
-Here `solving_slae` denotes a job for solving Systems of Linear Algebraic Equations. 
+Here `solving_slae` denotes a job for solving systems of linear algebraic equations. 
 
 **Response**
 
+- `201 Created` — the job was created successfully.
+
 ```json
 {
-  "jobId": "<new-job-id>",
-  "jobType": "solving_slae",
-  "status": "DRAFT"
+  "jobId": "<new-job-id>"
 }
 ```
 
 **Meaning**
 
-Creates a new job resource and reserves a namespace/prefix in object storage for future artifacts.
+Creates a new job resource and assigns an object storage prefix for future job artifacts.
+
+**Possible errors**
+
+- `400 Bad Request` — unknown or unsupported job type.
 
 ---
 
@@ -235,6 +239,8 @@ For `jobType = solving_slae`, supported values in v1 are:
 
 **Response**
 
+- `200 OK` — pre-signed upload URL was returned successfully.
+
 ```json
 {
   "jobId": "<job-id>",
@@ -247,6 +253,12 @@ For `jobType = solving_slae`, supported values in v1 are:
 **Meaning**
 
 Returns a pre-signed URL that allows the client to upload an input artifact directly to object storage.
+
+**Possible errors**
+
+- `404 Not Found` — job does not exist;
+- `409 Conflict` — the job is not in `DRAFT` state;
+- `400 Bad Request` — unknown or unsupported input slot for given jobType.
 
 ---
 
@@ -264,6 +276,8 @@ Empty body.
 
 **Response**
 
+- `202 Accepted` — the submit request was accepted.
+
 ```json
 {
   "jobId": "<job-id>",
@@ -279,7 +293,7 @@ Submission is allowed only when all required input slots defined by the job prof
 **Possible errors**
 
 - `404 Not Found` — the job does not exist;
-- `409 Conflict` — the job has already been submitted or is already terminal;
+- `409 Conflict` — the job is not in `DRAFT` state (for example, it has already been submitted or is already in a terminal state);
 - `400 Bad Request` — required inputs are missing.
 
 ---
@@ -293,6 +307,8 @@ GET /jobs/{jobId}
 ```
 
 **Response**
+
+ - `200 OK` — job state was returned successfully.
 
 ```json
 {
@@ -310,8 +326,12 @@ GET /jobs/{jobId}
 
 **Meaning**
 
-Returns the current state of the job and lifecycle metadata useful for UI and administration.
+Returns the current state of the job and lifecycle metadata useful for UI and administration. Note that if a field 
+has a `null` or empty value, the response still contains that field with the value `null` or `""`.
 
+**Possible errors**
+
+- `404 Not Found` — the job does not exist.
 ---
 
 ### 5. Request Job Cancellation
@@ -328,6 +348,8 @@ Empty body.
 
 **Response**
 
+- `202 Accepted` — the cancellation request was accepted.
+
 ```json
 {
   "jobId": "<job-id>",
@@ -337,7 +359,8 @@ Empty body.
 
 **Meaning**
 
-Accepts a cancellation request and forwards it to the execution pipeline.
+Accepts a cancellation request and forwards it to the execution pipeline. If a job is already in `CANCEL_REQUESTED`
+state, repeated cancellation returns `202 Accepted`.
 
 **Possible errors**
 
@@ -356,16 +379,20 @@ GET /jobs/{jobId}/result-url
 
 **Response**
 
+- `200 OK` — the job was found and a pre-signed download URL was returned.
+
 ```json
 {
   "jobId": "<job-id>",
-  "downloadUrl": "<presigned-download-url>"
+  "downloadUrl": "<presigned-download-url>",
+  "expiresAt": "<timestamp>"
 }
 ```
 
 **Meaning**
 
 Returns a pre-signed URL that allows the client to download the result artifact directly from object storage.
+The returned URL is temporary, and its expiration is defined by server configuration.
 
 **Possible errors**
 
