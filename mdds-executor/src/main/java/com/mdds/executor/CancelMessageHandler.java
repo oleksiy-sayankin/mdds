@@ -31,7 +31,7 @@ public class CancelMessageHandler implements MessageHandler<CancelJobDTO> {
   @Override
   public void handle(@NonNull Message<CancelJobDTO> message, @NonNull Acknowledger ack) {
     var payload = message.payload();
-    try (var ignoredJobId = MDC.putCloseable("jobId", payload.getJobId());
+    try (var ignoredJobId = MDC.putCloseable("jobId", payload.jobId());
         var ignoredEvent = MDC.putCloseable("event", "cancel_request")) {
       try {
         var response = solverStub.cancelJob(buildCancelRequest(payload));
@@ -48,6 +48,6 @@ public class CancelMessageHandler implements MessageHandler<CancelJobDTO> {
 
   private static CancelJobRequest buildCancelRequest(CancelJobDTO cancelJobDTO) {
     log.info("Building cancel request for job");
-    return CancelJobRequest.newBuilder().setJobId(cancelJobDTO.getJobId()).build();
+    return CancelJobRequest.newBuilder().setJobId(cancelJobDTO.jobId()).build();
   }
 }

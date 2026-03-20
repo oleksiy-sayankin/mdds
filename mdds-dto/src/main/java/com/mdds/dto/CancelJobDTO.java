@@ -4,15 +4,5 @@
  */
 package com.mdds.dto;
 
-import jakarta.annotation.Nonnull;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 /** Represents request for cancelling a job */
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class CancelJobDTO {
-  private @Nonnull String jobId;
-}
+public record CancelJobDTO(String jobId) {}
