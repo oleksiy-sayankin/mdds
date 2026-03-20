@@ -14,5 +14,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class JobIdResponseDTO {
-  private @Nonnull String id;
+  private @Nonnull String jobId;
 }

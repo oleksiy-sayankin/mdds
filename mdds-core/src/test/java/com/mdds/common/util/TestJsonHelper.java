@@ -98,13 +98,13 @@ class TestJsonHelper {
   void testToJsonJobIdResponseDTO() {
     var jobIdResponse = new JobIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
     var actualJson = JsonHelper.toJson(jobIdResponse);
-    var expectedJson = "{\"id\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
+    var expectedJson = "{\"jobId\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
     assertThat(actualJson).isEqualTo(expectedJson);
   }
 
   @Test
   void testFromJsonJobIdResponseDTO() {
-    var json = "{\"id\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
+    var json = "{\"jobId\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
     var expectedJobIdResponseDTO = new JobIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
     var actualJobIdResponseDTO = JsonHelper.fromJson(json, JobIdResponseDTO.class);
     assertThat(actualJobIdResponseDTO).isEqualTo(expectedJobIdResponseDTO);

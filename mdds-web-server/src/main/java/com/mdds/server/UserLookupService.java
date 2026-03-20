@@ -19,11 +19,14 @@ public class UserLookupService {
   private final UsersRepository usersRepository;
 
   @Transactional(readOnly = true)
-  public long findUserIdOrGuest(String loginHeader) {
-    String login = (loginHeader == null || loginHeader.isBlank()) ? "guest" : loginHeader.trim();
+  public long findUserId(String loginHeader) {
+    if (loginHeader == null || loginHeader.isBlank()) {
+      throw new UserIsNullOrBlankException("User is null or blank.");
+    }
 
+    var login = loginHeader.trim();
     return usersRepository
         .findIdByLogin(login)
-        .orElseThrow(() -> new UnknownUserException("Unknown user login: " + login));
+        .orElseThrow(() -> new UnknownUserException("Unknown user login: " + login + "."));
   }
 }

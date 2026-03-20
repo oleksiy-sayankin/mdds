@@ -11,10 +11,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class HttpTestClient {
   private final HttpClient client;
   private final String baseUrl;
+  private static final String CONTENT_TYPE = "Content-Type";
+  private static final String APPLICATION_JSON = "application/json";
 
   public HttpTestClient(String host, int port) {
     this.client = HttpClient.newHttpClient();
@@ -26,12 +29,30 @@ public class HttpTestClient {
     return client.send(request, HttpResponse.BodyHandlers.ofString());
   }
 
-  public HttpResponse<String> post(String path, Map<String, String> headers)
+  public HttpResponse<String> post(String path, Map<String, String> headers, Object body)
       throws IOException, InterruptedException {
+
+    var jsonBody = JsonHelper.toJson(body);
+
     var request =
         HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + path))
-            .POST(HttpRequest.BodyPublishers.noBody());
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
+
+    for (var entry : headers.entrySet()) {
+      request.header(entry.getKey(), entry.getValue());
+    }
+    return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  public HttpResponse<String> post(String path, Map<String, String> headers, String rawJson)
+      throws IOException, InterruptedException {
+
+    var request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + path))
+            .POST(HttpRequest.BodyPublishers.ofString(rawJson));
+
     for (var entry : headers.entrySet()) {
       request.header(entry.getKey(), entry.getValue());
     }
@@ -52,10 +73,16 @@ public class HttpTestClient {
     var request =
         HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + "/solve"))
-            .header("Content-Type", "application/json")
+            .header(CONTENT_TYPE, APPLICATION_JSON)
+            .header("X-MDDS-User-Login", "guest")
+            .header("X-MDDS-Upload-Session-Id", newSessionId())
             .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
             .build();
 
     return client.send(request, HttpResponse.BodyHandlers.ofString());
+  }
+
+  private static String newSessionId() {
+    return "session-" + UUID.randomUUID();
   }
 }

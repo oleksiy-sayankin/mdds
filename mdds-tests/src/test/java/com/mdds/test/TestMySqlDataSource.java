@@ -64,7 +64,7 @@ class TestMySqlDataSource extends BaseEnvironment {
     var response = webServerClient.postSolve("mysql", solver.getName(), params);
     var json = response.body();
 
-    var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getId();
+    var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();
     Assertions.assertThat(jobId).as("Job id should not be null").isNotNull();
     var actual = awaitForResult(jobId);
 

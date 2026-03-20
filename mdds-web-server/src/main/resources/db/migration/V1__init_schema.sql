@@ -18,6 +18,7 @@ create table if not exists jobs (
     id text primary key,
     user_id bigint not null references users(id),
     status text not null,
+    job_type text not null,
     progress int not null default 0,
     upload_session_id text not null,
     created_at timestamptz not null default now(),

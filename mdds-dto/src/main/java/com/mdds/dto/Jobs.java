@@ -6,6 +6,7 @@ package com.mdds.dto;
 
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -16,7 +17,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Represents Jon status. */
+/** Represents Job status. */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -37,6 +38,11 @@ public class Jobs {
   @Column(name = "status", nullable = false)
   @Nonnull
   private JobStatus status;
+
+  @Column(name = "job_type", nullable = false)
+  @Nonnull
+  @Convert(converter = JobTypeConverter.class)
+  private JobType jobType;
 
   @Column(name = "progress", nullable = false)
   private int progress;

@@ -19,7 +19,7 @@ Refer to the LICENSE file in the root directory for full license details.
     * [Lifecycle rules](#lifecycle-rules)
   * [Object Storage Layout](#object-storage-layout)
   * [REST API v1](#rest-api-v1)
-    * [1. Create a Job](#1-create-a-job)
+    * [1. Create or Reuse a Draft Job](#1-create-or-reuse-a-draft-job)
     * [2. Request a Pre-Signed Upload URL for an Input Artifact](#2-request-a-pre-signed-upload-url-for-an-input-artifact)
     * [3. Submit a Job for Execution](#3-submit-a-job-for-execution)
     * [4. Get Job State](#4-get-job-state)
@@ -80,7 +80,6 @@ In other words, the platform coordinates work, but the business meaning of the w
 The Web Server is responsible for:
 
 - creating jobs and assigning job identifiers;
-- assigning object storage prefixes to jobs;
 - issuing pre-signed upload URLs for input artifacts;
 - validating whether a job is ready for submission;
 - generating the job manifest;
@@ -145,6 +144,7 @@ Each job moves through a defined set of statuses.
 - After a job is submitted, its input artifacts must be treated as immutable.
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
 - Downloading results is allowed only when the job is in `DONE`.
+- An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
 
 ---
 
@@ -178,13 +178,25 @@ Note: in S3-compatible storage these are object keys with prefixes, not real dir
 
 The API below describes the public lifecycle of a job.
 
-### 1. Create a Job
+### 1. Create or Reuse a Draft Job
 
 **Endpoint**
 
 ```http
 POST /jobs
 ```
+
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
+X-MDDS-Upload-Session-Id: <upload-session-id>
+Content-Type: application/json
+```
+
+`X-MDDS-Upload-Session-Id` is a required idempotency key for draft job creation.
+For the same pair (`<user-login>`, `<upload-session-id>`), if an existing job is still in DRAFT state, 
+the server must return the same draft job.
 
 **Request**
 
@@ -205,13 +217,35 @@ Here `solving_slae` denotes a job for solving systems of linear algebraic equati
 }
 ```
 
+- `200 OK` — a draft job for the same user and upload session already exists and was returned.
+
+```json
+{
+  "jobId": "<existing-job-id>"
+}
+```
+
 **Meaning**
 
-Creates a new job resource and assigns an object storage prefix for future job artifacts.
+Creates a new draft job or returns an existing draft job for the same user and upload session id.
+The endpoint uses the upload session id as an idempotency key.
+When a new job is created, the server assigns a job identifier, and the object storage prefix 
+is derived from the user identifier and job identifier.
+The `X-MDDS-Upload-Session-Id` may be reused only while the corresponding job remains in `DRAFT` state.
+Once the job leaves `DRAFT`, that upload session id is considered closed and must not be reused.
 
 **Possible errors**
 
-- `400 Bad Request` — unknown or unsupported job type.
+- `400 Bad Request` — unknown or unsupported job type;
+- `400 Bad Request` — null or blank job type;
+- `400 Bad Request` — required headers are missing;
+- `400 Bad Request` — request body is missing or malformed;
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `400 Bad Request` — `X-MDDS-Upload-Session-Id` is blank;
+- `401 Unauthorized` — unknown user login;
+- `409 Conflict` — a job already exists for the same upload session id, but with a different `jobType`;
+- `409 Conflict` — a job already exists for the same upload session id, but it is no longer in `DRAFT` state. The client must create a new upload session id;
+- `415 Unsupported Media Type` — missing or unsupported `Content-Type`; `application/json` is required.
 
 ---
 
@@ -253,11 +287,12 @@ For `jobType = solving_slae`, supported values in v1 are:
 **Meaning**
 
 Returns a pre-signed URL that allows the client to upload an input artifact directly to object storage.
+Input artifacts can be uploaded only while the job is in `DRAFT` state. After submission, input artifacts are immutable.
 
 **Possible errors**
 
 - `404 Not Found` — job does not exist;
-- `409 Conflict` — the job is not in `DRAFT` state;
+- `409 Conflict` — the job is not in `DRAFT` state and no more input artifacts can be uploaded;
 - `400 Bad Request` — unknown or unsupported input slot for given jobType.
 
 ---
