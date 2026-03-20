@@ -261,15 +261,24 @@ POST /jobs/{jobId}/inputs
 
 ```json
 {
-  "inputSlot": "matrix"
+  "inputSlot": "<input-slot>"
 }
 ```
 `inputSlot` is a logical name of an input artifact defined by the selected job profile.
 
-For `jobType = solving_slae`, supported values in v1 are:
+For `jobType` = `solving_slae`, supported values for `<input-slot>` in v1 are:
 
 - `matrix` — matrix of coefficients for System of Linear Algebraic Equations.
 - `rhs` — right hand side vector for System of Linear Algebraic Equations.
+
+For jobs with `jobType` = `solving_slae_parallel`, input upload URL requests are not supported in this version.
+
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
+Content-Type: application/json
+```
 
 **Response**
 
@@ -278,7 +287,7 @@ For `jobType = solving_slae`, supported values in v1 are:
 ```json
 {
   "jobId": "<job-id>",
-  "inputSlot": "matrix",
+  "inputSlot": "<input-slot>",
   "uploadUrl": "<presigned-upload-url>",
   "expiresAt": "<timestamp>"
 }
@@ -287,13 +296,62 @@ For `jobType = solving_slae`, supported values in v1 are:
 **Meaning**
 
 Returns a pre-signed URL that allows the client to upload an input artifact directly to object storage.
+The returned URL must be used with HTTP `PUT` to upload the artifact bytes.
 Input artifacts can be uploaded only while the job is in `DRAFT` state. After submission, input artifacts are immutable.
+In case of expiration of pre-signed URL, the new one can be requested if job is in `DRAFT` state.
+While the job remains in `DRAFT`, the client may request a new upload URL for the same `inputSlot` and re-upload the artifact.
+For a given `jobId` and `inputSlot`, the pre-signed upload URL always targets the canonical object key assigned to 
+that slot. Re-uploading the same slot replaces the previously uploaded artifact for that slot.
+
+Note: `<timestamp>` uses RFC 3339 format, for example `2026-03-20T14:30:00Z` or `2026-03-20T14:30:00+02:00`.
+
+**Upload via Pre-Signed URL**
+
+After receiving `uploadUrl`, the client uploads the artifact bytes directly to object storage using HTTP `PUT` to the 
+returned pre-signed URL. The orchestration server does not proxy artifact bytes through itself for this operation.
+
+The following rules apply:
+
+* the client must use HTTP `PUT` with the artifact bytes as the request body;
+* the client must not send an Authorization header when calling the pre-signed URL;
+* `Content-Type` is not part of the signed parameters of the pre-signed URL, therefore the client may omit it or send an appropriate value;
+* while the job remains in `DRAFT`, the client may request a new upload URL for the same `inputSlot` and upload a replacement artifact;
+* the artifact currently stored under the canonical object key for that slot is used at submission time;
+* the existence of required uploaded artifacts is validated by the orchestration server during `POST /jobs/{jobId}/submit`, not during pre-signed URL issuance.
+
+For browser-based deployments, the following object storage CORS requirements apply:
+
+* the frontend origin used by the system must be allowed;
+* HTTP method `PUT` must be allowed;
+* request headers used by the client upload request must be allowed, including `Content-Type` when sent;
+* response headers that the frontend is expected to read must be exposed.
+
+If the frontend does not rely on any response headers from object storage, exposing additional response headers is not required.
+
+Illustrative example of the direct upload request:
+
+```http request
+PUT <presigned-upload-url>
+Content-Type: application/octet-stream
+
+<artifact-bytes>
+```
 
 **Possible errors**
 
-- `404 Not Found` — job does not exist;
+The errors listed below apply to `POST /jobs/{jobId}/inputs`.
+Errors returned by object storage during direct `PUT` upload are outside of this endpoint contract.
+
+- `400 Bad Request` — unknown or unsupported input slot for the given jobType;
+- `400 Bad Request` — `inputSlot` is null or blank;
+- `400 Bad Request` — request body is missing or malformed;
+- `400 Bad Request` — required headers are missing;
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `400 Bad Request` — input upload URL requests are not supported for the given `jobType`;
+- `401 Unauthorized` — unknown user login;
+- `404 Not Found` — job does not exist (or is not accessible to the current user);
 - `409 Conflict` — the job is not in `DRAFT` state and no more input artifacts can be uploaded;
-- `400 Bad Request` — unknown or unsupported input slot for given jobType.
+- `415 Unsupported Media Type` — missing or unsupported `Content-Type`; `application/json` is required.
 
 ---
 
