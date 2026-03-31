@@ -21,10 +21,11 @@ Refer to the LICENSE file in the root directory for full license details.
   * [REST API v1](#rest-api-v1)
     * [1. Create or Reuse a Draft Job](#1-create-or-reuse-a-draft-job)
     * [2. Request a Pre-Signed Upload URL for an Input Artifact](#2-request-a-pre-signed-upload-url-for-an-input-artifact)
-    * [3. Submit a Job for Execution](#3-submit-a-job-for-execution)
-    * [4. Get Job State](#4-get-job-state)
-    * [5. Request Job Cancellation](#5-request-job-cancellation)
-    * [6. Request a Pre-Signed Download URL for the Result](#6-request-a-pre-signed-download-url-for-the-result)
+    * [3. Set Job Parameters](#3-set-job-parameters)
+    * [4. Submit a Job for Execution](#4-submit-a-job-for-execution)
+    * [5. Get Job State](#5-get-job-state)
+    * [6. Request Job Cancellation](#6-request-job-cancellation)
+    * [7. Request a Pre-Signed Download URL for the Result](#7-request-a-pre-signed-download-url-for-the-result)
   * [Manifest v1](#manifest-v1)
     * [Example manifest for SLAE solving](#example-manifest-for-slae-solving)
     * [Field meaning](#field-meaning)
@@ -129,6 +130,19 @@ Each job moves through a defined set of statuses.
 
 ### Supported statuses
 
+The diagram below shows the main lifecycle transitions.
+
+```mermaid
+graph TD;
+    DRAFT-->SUBMITTED;
+    SUBMITTED-->IN_PROGRESS;
+    SUBMITTED-->CANCEL_REQUESTED;
+    IN_PROGRESS-->DONE;
+    IN_PROGRESS-->CANCEL_REQUESTED;
+    CANCEL_REQUESTED-->CANCELLED
+    IN_PROGRESS-->ERROR;
+```
+
 - `DRAFT` — the job has been created, but input artifacts are still being uploaded;
 - `SUBMITTED` — the job has been sent to the execution pipeline;
 - `IN_PROGRESS` — a Worker has started executing the job;
@@ -140,8 +154,8 @@ Each job moves through a defined set of statuses.
 ### Lifecycle rules
 
 - A newly created job always starts in `DRAFT`.
-- A job can be submitted only after all required inputs have been uploaded.
-- After a job is submitted, its input artifacts must be treated as immutable.
+- A job can be submitted only after all required inputs and required parameters have been uploaded.
+- After a job is submitted, its input artifacts and parameters must be treated as immutable.
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
 - Downloading results is allowed only when the job is in `DONE`.
 - An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
@@ -156,8 +170,8 @@ File structure for a job:
 
 ```text
 jobs/{userId}/{jobId}/manifest.json
-jobs/{userId}/{jobId}/in/{inputSlot}
-jobs/{userId}/{jobId}/out/{outputSlot}
+jobs/{userId}/{jobId}/in/{inputFileName}
+jobs/{userId}/{jobId}/out/{outputFileName}
 jobs/{userId}/{jobId}/logs/{logFile}
 ```
 
@@ -165,9 +179,9 @@ Examples:
 
 ```text
 jobs/42/abc-123/manifest.json
-jobs/42/abc-123/in/matrix.csv.gz
-jobs/42/abc-123/in/rhs.csv.gz
-jobs/42/abc-123/out/solution.csv.gz
+jobs/42/abc-123/in/matrix.csv
+jobs/42/abc-123/in/rhs.csv
+jobs/42/abc-123/out/solution.csv
 ```
 
 Note: in S3-compatible storage these are object keys with prefixes, not real directories.
@@ -287,7 +301,6 @@ Content-Type: application/json
 ```json
 {
   "jobId": "<job-id>",
-  "inputSlot": "<input-slot>",
   "uploadUrl": "<presigned-upload-url>",
   "expiresAt": "<timestamp>"
 }
@@ -342,7 +355,7 @@ Content-Type: application/octet-stream
 The errors listed below apply to `POST /jobs/{jobId}/inputs`.
 Errors returned by object storage during direct `PUT` upload are outside of this endpoint contract.
 
-- `400 Bad Request` — unknown or unsupported input slot for the given jobType;
+- `400 Bad Request` — unknown or unsupported input slot for the given `jobType`;
 - `400 Bad Request` — `inputSlot` is null or blank;
 - `400 Bad Request` — request body is missing or malformed;
 - `400 Bad Request` — required headers are missing;
@@ -355,7 +368,57 @@ Errors returned by object storage during direct `PUT` upload are outside of this
 
 ---
 
-### 3. Submit a Job for Execution
+### 3. Set Job Parameters
+
+**Endpoint**
+
+```http
+PUT /jobs/{jobId}/params
+```
+
+**Request**
+
+```json
+{
+  "solvingMethod": "numpy_exact_solver",
+  "precision": 1e-9
+}
+```
+
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
+Content-Type: application/json
+```
+
+**Response**
+
+- `200 OK` — job parameters were stored successfully.
+
+**Meaning**
+
+Stores the parameter set for the job. Parameters can be set or replaced only while the job is in `DRAFT` state.
+After submission, job parameters are immutable.  Omitted parameters are removed when the parameter set is replaced. 
+While the job remains in `DRAFT`, the client may send this request again to replace the current parameter set for the job.
+Validation of whether all required parameters are present is performed during `POST /jobs/{jobId}/submit`, not during this step.
+
+**Possible errors**
+
+- `400 Bad Request` — unknown or unsupported parameter for the given `jobType`;
+- `400 Bad Request` — a parameter name is blank or invalid;
+- `400 Bad Request` — a parameter value has an invalid type for the given `jobType`;
+- `400 Bad Request` — request body is missing or malformed;
+- `400 Bad Request` — required headers are missing;
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `401 Unauthorized` — unknown user login;
+- `404 Not Found` — job does not exist (or is not accessible to the current user);
+- `409 Conflict` — the job is not in `DRAFT` state and job parameters can no longer be modified;
+- `415 Unsupported Media Type` — missing or unsupported `Content-Type`; `application/json` is required.
+
+---
+
+### 4. Submit a Job for Execution
 
 **Endpoint**
 
@@ -380,18 +443,18 @@ Empty body.
 
 **Meaning**
 
-Validates that all required inputs exist, generates `manifest.json`, and publishes the job to the execution queue.
-Submission is allowed only when all required input slots defined by the job profile are present.
+Validates that all required inputs and job parameters exist, generates `manifest.json`, and publishes the job to the execution queue.
+Submission is allowed only when all required input slots and required job parameters defined by the job profile are present.
 
 **Possible errors**
 
 - `404 Not Found` — the job does not exist;
 - `409 Conflict` — the job is not in `DRAFT` state (for example, it has already been submitted or is already in a terminal state);
-- `400 Bad Request` — required inputs are missing.
+- `400 Bad Request` — required inputs or job parameters are missing.
 
 ---
 
-### 4. Get Job State
+### 5. Get Job State
 
 **Endpoint**
 
@@ -427,7 +490,7 @@ has a `null` or empty value, the response still contains that field with the val
 - `404 Not Found` — the job does not exist.
 ---
 
-### 5. Request Job Cancellation
+### 6. Request Job Cancellation
 
 **Endpoint**
 
@@ -462,7 +525,7 @@ state, repeated cancellation returns `202 Accepted`.
 
 ---
 
-### 6. Request a Pre-Signed Download URL for the Result
+### 7. Request a Pre-Signed Download URL for the Result
 
 **Endpoint**
 
@@ -509,12 +572,12 @@ The Web Server generates the manifest when the job is submitted. The Worker read
   "jobType": "solving_slae",
   "inputs": {
     "matrix": {
-      "objectKey": "jobs/<userId>/<jobId>/in/matrix.csv.gz",
-      "format": "csv.gz"
+      "objectKey": "jobs/<userId>/<jobId>/in/matrix.csv",
+      "format": "csv"
     },
     "rhs": {
-      "objectKey": "jobs/<userId>/<jobId>/in/rhs.csv.gz",
-      "format": "csv.gz"
+      "objectKey": "jobs/<userId>/<jobId>/in/rhs.csv",
+      "format": "csv"
     }
   },
   "params": {
@@ -522,8 +585,8 @@ The Web Server generates the manifest when the job is submitted. The Worker read
   },
   "outputs": {
     "solution": {
-      "objectKey": "jobs/<userId>/<jobId>/out/solution.csv.gz",
-      "format": "csv.gz"
+      "objectKey": "jobs/<userId>/<jobId>/out/solution.csv",
+      "format": "csv"
     }
   }
 }
@@ -582,12 +645,14 @@ This means that the public lifecycle API can remain the same:
 
 - `POST /jobs`
 - `POST /jobs/{jobId}/inputs`
+- `PUT /jobs/{jobId}/params`
 - `POST /jobs/{jobId}/submit`
 - `GET /jobs/{jobId}`
 - `POST /jobs/{jobId}/cancel`
 - `GET /jobs/{jobId}/result-url`
 
-Only the `jobType` profile and the Worker logic need to change.
+Only the `jobType` profile and the Worker logic need to change. Direct artifact upload via a pre-signed URL 
+remains part of the client interaction flow, but is not itself a stable orchestrator endpoint.
 
 ---
 
