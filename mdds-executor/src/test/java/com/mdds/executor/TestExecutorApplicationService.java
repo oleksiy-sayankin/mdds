@@ -14,9 +14,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.mdds.common.CommonProperties;
+import com.mdds.domain.SlaeSolver;
 import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.SlaeSolver;
 import com.mdds.grpc.solver.GetJobStatusResponse;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.grpc.solver.RequestStatus;

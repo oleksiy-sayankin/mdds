@@ -2,8 +2,9 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.dto;
+package com.mdds.persistence.converter;
 
+import com.mdds.domain.JobType;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 

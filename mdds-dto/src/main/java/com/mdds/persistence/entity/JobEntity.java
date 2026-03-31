@@ -2,8 +2,11 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.dto;
+package com.mdds.persistence.entity;
 
+import com.mdds.domain.JobStatus;
+import com.mdds.domain.JobType;
+import com.mdds.persistence.converter.JobTypeConverter;
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -14,16 +17,18 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-/** Represents Job status. */
-@Data
-@AllArgsConstructor
+/** Represents persisted job metadata. */
+@Getter
+@Setter
 @NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "jobs")
-public class Jobs {
+public class JobEntity {
   @Id private String id;
 
   @Column(name = "user_id", nullable = false)

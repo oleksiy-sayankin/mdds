@@ -4,10 +4,12 @@
  */
 package com.mdds.dto;
 
-import static com.mdds.dto.SlaeSolver.PETSC_SOLVER;
+import static com.mdds.domain.SlaeSolver.PETSC_SOLVER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.mdds.domain.SlaeSolver;
+import com.mdds.domain.SolverParsingException;
 import org.junit.jupiter.api.Test;
 
 class TestSlaeSolver {
@@ -22,7 +24,7 @@ class TestSlaeSolver {
   void testParse() {
     assertThat(SlaeSolver.parse("petsc_solver")).isEqualTo(PETSC_SOLVER);
     assertThatThrownBy(() -> SlaeSolver.parse("wrong_solver"))
-        .isInstanceOf(SlaeSolver.SolverParsingException.class)
+        .isInstanceOf(SolverParsingException.class)
         .hasMessageContaining("Can not parse solving method");
   }
 }

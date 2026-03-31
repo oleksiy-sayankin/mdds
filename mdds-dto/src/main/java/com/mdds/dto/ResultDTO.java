@@ -4,6 +4,7 @@
  */
 package com.mdds.dto;
 
+import com.mdds.domain.IllegalPercentValueException;
 import com.mdds.grpc.solver.JobStatus;
 import jakarta.annotation.Nonnull;
 import java.time.Instant;
@@ -27,7 +28,8 @@ public class ResultDTO {
 
   public void setProgress(int progress) {
     if (progress < 0 || progress > 100) {
-      throw new IllegalPercentValue("Progress must be between 0 and 100, but was " + progress);
+      throw new IllegalPercentValueException(
+          "Progress must be between 0 and 100, but was " + progress);
     }
     this.progress = progress;
   }

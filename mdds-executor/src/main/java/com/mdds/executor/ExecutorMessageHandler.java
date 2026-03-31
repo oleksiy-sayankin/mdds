@@ -234,7 +234,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
     log.info("Building submit solve job request for job");
     // set solving method for gRPC request
     var requestBuilder =
-        SubmitJobRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getName());
+        SubmitJobRequest.newBuilder().setMethod(payload.getSlaeSolvingMethod().getValue());
 
     // set matrix for gRPC request
     for (var row : payload.getMatrix()) {

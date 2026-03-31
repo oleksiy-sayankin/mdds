@@ -5,6 +5,7 @@
 
 package com.mdds.dto;
 
+import com.mdds.domain.SlaeSolver;
 import jakarta.annotation.Nonnull;
 import java.time.Instant;
 import lombok.AllArgsConstructor;

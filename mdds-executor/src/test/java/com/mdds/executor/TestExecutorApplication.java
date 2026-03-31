@@ -10,10 +10,10 @@ import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.offset;
 
 import com.mdds.common.CommonProperties;
+import com.mdds.domain.SlaeSolver;
 import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
-import com.mdds.dto.SlaeSolver;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
@@ -190,8 +190,8 @@ class TestExecutorApplication {
         SlaeSolver.NUMPY_EXACT_SOLVER,
         SlaeSolver.NUMPY_PINV_SOLVER,
         SlaeSolver.PETSC_SOLVER,
-        SlaeSolver.NUNPY_LSTSQ_SOLVER,
-        SlaeSolver.SCIPY_GMERS_SOLVER);
+        SlaeSolver.NUMPY_LSTSQ_SOLVER,
+        SlaeSolver.SCIPY_GMRES_SOLVER);
   }
 
   @ParameterizedTest

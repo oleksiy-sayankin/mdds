@@ -7,6 +7,7 @@ package com.mdds.dto;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.mdds.domain.IllegalPercentValueException;
 import org.junit.jupiter.api.Test;
 
 class TestResultDTO {
@@ -18,10 +19,10 @@ class TestResultDTO {
     assertThatCode(() -> result.setProgress(0)).doesNotThrowAnyException();
     assertThatCode(() -> result.setProgress(100)).doesNotThrowAnyException();
     assertThatThrownBy(() -> result.setProgress(-1))
-        .isInstanceOf(IllegalPercentValue.class)
+        .isInstanceOf(IllegalPercentValueException.class)
         .hasMessageContaining("Progress must be between 0 and 100, but was");
     assertThatThrownBy(() -> result.setProgress(101))
-        .isInstanceOf(IllegalPercentValue.class)
+        .isInstanceOf(IllegalPercentValueException.class)
         .hasMessageContaining("Progress must be between 0 and 100, but was");
   }
 }

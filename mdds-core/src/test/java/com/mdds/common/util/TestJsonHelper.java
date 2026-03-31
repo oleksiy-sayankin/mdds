@@ -4,7 +4,7 @@
  */
 package com.mdds.common.util;
 
-import static com.mdds.dto.SlaeSolver.NUMPY_EXACT_SOLVER;
+import static com.mdds.domain.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
