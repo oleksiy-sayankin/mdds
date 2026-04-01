@@ -12,7 +12,7 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 /** Start point for web server. */
 @Slf4j
 @SpringBootApplication(scanBasePackages = "com.mdds")
-@EntityScan(basePackages = "com.mdds.dto")
+@EntityScan(basePackages = "com.mdds.persistence.entity")
 public class ServerApplication {
   public static void main(String[] args) {
     SpringApplication.run(ServerApplication.class, args);

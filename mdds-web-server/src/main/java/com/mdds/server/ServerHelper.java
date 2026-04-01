@@ -4,12 +4,12 @@
  */
 package com.mdds.server;
 
-import static com.mdds.dto.SlaeSolver.isValid;
-import static com.mdds.dto.SlaeSolver.parse;
+import static com.mdds.domain.SlaeSolver.isValid;
+import static com.mdds.domain.SlaeSolver.parse;
 
 import com.mdds.api.Processable;
 import com.mdds.data.source.DataSourceDescriptor;
-import com.mdds.dto.SlaeSolver;
+import com.mdds.domain.SlaeSolver;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 

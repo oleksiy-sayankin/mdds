@@ -7,11 +7,11 @@ package com.mdds.server;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+import com.mdds.domain.JobStatus;
+import com.mdds.domain.UnknownJobTypeException;
 import com.mdds.dto.CreateJobRequestDTO;
 import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.JobStatus;
-import com.mdds.dto.UnknownJobTypeException;
-import com.mdds.server.jpa.JobsRepository;
+import com.mdds.server.support.JobTestFixture;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +26,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -34,11 +35,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
 @Testcontainers
+@Import(JobTestFixture.class)
 class TestCreateOrReuseDraftJobIntegration {
-
-  @Autowired private JobsRepository jobsRepository;
-  @Autowired private UserLookupService userLookupService;
   @Autowired private JobController controller;
+  @Autowired private JobTestFixture jobFixture;
 
   private static final Pattern UUID_REGEX_PATTERN =
       Pattern.compile("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$");
@@ -128,12 +128,7 @@ class TestCreateOrReuseDraftJobIntegration {
     var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
     var jobId = response.getJobId();
     var status = JobStatus.SUBMITTED;
-    var jobResponse = jobsRepository.findById(jobId);
-    jobResponse.ifPresent(
-        job -> {
-          job.setStatus(status);
-          jobsRepository.save(job);
-        });
+    jobFixture.forceStatus(jobId, status);
     assertThatExceptionOfType(JobIsNotDraftException.class)
         .isThrownBy(() -> createOrReuseDraftJob(GUEST, session, createJobRequest))
         .withMessage(
@@ -311,8 +306,7 @@ class TestCreateOrReuseDraftJobIntegration {
     assertThat(isValidUUID(response.getJobId())).isTrue();
   }
 
-  private void assertSingleJobRow(String user, String session) {
-    long userId = userLookupService.findUserId(user);
-    assertThat(jobsRepository.countByUserIdAndUploadSessionId(userId, session)).isEqualTo(1);
+  private void assertSingleJobRow(String userId, String session) {
+    assertThat(jobFixture.countByUserIdAndUploadSessionId(userId, session)).isEqualTo(1);
   }
 }

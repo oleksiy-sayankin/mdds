@@ -4,8 +4,8 @@
  */
 package com.mdds.server;
 
+import com.mdds.domain.UnknownJobTypeException;
 import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.UnknownJobTypeException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -101,5 +101,31 @@ public class GlobalExceptionHandler {
       UploadSessionIdIsNullOrBlankException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InputSlotIsNullOrBlankException.class)
+  public ResponseEntity<ErrorResponseDTO> handleInputSlotIsNullOrBlank(
+      InputSlotIsNullOrBlankException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InputUploadUrlNotSupportedForJobTypeException.class)
+  public ResponseEntity<ErrorResponseDTO> handleInputUploadUrlNotSupported(
+      InputUploadUrlNotSupportedForJobTypeException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(UnknownOrUnsupportedInputSlotException.class)
+  public ResponseEntity<ErrorResponseDTO> handleUnknownOrUnsupportedInputSlot(
+      UnknownOrUnsupportedInputSlotException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(JobDoesNotExistException.class)
+  public ResponseEntity<ErrorResponseDTO> handleJobDoesNotExist(JobDoesNotExistException ex) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDTO(ex.getMessage()));
   }
 }

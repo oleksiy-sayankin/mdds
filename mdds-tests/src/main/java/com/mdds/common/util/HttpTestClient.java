@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -26,6 +27,16 @@ public class HttpTestClient {
 
   public HttpResponse<String> get(String path) throws IOException, InterruptedException {
     var request = HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).GET().build();
+    return client.send(request, HttpResponse.BodyHandlers.ofString());
+  }
+
+  public HttpResponse<String> put(String path, Path fileToSend)
+      throws IOException, InterruptedException {
+    var request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(path))
+            .PUT(HttpRequest.BodyPublishers.ofFile(fileToSend))
+            .build();
     return client.send(request, HttpResponse.BodyHandlers.ofString());
   }
 

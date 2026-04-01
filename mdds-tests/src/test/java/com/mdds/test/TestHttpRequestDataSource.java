@@ -5,8 +5,8 @@
 package com.mdds.test;
 
 import com.mdds.common.util.JsonHelper;
+import com.mdds.domain.SlaeSolver;
 import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.SlaeSolver;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -25,7 +25,7 @@ class TestHttpRequestDataSource extends BaseEnvironment {
         "matrix",
         List.of(List.of(1.3, 2.4, 3.1), List.of(4.77, 5.2321, 6.32), List.of(7.23, 8.43, 9.4343)));
     params.put("rhs", List.of(1.3, 2.2, 3.7));
-    var response = webServerClient.postSolve("http_request", solver.getName(), params);
+    var response = webServerClient.postSolve("http_request", solver.getValue(), params);
     var json = response.body();
 
     var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();

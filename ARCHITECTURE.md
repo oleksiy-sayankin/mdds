@@ -154,7 +154,7 @@ graph TD;
 ### Lifecycle rules
 
 - A newly created job always starts in `DRAFT`.
-- A job can be submitted only after all required inputs and required parameters have been uploaded.
+- A job can be submitted only after all required inputs and required parameters have been provided.
 - After a job is submitted, its input artifacts and parameters must be treated as immutable.
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
 - Downloading results is allowed only when the job is in `DONE`.
@@ -278,12 +278,14 @@ POST /jobs/{jobId}/inputs
   "inputSlot": "<input-slot>"
 }
 ```
-`inputSlot` is a logical name of an input artifact defined by the selected job profile.
+`<inputSlot>` is a logical name of an input artifact defined by the selected job profile.
 
 For `jobType` = `solving_slae`, supported values for `<input-slot>` in v1 are:
 
 - `matrix` — matrix of coefficients for System of Linear Algebraic Equations.
 - `rhs` — right hand side vector for System of Linear Algebraic Equations.
+
+Note, the server performs trim/lowercase normalization for `<inputSlot>` value. 
 
 For jobs with `jobType` = `solving_slae_parallel`, input upload URL requests are not supported in this version.
 

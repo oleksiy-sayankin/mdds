@@ -5,8 +5,8 @@
 package com.mdds.test;
 
 import com.mdds.common.util.JsonHelper;
+import com.mdds.domain.SlaeSolver;
 import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.SlaeSolver;
 import java.io.IOException;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -61,7 +61,7 @@ class TestMySqlDataSource extends BaseEnvironment {
     params.put("mysql.rhs.json.field.name", "JSON_FIELD");
     params.put("mysql.rhs.primary.key.field.name", "ID");
     params.put("mysql.rhs.primary.key.field.value", "1");
-    var response = webServerClient.postSolve("mysql", solver.getName(), params);
+    var response = webServerClient.postSolve("mysql", solver.getValue(), params);
     var json = response.body();
 
     var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();

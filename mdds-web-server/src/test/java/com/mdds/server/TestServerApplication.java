@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -64,12 +65,12 @@ import software.amazon.awssdk.utils.AttributeMap;
 @Slf4j
 @SpringBootTest(
     classes = ServerApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class TestServerApplication {
   @Autowired private JobsRepository jobsRepository;
+  @LocalServerPort private int port;
 
   private static final String HOST = "localhost";
-  private static final int PORT = findFreePort();
   private static final int REDIS_PORT = findFreePort();
   private static final RedisServer redisServer;
   private static final String DB_NAME = "testdb";
@@ -137,8 +138,6 @@ class TestServerApplication {
     registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
     registry.add("mdds.redis.host", () -> "localhost");
     registry.add("mdds.redis.port", () -> String.valueOf(REDIS_PORT));
-    registry.add("mdds.server.host", () -> "localhost");
-    registry.add("mdds.server.port", () -> String.valueOf(PORT));
     registry.add("spring.datasource.url", postgres::getJdbcUrl);
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
@@ -162,7 +161,7 @@ class TestServerApplication {
 
   @Test
   void testRootReturnsIndexHtml() throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response = http.get("/");
     assertThat(response.statusCode()).isEqualTo(HttpURLConnection.HTTP_OK);
     assertThat(response.body()).contains("<html");
@@ -170,7 +169,7 @@ class TestServerApplication {
 
   @Test
   void testHealthReturnsStatusOk() throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response = http.get("/health");
     assertThat(response.statusCode()).isEqualTo(HttpURLConnection.HTTP_OK);
   }
@@ -179,7 +178,7 @@ class TestServerApplication {
   void testNoResultForJobId() throws IOException, InterruptedException {
     var jobId = "wrong_job_id";
     // Request result using endpoint
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response = http.get("/result/" + jobId);
     assertThat(response.statusCode()).isEqualTo(404);
     var body = JsonHelper.fromJson(response.body(), ErrorResponseDTO.class);
@@ -207,7 +206,7 @@ class TestServerApplication {
     }
 
     // Request result using endpoint
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response = http.get("/result/" + jobId);
     var actual = JsonHelper.fromJson(response.body(), ResultDTO.class);
     assertThat(actual).isEqualTo(expected);
@@ -216,7 +215,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsSameJobIdForSameUserAndUploadSession()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var first = createOrReuseJob(http, "guest", sessionId, HttpStatus.CREATED);
     var second = createOrReuseJob(http, "guest", sessionId, HttpStatus.OK);
@@ -227,7 +226,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsErrorWhenExistingJobNotInDraft()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var response =
         http.post(
@@ -243,7 +242,7 @@ class TestServerApplication {
 
     var jobId = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class).getJobId();
     var jobResponse = jobsRepository.findById(jobId);
-    var status = com.mdds.dto.JobStatus.SUBMITTED;
+    var status = com.mdds.domain.JobStatus.SUBMITTED;
     jobResponse.ifPresent(
         job -> {
           job.setStatus(status);
@@ -276,7 +275,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsDifferentJobIdsForDifferentUploadSessionsOfSameUser()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
 
     var sessionA = createOrReuseJob(http, "guest", newSessionId(), HttpStatus.CREATED);
     var sessionB = createOrReuseJob(http, "guest", newSessionId(), HttpStatus.CREATED);
@@ -287,7 +286,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsDifferentJobIdsForSameUploadSessionOfDifferentUsers()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var guestJob = createOrReuseJob(http, "guest", sessionId, HttpStatus.CREATED);
     var adminJob = createOrReuseJob(http, "admin", sessionId, HttpStatus.CREATED);
@@ -310,7 +309,7 @@ class TestServerApplication {
   @MethodSource("userValues")
   void testCreateOrReuseDraftJobReturnsErrorForInvalidUser(
       String user, int statusCode, String message) throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response =
         http.post(
             "/jobs",
@@ -339,7 +338,7 @@ class TestServerApplication {
   @MethodSource("jobTypeValues")
   void testCreateOrReuseDraftJobReturnsErrorForInvalidJobType(String jobType, String message)
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response =
         http.post(
             "/jobs",
@@ -363,7 +362,7 @@ class TestServerApplication {
   @MethodSource("jobSessionIdValues")
   void testCreateOrReuseDraftJobReturnsErrorForInvalidSessionId(String jobSessionId)
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response =
         http.post(
             "/jobs",
@@ -392,7 +391,7 @@ class TestServerApplication {
   @MethodSource("jsonBodyValues")
   void testCreateOrReuseDraftJobReturnsErrorForInvalidOrIncompleteRequestBody(
       String jsonBody, String message) throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response =
         http.post(
             "/jobs",
@@ -411,7 +410,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsErrorForMissingUser()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response =
         http.post(
             "/jobs",
@@ -425,7 +424,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsErrorForMissingSession()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var response =
         http.post(
             "/jobs",
@@ -439,7 +438,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsErrorForConflictingJobTypes()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var session = newSessionId();
     var originJobType = "solving_slae";
     var otherJobType = "solving_slae_parallel";
@@ -481,7 +480,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsErrorForNonJsonContentType()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var session = newSessionId();
     var response =
         http.post(
@@ -500,7 +499,7 @@ class TestServerApplication {
   @Test
   void testCreateOrReuseDraftJobReturnsErrorForMissingContentType()
       throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     var session = newSessionId();
     var response =
         http.post(
@@ -512,7 +511,7 @@ class TestServerApplication {
 
   @Test
   void testSolveHttpRequestDataSource() throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     Map<String, Object> params = new HashMap<>();
     params.put(
         "matrix",
@@ -529,7 +528,7 @@ class TestServerApplication {
 
   @Test
   void testSolveMysqlDataSource() throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     Map<String, Object> params = new HashMap<>();
     params.put("mysql.url", mysql.getJdbcUrl());
     params.put("mysql.user", USER_NAME);
@@ -565,7 +564,7 @@ class TestServerApplication {
 
   @Test
   void testSolveS3DataSource() throws IOException, InterruptedException {
-    var http = new HttpTestClient(HOST, PORT);
+    var http = new HttpTestClient(HOST, port);
     Map<String, Object> params = new HashMap<>();
     var endpoint = "http://localhost:" + s3Port;
     params.put("aws.bucket.name", BUCKET);

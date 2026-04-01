@@ -9,8 +9,8 @@ import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_C
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import com.mdds.common.util.JsonHelper;
+import com.mdds.domain.SlaeSolver;
 import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.SlaeSolver;
 import com.mdds.grpc.solver.JobStatus;
 import java.io.IOException;
 import java.net.URI;
@@ -65,7 +65,7 @@ class TestS3DataSource extends BaseEnvironment {
     params.put("aws.matrix.key", "matrix.json");
     params.put("aws.rhs.key", "rhs.json");
     params.put("aws.path.style.access.enabled", "true");
-    var response = webServerClient.postSolve("s3", solver.getName(), params);
+    var response = webServerClient.postSolve("s3", solver.getValue(), params);
     var json = response.body();
 
     var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();

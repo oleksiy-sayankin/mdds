@@ -4,9 +4,9 @@
  */
 package com.mdds.server;
 
-import com.mdds.dto.JobStatus;
-import com.mdds.dto.JobType;
-import com.mdds.dto.Jobs;
+import com.mdds.domain.JobStatus;
+import com.mdds.domain.JobType;
+import com.mdds.persistence.entity.JobEntity;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.jpa.UsersRepository;
 import java.time.Instant;
@@ -78,7 +78,7 @@ public class JobCreationService {
       return new JobCreationResult(existingJob.getId(), false);
     } else {
       var jobId = UUID.randomUUID().toString();
-      var job = new Jobs();
+      var job = new JobEntity();
       job.setId(jobId);
       job.setUserId(userId);
       job.setUploadSessionId(uploadSessionId);

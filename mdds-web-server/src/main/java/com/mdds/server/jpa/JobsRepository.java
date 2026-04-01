@@ -5,15 +5,15 @@
 package com.mdds.server.jpa;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.mdds.dto.Jobs;
+import com.mdds.persistence.entity.JobEntity;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-/** JPA repository to process Jobs. */
-public interface JobsRepository extends JpaRepository<Jobs, String> {
+/** JPA repository to process JobEntity. */
+public interface JobsRepository extends JpaRepository<JobEntity, String> {
 
   @VisibleForTesting
   long countByUserIdAndUploadSessionId(Long userId, String uploadSessionId);
 
-  Optional<Jobs> findByUserIdAndUploadSessionId(Long userId, String uploadSessionId);
+  Optional<JobEntity> findByUserIdAndUploadSessionId(Long userId, String uploadSessionId);
 }

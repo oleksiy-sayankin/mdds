@@ -4,7 +4,7 @@ spring:
   config:
     import: "classpath:mdds-common.yml"
   application:
-    name: Web Server
+    name: web-server
 
   datasource:
     url: ${MDDS_METADATA_STORAGE_JDBC_URL}
@@ -25,9 +25,17 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
-mdds.server:
-  host: localhost
-  port: 8000
 server:
-  address: ${mdds.server.host}
-  port: ${mdds.server.port}
+  address: ${SERVER_ADDRESS:0.0.0.0}
+  port: ${SERVER_PORT:8000}
+
+mdds:
+  object-storage:
+    bucket: ${MDDS_OBJECT_STORAGE_BUCKET:mdds}
+    region: ${MDDS_OBJECT_STORAGE_REGION:us-east-1}
+    internal-endpoint: ${MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT:http://minio:9000}
+    public-endpoint: ${MDDS_OBJECT_STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}
+    access-key: ${MDDS_OBJECT_STORAGE_ACCESS_KEY}
+    secret-key: ${MDDS_OBJECT_STORAGE_SECRET_KEY}
+    path-style-access-enabled: ${MDDS_OBJECT_STORAGE_PATH_STYLE_ACCESS_ENABLED:true}
+    presign-put-ttl: ${MDDS_OBJECT_STORAGE_PRESIGN_PUT_TTL:PT15M}
