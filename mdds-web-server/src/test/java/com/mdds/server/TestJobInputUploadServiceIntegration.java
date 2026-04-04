@@ -16,12 +16,15 @@ import com.mdds.server.jpa.JobsRepository;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;
+
+import com.mdds.server.support.JobTestFixture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MinIOContainer;
@@ -31,13 +34,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
 @Testcontainers
+@Import(JobTestFixture.class)
 class TestJobInputUploadServiceIntegration {
 
   @Autowired private JobInputUploadService jobInputUploadService;
   @Autowired private ObjectStorageProperties objectStorageProperties;
-  @Autowired private JobController controller;
+  @Autowired private JobCreationService jobCreationService;
   @Autowired private UserLookupService userLookupService;
-  @Autowired private JobsRepository jobsRepository;
+  @Autowired private JobTestFixture jobFixture;
 
   @Container
   private static final MinIOContainer MINIO_CONTAINER =
@@ -73,13 +77,12 @@ class TestJobInputUploadServiceIntegration {
   @MethodSource("userLoginValues")
   void testIssueUploadUrl(String login) {
     var session = newSessionId();
-    var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(login, session, createJobRequest);
-    var jobId = response.getJobId();
+    var jobType = JobType.SOLVING_SLAE;
+    var userId = userLookupService.findUserId(login);
+    var response = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = response.jobId();
 
     var ttl = objectStorageProperties.presignPutTtl();
-    var userId = userLookupService.findUserId(login);
 
     var inputSlot = "matrix";
     var before = Instant.now();
@@ -110,13 +113,12 @@ class TestJobInputUploadServiceIntegration {
   @MethodSource("inputSlots")
   void testIssueUploadUrlSlotNormalization(String inputSlot, String expectedSlot) {
     var session = newSessionId();
-    var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
-    var jobId = response.getJobId();
+    var jobType = JobType.SOLVING_SLAE;
+    var userId = userLookupService.findUserId(GUEST);
+    var response = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = response.jobId();
 
     var ttl = objectStorageProperties.presignPutTtl();
-    var userId = userLookupService.findUserId(GUEST);
 
     var before = Instant.now();
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, inputSlot);
@@ -145,44 +147,42 @@ class TestJobInputUploadServiceIntegration {
   @Test
   void testIssueUploadUrlJobBelongsToOtherUser() {
     var session = newSessionId();
-    var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(ADMIN, session, createJobRequest);
-    var jobId = response.getJobId();
-    var userId = userLookupService.findUserId(GUEST);
+    var jobType = JobType.SOLVING_SLAE;
+    var adminId = userLookupService.findUserId(ADMIN);
+    var response = createOrReuseDraftJob(adminId, session, jobType);
+    var jobId = response.jobId();
+    final var guestId = userLookupService.findUserId(GUEST);
     var inputSlot = "matrix";
 
     assertThatExceptionOfType(JobDoesNotExistException.class)
-        .isThrownBy(() -> jobInputUploadService.issueUploadUrl(userId, jobId, inputSlot))
+        .isThrownBy(() -> jobInputUploadService.issueUploadUrl(guestId, jobId, inputSlot))
         .withMessage("Job with id '" + jobId + "' does not exist.");
   }
 
   @Test
   void testIssueUploadUrlJobTypeNotSupported() {
     var session = newSessionId();
-    var jobType = "solving_slae_parallel";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
-    var jobId = response.getJobId();
+    var jobType = JobType.SOLVING_SLAE_PARALLEL;
     var userId = userLookupService.findUserId(GUEST);
+    var response = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = response.jobId();
     var inputSlot = "matrix";
 
     assertThatExceptionOfType(InputUploadUrlNotSupportedForJobTypeException.class)
         .isThrownBy(() -> jobInputUploadService.issueUploadUrl(userId, jobId, inputSlot))
         .withMessage(
             "Input upload URL requests are not supported for the given jobType: '"
-                + jobType
+                + jobType.value()
                 + "'.");
   }
 
   @Test
   void testIssueUploadUrlBlankInputSlot() {
     var session = newSessionId();
-    var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
-    var jobId = response.getJobId();
+    var jobType = JobType.SOLVING_SLAE;
     var userId = userLookupService.findUserId(GUEST);
+    var response = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = response.jobId();
     var inputSlot = "";
 
     assertThatExceptionOfType(InputSlotIsNullOrBlankException.class)
@@ -193,19 +193,12 @@ class TestJobInputUploadServiceIntegration {
   @Test
   void testIssueUploadUrlInvalidInputJobState() {
     var session = newSessionId();
-    var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
-    var jobId = response.getJobId();
-    var status = JobStatus.SUBMITTED;
-    var jobResponse = jobsRepository.findById(jobId);
-    jobResponse.ifPresent(
-        job -> {
-          job.setStatus(status);
-          jobsRepository.save(job);
-        });
-
+    var jobType = JobType.SOLVING_SLAE;
     var userId = userLookupService.findUserId(GUEST);
+    var response = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = response.jobId();
+    jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
+
     var inputSlot = "matrix";
 
     assertThatExceptionOfType(JobIsNotDraftException.class)
@@ -219,11 +212,10 @@ class TestJobInputUploadServiceIntegration {
   @Test
   void testIssueUploadUrlUnknownInputSlot() {
     var session = newSessionId();
-    var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
-    var jobId = response.getJobId();
+    var jobType = JobType.SOLVING_SLAE;
     var userId = userLookupService.findUserId(GUEST);
+    var response = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = response.jobId();
     var inputSlot = "unknown_input_slot";
 
     assertThatExceptionOfType(UnknownOrUnsupportedInputSlotException.class)
@@ -238,8 +230,8 @@ class TestJobInputUploadServiceIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private JobIdResponseDTO createOrReuseDraftJob(
-      String user, String session, CreateJobRequestDTO createJobRequestDTO) {
-    return controller.createOrReuseDraftJob(user, session, createJobRequestDTO).getBody();
+  private JobCreationResult createOrReuseDraftJob(
+      long user, String session, JobType jobType) {
+    return jobCreationService.createOrReuseDraftJob(user, session, jobType);
   }
 }
