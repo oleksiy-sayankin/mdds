@@ -387,6 +387,8 @@ PUT /jobs/{jobId}/params
 }
 ```
 
+Note, parameter's names are case-sensitive.
+
 **Required headers**
 
 ```http
@@ -410,6 +412,7 @@ Validation of whether all required parameters are present is performed during `P
 - `400 Bad Request` — unknown or unsupported parameter for the given `jobType`;
 - `400 Bad Request` — a parameter name is blank or invalid;
 - `400 Bad Request` — a parameter value has an invalid type for the given `jobType`;
+- `400 Bad Request` — a parameter has an invalid value for the given `jobType`;
 - `400 Bad Request` — request body is missing or malformed;
 - `400 Bad Request` — required headers are missing;
 - `400 Bad Request` — `X-MDDS-User-Login` is blank;
