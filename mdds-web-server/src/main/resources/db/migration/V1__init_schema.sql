@@ -27,6 +27,14 @@ create table if not exists jobs (
     finished_at timestamptz null
     );
 
+-- job parameters
+create table if not exists job_params (
+    job_id text not null references jobs(id) on delete cascade,
+    param_name text not null,
+    param_value jsonb not null,
+    primary key (job_id, param_name)
+    );
+
 create index if not exists idx_jobs_user_id on jobs(user_id);
 create index if not exists idx_jobs_status on jobs(status);
 create index if not exists idx_jobs_created_at on jobs(created_at);

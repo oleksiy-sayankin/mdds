@@ -128,4 +128,32 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ErrorResponseDTO> handleJobDoesNotExist(JobDoesNotExistException ex) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDTO(ex.getMessage()));
   }
+
+  @ExceptionHandler(UnknownOrUnsupportedJobParameterException.class)
+  public ResponseEntity<ErrorResponseDTO> handleUnknownOrUnsupportedJobParameter(
+      UnknownOrUnsupportedJobParameterException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(JobParameterIsNullOrBlankException.class)
+  public ResponseEntity<ErrorResponseDTO> handleNullOrBlankJobParameter(
+      JobParameterIsNullOrBlankException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InvalidJobParameterTypeException.class)
+  public ResponseEntity<ErrorResponseDTO> handleInvalidJobParameterType(
+      InvalidJobParameterTypeException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InvalidJobParameterValueException.class)
+  public ResponseEntity<ErrorResponseDTO> handleInvalidJobParameterValue(
+      InvalidJobParameterValueException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
 }

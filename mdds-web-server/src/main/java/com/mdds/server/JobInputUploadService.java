@@ -26,7 +26,7 @@ public class JobInputUploadService {
       long requestedUserId, String requestedJobId, String inputSlot) {
     var existingJob =
         jobsRepository
-            .findById(requestedJobId)
+            .findByIdAndUserId(requestedJobId, requestedUserId)
             .orElseThrow(
                 () ->
                     new JobDoesNotExistException(
@@ -34,10 +34,6 @@ public class JobInputUploadService {
     var existingUserId = existingJob.getUserId();
     var existingJobId = existingJob.getId();
     var existingJobType = existingJob.getJobType();
-    if (!isAccessible(existingUserId, requestedUserId)) {
-      throw new JobDoesNotExistException(
-          String.format("Job with id '%s' does not exist.", requestedJobId));
-    }
     var profile = JobProfiles.forType(existingJobType);
 
     if (!profile.supportsInputUploadUrl()) {
@@ -84,9 +80,5 @@ public class JobInputUploadService {
 
   private static boolean isNullOrBlank(String inputSlot) {
     return inputSlot == null || inputSlot.isBlank();
-  }
-
-  private static boolean isAccessible(long existingUserId, long requestedUserId) {
-    return existingUserId == requestedUserId;
   }
 }
