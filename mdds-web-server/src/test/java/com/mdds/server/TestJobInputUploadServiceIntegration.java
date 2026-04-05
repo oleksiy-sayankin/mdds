@@ -10,14 +10,10 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import com.mdds.domain.JobProfiles;
 import com.mdds.domain.JobStatus;
 import com.mdds.domain.JobType;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.server.jpa.JobsRepository;
+import com.mdds.server.support.JobTestFixture;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;
-
-import com.mdds.server.support.JobTestFixture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -230,8 +226,7 @@ class TestJobInputUploadServiceIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private JobCreationResult createOrReuseDraftJob(
-      long user, String session, JobType jobType) {
+  private JobCreationResult createOrReuseDraftJob(long user, String session, JobType jobType) {
     return jobCreationService.createOrReuseDraftJob(user, session, jobType);
   }
 }
