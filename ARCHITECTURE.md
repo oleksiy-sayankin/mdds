@@ -17,6 +17,7 @@ Refer to the LICENSE file in the root directory for full license details.
   * [Job Lifecycle](#job-lifecycle)
     * [Supported statuses](#supported-statuses)
     * [Lifecycle rules](#lifecycle-rules)
+  * [Client-Server Interaction](#client-server-interaction-)
   * [Object Storage Layout](#object-storage-layout)
   * [REST API v1](#rest-api-v1)
     * [1. Create or Reuse a Draft Job](#1-create-or-reuse-a-draft-job)
@@ -25,7 +26,7 @@ Refer to the LICENSE file in the root directory for full license details.
     * [4. Submit a Job for Execution](#4-submit-a-job-for-execution)
     * [5. Get Job State](#5-get-job-state)
     * [6. Request Job Cancellation](#6-request-job-cancellation)
-    * [7. Request a Pre-Signed Download URL for the Result](#7-request-a-pre-signed-download-url-for-the-result)
+    * [7. Request a Pre-Signed Download URL for an Output Artifact](#7-request-a-pre-signed-download-url-for-an-output-artifact)
   * [Manifest v1](#manifest-v1)
     * [Example manifest for SLAE solving](#example-manifest-for-slae-solving)
     * [Field meaning](#field-meaning)
@@ -67,8 +68,8 @@ The long-term goal is to build a system where:
 
 - the **Web Server** acts as a **job orchestrator**;
 - **Workers** execute concrete job types;
-- **object storage** (S3/MinIO) stores job inputs, outputs, and manifests;
-- the **metadata store** (RDBMS) stores job lifecycle data such as status, timestamps, owner, and progress.
+- **Object Storage** (S3/MinIO) stores job inputs, outputs, and manifests;
+- the **Metadata Store** (RDBMS) stores job lifecycle data such as status, timestamps, owner, and progress.
 
 In other words, the platform coordinates work, but the business meaning of the work is delegated to Workers through manifests.
 
@@ -82,14 +83,22 @@ The Web Server is responsible for:
 
 - creating jobs and assigning job identifiers;
 - issuing pre-signed upload URLs for input artifacts;
-- validating whether a job is ready for submission;
+- validating whether a job is ready for submission. This is structural validation and means whether all required input 
+ slots and required parameters are present and parameter values conform to their declared types. Detailed semantic verification is performed
+  by Worker;
 - generating the job manifest;
 - publishing jobs to the execution queue;
 - exposing job status to clients;
 - accepting cancellation requests;
-- issuing pre-signed download URLs for results.
+- consuming asynchronous lifecycle updates from Workers;
+- persisting updates from Workers to Metadata Store;
+- issuing pre-signed download URLs for results;
+- optionally reconciling stale jobs that remain in non-terminal states for too long. 
 
 The Web Server should not contain job-specific execution logic.
+
+Note, Web Server does **not** synchronously query Workers in ordinary `GET` processing, it returns persisted job state 
+from Metadata Store.
 
 ### Worker
 
@@ -99,6 +108,8 @@ The Worker is responsible for:
 - reading `manifest.json` from object storage;
 - selecting the correct handler for the given `jobType`;
 - downloading input artifacts;
+- performing job-specific semantic validation before execution;
+- publishing lifecycle updates, including `VALIDATION_FAILED` when inputs or parameters are semantically invalid for the given `jobType`;
 - executing the actual job logic;
 - uploading output artifacts;
 - publishing lifecycle status updates.
@@ -120,6 +131,7 @@ The relational database is responsible for:
 - storing job lifecycle status;
 - storing timestamps;
 - storing user/job relationships;
+- storing job parameter data and relationships to jobs;
 - supporting filtering, querying, and future administrative pages.
 
 ---
@@ -136,6 +148,7 @@ The diagram below shows the main lifecycle transitions.
 graph TD;
     DRAFT-->SUBMITTED;
     SUBMITTED-->IN_PROGRESS;
+    SUBMITTED-->VALIDATION_FAILED;
     SUBMITTED-->CANCEL_REQUESTED;
     IN_PROGRESS-->DONE;
     IN_PROGRESS-->CANCEL_REQUESTED;
@@ -145,6 +158,7 @@ graph TD;
 
 - `DRAFT` — the job has been created, but input artifacts are still being uploaded;
 - `SUBMITTED` — the job has been sent to the execution pipeline;
+- `VALIDATION_FAILED` — worker-side validation failed before execution;
 - `IN_PROGRESS` — a Worker has started executing the job;
 - `CANCEL_REQUESTED` — a cancellation request has been accepted and forwarded;
 - `CANCELLED` — the Worker confirmed that execution was cancelled;
@@ -159,6 +173,71 @@ graph TD;
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
 - Downloading results is allowed only when the job is in `DONE`.
 - An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
+- `SUBMITTED` means the job has been accepted into the execution pipeline and became immutable.
+- Semantic validation is performed by the Worker after submission; if it fails, the job transitions to `VALIDATION_FAILED` instead of `IN_PROGRESS`.
+---
+
+## Client-Server Interaction 
+
+The diagram below shows the main sequence of interactions from creating job and obtaining its results.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant S3
+    participant RDBMS
+    participant Queue
+    participant Worker
+    Client->>Server: POST /jobs {jobType}
+    Server->>RDBMS: Create or reuse DRAFT job
+    Server-->>Client: 201/200 Created/OK {jobId}
+    Note over Client, Server: Job in DRAFT state created
+    Client->>Server: POST /jobs/{jobId}/inputs {inputSlot}
+    Server-->>Client: 200 OK, {uploadUrl, expiresAt}
+    Client->>S3: PUT {uploadUrl}
+    S3-->>Client: 200 OK, file was uploaded
+    Note over Client, S3: Job input artifact was uploaded to S3
+    Client->>Server: PUT /jobs/{jobId}/params {parameterSet}
+    Server->>RDBMS: Replace Job parameters
+    Server-->>Client: 200 OK, parameters are replaced
+    Note over Client, Server: Job parameters are uploaded
+    Client->>Server: POST /jobs/{jobId}/submit
+    Server ->> RDBMS: Validate structural readiness
+    Note over Server, RDBMS: Job input artifacts and params are structurally valid
+    Server->>S3: Store manifest.json
+    Server->>Queue: Submitted job message
+    Server->>RDBMS: Update Job status to SUBMITTED
+    Server-->>Client: 202 Accepted, {jobId, status=SUBMITTED}
+    Note over Client, Server: Job is submitted
+    
+    Queue->>Worker: Submitted job message
+    
+    loop until terminal state DONE/ERROR/CANCELLED/VALIDATION_FAILED
+       Note over Queue, Worker: Job input artifacts and params are semantically valid
+       Worker-->>Queue: Status update: IN_PROGRESS
+       Queue-->>Server: Status update: IN_PROGRESS
+       Server->>RDBMS: Update Job status to IN_PROGRESS
+
+       Client->>Server: GET /jobs/{jobId}
+       Server->>RDBMS: Read Job status
+       Server-->>Client: 200 OK, {jobId, status=IN_PROGRESS}
+       
+       Note over Client, Server: Job is being processed
+    end
+    Worker-->>Queue: Status update: DONE
+    Queue-->>Server: Status update: DONE
+    Server->>RDBMS: Update Job status to DONE
+    Client->>Server: GET /jobs/{jobId}
+    Server->>RDBMS: Get Job status
+    Server-->>Client: 200 OK, {jobId, status=DONE}
+    Note over Client, Server: Job is done
+    Client->>Server: GET /jobs/{jobId}/outputs?outputSlot={outputSlot}
+    Server-->>Client: 200 OK, {downloadUrl, expiresAt}
+    Client->>S3: GET {downloadUrl}
+    S3-->>Client: 200 OK, return Response with file
+    Note over Client, Server: Job output artifacts are downloaded
+```
 
 ---
 
@@ -332,7 +411,7 @@ The following rules apply:
 * `Content-Type` is not part of the signed parameters of the pre-signed URL, therefore the client may omit it or send an appropriate value;
 * while the job remains in `DRAFT`, the client may request a new upload URL for the same `inputSlot` and upload a replacement artifact;
 * the artifact currently stored under the canonical object key for that slot is used at submission time;
-* the existence of required uploaded artifacts is validated by the orchestration server during `POST /jobs/{jobId}/submit`, not during pre-signed URL issuance.
+* the presence of required uploaded artifacts is checked during `POST /jobs/{jobId}/submit`; semantic correctness is validated later by the Worker.
 
 For browser-based deployments, the following object storage CORS requirements apply:
 
@@ -405,7 +484,7 @@ Content-Type: application/json
 Stores the parameter set for the job. Parameters can be set or replaced only while the job is in `DRAFT` state.
 After submission, job parameters are immutable.  Omitted parameters are removed when the parameter set is replaced. 
 While the job remains in `DRAFT`, the client may send this request again to replace the current parameter set for the job.
-Validation of whether all required parameters are present is performed during `POST /jobs/{jobId}/submit`, not during this step.
+The presence of required parameters is checked during `POST /jobs/{jobId}/submit`; semantic correctness is validated later by the Worker.
 
 **Possible errors**
 
@@ -448,8 +527,9 @@ Empty body.
 
 **Meaning**
 
-Validates that all required inputs and job parameters exist, generates `manifest.json`, and publishes the job to the execution queue.
-Submission is allowed only when all required input slots and required job parameters defined by the job profile are present.
+Generates `manifest.json`, and publishes the job to the execution queue.
+The Web Server performs structural readiness checks only.
+Semantic validation of inputs and parameters is performed by the Worker after submission and may result in `VALIDATION_FAILED`.
 
 **Possible errors**
 
@@ -487,8 +567,10 @@ GET /jobs/{jobId}
 
 **Meaning**
 
-Returns the current state of the job and lifecycle metadata useful for UI and administration. Note that if a field 
+Returns the latest persisted job state from the Metadata Store for UI and administration.
+The endpoint does not synchronously query Workers during request processing. Note that if a field 
 has a `null` or empty value, the response still contains that field with the value `null` or `""`.
+`message` may contain validation failure details or execution error details for statuses like `VALIDATION_FAILED` and `ERROR`.
 
 **Possible errors**
 
@@ -530,12 +612,12 @@ state, repeated cancellation returns `202 Accepted`.
 
 ---
 
-### 7. Request a Pre-Signed Download URL for the Result
+### 7. Request a Pre-Signed Download URL for an Output Artifact
 
 **Endpoint**
 
 ```http
-GET /jobs/{jobId}/result-url
+GET /jobs/{jobId}/outputs?outputSlot=<output-slot>
 ```
 
 **Response**
@@ -654,7 +736,7 @@ This means that the public lifecycle API can remain the same:
 - `POST /jobs/{jobId}/submit`
 - `GET /jobs/{jobId}`
 - `POST /jobs/{jobId}/cancel`
-- `GET /jobs/{jobId}/result-url`
+- `GET /jobs/{jobId}/outputs?outputSlot=<output-slot>`
 
 Only the `jobType` profile and the Worker logic need to change. Direct artifact upload via a pre-signed URL 
 remains part of the client interaction flow, but is not itself a stable orchestrator endpoint.
