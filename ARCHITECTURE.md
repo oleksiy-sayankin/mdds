@@ -22,7 +22,7 @@ Refer to the LICENSE file in the root directory for full license details.
   * [REST API v1](#rest-api-v1)
     * [1. Create or Reuse a Draft Job](#1-create-or-reuse-a-draft-job)
     * [2. Request a Pre-Signed Upload URL for an Input Artifact](#2-request-a-pre-signed-upload-url-for-an-input-artifact)
-    * [3. Set Job Parameters](#3-set-job-parameters)
+    * [3. Patch Job Parameters](#3-patch-job-parameters)
     * [4. Submit a Job for Execution](#4-submit-a-job-for-execution)
     * [5. Get Job State](#5-get-job-state)
     * [6. Request Job Cancellation](#6-request-job-cancellation)
@@ -198,10 +198,10 @@ sequenceDiagram
     Client->>S3: PUT {uploadUrl}
     S3-->>Client: 200 OK, file was uploaded
     Note over Client, S3: Job input artifact was uploaded to S3
-    Client->>Server: PUT /jobs/{jobId}/params {parameterSet}
-    Server->>RDBMS: Replace Job parameters
-    Server-->>Client: 200 OK, parameters are replaced
-    Note over Client, Server: Job parameters are uploaded
+    Client->>Server: PATCH /jobs/{jobId}/params {mergePatch}
+    Server->>RDBMS: Apply parameter merge patch
+    Server-->>Client: 200 OK, parameters are patched
+    Note over Client, Server: Job parameters are patched
     Client->>Server: POST /jobs/{jobId}/submit
     Server ->> RDBMS: Validate structural readiness
     Note over Server, RDBMS: Job input artifacts and params are structurally valid
@@ -449,12 +449,12 @@ Errors returned by object storage during direct `PUT` upload are outside of this
 
 ---
 
-### 3. Set Job Parameters
+### 3. Patch Job Parameters
 
 **Endpoint**
 
 ```http
-PUT /jobs/{jobId}/params
+PATCH /jobs/{jobId}/params
 ```
 
 **Request**
@@ -472,7 +472,7 @@ Note, parameter's names are case-sensitive.
 
 ```http
 X-MDDS-User-Login: <user-login>
-Content-Type: application/json
+Content-Type: application/merge-patch+json
 ```
 
 **Response**
@@ -481,10 +481,17 @@ Content-Type: application/json
 
 **Meaning**
 
-Stores the parameter set for the job. Parameters can be set or replaced only while the job is in `DRAFT` state.
-After submission, job parameters are immutable.  Omitted parameters are removed when the parameter set is replaced. 
-While the job remains in `DRAFT`, the client may send this request again to replace the current parameter set for the job.
+Applies a JSON Merge Patch to the current parameter set of the draft job.
+Fields present in the patch are added or updated.
+Fields set to `null` are removed from the current parameter set.
+Fields omitted from the patch remain unchanged.
+An empty JSON object `{}` has no effect.
+The request body must be a JSON object.
+Top-level non-object merge patches are not supported for this endpoint.
+After submission, job parameters are immutable.
+While the job remains in `DRAFT`, the client may send this request again to patch the current parameter set for the job.
 The presence of required parameters is checked during `POST /jobs/{jobId}/submit`; semantic correctness is validated later by the Worker.
+Removing a required parameter while the job is in `DRAFT` is allowed, but `POST /jobs/{jobId}/submit` will fail until the required parameter is provided again.
 
 **Possible errors**
 
@@ -494,11 +501,12 @@ The presence of required parameters is checked during `POST /jobs/{jobId}/submit
 - `400 Bad Request` — a parameter has an invalid value for the given `jobType`;
 - `400 Bad Request` — request body is missing or malformed;
 - `400 Bad Request` — required headers are missing;
+- `400 Bad Request` — the merge patch document must be a JSON object;
 - `400 Bad Request` — `X-MDDS-User-Login` is blank;
 - `401 Unauthorized` — unknown user login;
 - `404 Not Found` — job does not exist (or is not accessible to the current user);
 - `409 Conflict` — the job is not in `DRAFT` state and job parameters can no longer be modified;
-- `415 Unsupported Media Type` — missing or unsupported `Content-Type`; `application/json` is required.
+- `415 Unsupported Media Type` — missing or unsupported `Content-Type`; `application/merge-patch+json` is required.
 
 ---
 
@@ -732,7 +740,7 @@ This means that the public lifecycle API can remain the same:
 
 - `POST /jobs`
 - `POST /jobs/{jobId}/inputs`
-- `PUT /jobs/{jobId}/params`
+- `PATCH /jobs/{jobId}/params`
 - `POST /jobs/{jobId}/submit`
 - `GET /jobs/{jobId}`
 - `POST /jobs/{jobId}/cancel`
