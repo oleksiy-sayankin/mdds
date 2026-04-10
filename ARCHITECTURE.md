@@ -522,6 +522,12 @@ POST /jobs/{jobId}/submit
 
 Empty body.
 
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
+```
+
 **Response**
 
 - `202 Accepted` — the submit request was accepted.
@@ -535,15 +541,25 @@ Empty body.
 
 **Meaning**
 
-Generates `manifest.json`, and publishes the job to the execution queue.
+Generates `manifest.json`, publishes a submitted job message to the execution queue.
 The Web Server performs structural readiness checks only.
+Structural readiness means that all required input artifacts defined by the job profile are present in object storage 
+under their canonical object keys, and all required job parameters defined by the job profile are currently set.
+For each required input slot, the server checks the presence of the artifact currently stored under the canonical object 
+key assigned to that slot.
+If multiple structural prerequisites are missing, the server may return any one of the detected structural errors.
 Semantic validation of inputs and parameters is performed by the Worker after submission and may result in `VALIDATION_FAILED`.
+If the request is accepted, the job status is updated to `SUBMITTED`.
 
 **Possible errors**
 
-- `404 Not Found` — the job does not exist;
+- `400 Bad Request` — a required input artifact is absent in object storage;
+- `400 Bad Request` — a required parameter is absent;
+- `400 Bad Request` — required headers are missing;
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `401 Unauthorized` — unknown user login;
+- `404 Not Found` — job does not exist (or is not accessible to the current user);
 - `409 Conflict` — the job is not in `DRAFT` state (for example, it has already been submitted or is already in a terminal state);
-- `400 Bad Request` — required inputs or job parameters are missing.
 
 ---
 
