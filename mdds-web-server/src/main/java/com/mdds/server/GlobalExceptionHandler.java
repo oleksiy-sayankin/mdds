@@ -156,4 +156,11 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDTO(ex.getMessage()));
   }
+
+  @ExceptionHandler(MergePatchDocumentMustBeJsonObjectException.class)
+  public ResponseEntity<ErrorResponseDTO> handleMergePatchDocumentMustBeJsonObject(
+      MergePatchDocumentMustBeJsonObjectException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
 }

@@ -4,22 +4,24 @@
  */
 package com.mdds.server;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.mdds.domain.JobType;
 import com.mdds.dto.CreateJobRequestDTO;
 import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.JobSetParamsRequestDTO;
 import com.mdds.dto.JobUploadUrlRequestDTO;
 import com.mdds.dto.JobUploadUrlResponseDTO;
 import jakarta.validation.Valid;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,6 +43,8 @@ public class JobController {
   private static final String JOB_ID = "jobId";
   private static final String USER_ID = "userId";
   private static final String EVENT = "event";
+
+  private static final String APPLICATION_MERGE_PATCH_JSON_VALUE = "application/merge-patch+json";
 
   @PostMapping(
       path = "/jobs",
@@ -86,20 +90,30 @@ public class JobController {
     }
   }
 
-  @PutMapping(path = "/jobs/{jobId}/params", consumes = MediaType.APPLICATION_JSON_VALUE)
-  public ResponseEntity<Void> setParams(
+  @PatchMapping(path = "/jobs/{jobId}/params", consumes = APPLICATION_MERGE_PATCH_JSON_VALUE)
+  public ResponseEntity<Void> mergeParams(
       @PathVariable("jobId") String jobId,
       @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin,
-      @RequestBody JobSetParamsRequestDTO setParamsRequestDTO) {
-
+      @RequestBody JsonNode patchNode) {
     var userId = userLookupService.findUserId(userLogin);
-    var params = setParamsRequestDTO.params();
+    var params = extractPatchParams(patchNode);
     try (var ignoredJobId = MDC.putCloseable(JOB_ID, jobId);
         var ignoredUserId = MDC.putCloseable(USER_ID, Long.toString(userId));
-        var ignoredEvent = MDC.putCloseable(EVENT, "set_job_params")) {
-      jobParamsService.replaceParams(userId, jobId, params);
-      log.info("Job parameters are set.");
+        var ignoredEvent = MDC.putCloseable(EVENT, "patch_job_params")) {
+      jobParamsService.mergeParams(userId, jobId, params);
+      log.info("Job parameters patch was applied.");
       return ResponseEntity.ok().build();
     }
+  }
+
+  private static Map<String, JsonNode> extractPatchParams(JsonNode patchNode) {
+    if (patchNode == null || !patchNode.isObject()) {
+      throw new MergePatchDocumentMustBeJsonObjectException(
+          "The merge patch document must be a JSON object.");
+    }
+
+    return patchNode
+        .propertyStream()
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 }

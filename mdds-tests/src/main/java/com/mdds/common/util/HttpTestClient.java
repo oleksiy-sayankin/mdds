@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/** Small HTTP client utility for integration tests. */
 public class HttpTestClient {
   private final HttpClient client;
   private final String baseUrl;
@@ -46,6 +47,19 @@ public class HttpTestClient {
         HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + path))
             .PUT(HttpRequest.BodyPublishers.ofString(rawJson));
+
+    for (var entry : headers.entrySet()) {
+      request.header(entry.getKey(), entry.getValue());
+    }
+    return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  public HttpResponse<String> patch(String path, Map<String, String> headers, String rawJson)
+      throws IOException, InterruptedException {
+    var request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + path))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString(rawJson));
 
     for (var entry : headers.entrySet()) {
       request.header(entry.getKey(), entry.getValue());

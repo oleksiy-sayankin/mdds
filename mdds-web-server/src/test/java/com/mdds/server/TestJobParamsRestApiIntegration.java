@@ -71,7 +71,7 @@ class TestJobParamsRestApiIntegration {
 
   @ParameterizedTest
   @MethodSource("userLoginValues")
-  void testReplaceJobParamsViaRestApi(String userLogin) throws IOException, InterruptedException {
+  void testAddJobParamsViaRestApi(String userLogin) throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var jobType = "solving_slae";
@@ -81,7 +81,7 @@ class TestJobParamsRestApiIntegration {
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
-    replaceParams(http, userLogin, jobId, paramsAsJson);
+    patchParams(http, userLogin, jobId, paramsAsJson);
     var params = jobFixture.jobParams(jobId);
     assertThat(params)
         .containsKey("solvingMethod")
@@ -103,7 +103,7 @@ class TestJobParamsRestApiIntegration {
 
     var paramsAsJson =
         JsonHelper.toJson(Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
-    replaceParams(http, GUEST, jobId, paramsAsJson);
+    patchParams(http, GUEST, jobId, paramsAsJson);
     var params = jobFixture.jobParams(jobId);
 
     assertThat(params)
@@ -118,7 +118,7 @@ class TestJobParamsRestApiIntegration {
     var newParamsAsJson =
         JsonHelper.toJson(
             Map.of(solvingMethod, newSolvingMethodValue, precision, newPrecisionValue));
-    replaceParams(http, GUEST, jobId, newParamsAsJson);
+    patchParams(http, GUEST, jobId, newParamsAsJson);
 
     params = jobFixture.jobParams(jobId);
     assertThat(params)
@@ -129,7 +129,7 @@ class TestJobParamsRestApiIntegration {
   }
 
   @Test
-  void testDeleteOmittedJobParam() throws IOException, InterruptedException {
+  void testKeepAsIsOmittedJobParam() throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var jobType = "solving_slae";
@@ -143,7 +143,7 @@ class TestJobParamsRestApiIntegration {
 
     var paramsAsJson =
         JsonHelper.toJson(Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
-    replaceParams(http, GUEST, jobId, paramsAsJson);
+    patchParams(http, GUEST, jobId, paramsAsJson);
     var params = jobFixture.jobParams(jobId);
 
     assertThat(params)
@@ -155,13 +155,85 @@ class TestJobParamsRestApiIntegration {
     var newSolvingMethodValue = MAPPER.readTree("\"numpy_pinv_solver\"");
 
     var newParamsAsJson = JsonHelper.toJson(Map.of(solvingMethod, newSolvingMethodValue));
-    replaceParams(http, GUEST, jobId, newParamsAsJson);
+    patchParams(http, GUEST, jobId, newParamsAsJson);
 
     params = jobFixture.jobParams(jobId);
     assertThat(params)
         .containsKey(solvingMethod)
         .containsValue(newSolvingMethodValue)
-        .doesNotContainKey(precision);
+        .containsKey(precision)
+        .containsValue(precisionValue);
+  }
+
+  @Test
+  void testDeleteOneKeepOthers() throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, port);
+    var sessionId = newSessionId();
+    var jobType = "solving_slae";
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
+    var jobId = createJobResponse.getJobId();
+    var solvingMethod = "solvingMethod";
+    var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
+
+    var precision = "precision";
+    var precisionValue = MAPPER.readTree("0.001");
+
+    var paramsAsJson =
+        JsonHelper.toJson(Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
+    patchParams(http, GUEST, jobId, paramsAsJson);
+    var params = jobFixture.jobParams(jobId);
+
+    assertThat(params)
+        .containsKey(solvingMethod)
+        .containsValue(solvingMethodValue)
+        .containsKey(precision)
+        .containsValue(precisionValue);
+
+    var newSolvingMethodValue = MAPPER.readTree("null");
+
+    var newParamsAsJson = JsonHelper.toJson(Map.of(solvingMethod, newSolvingMethodValue));
+    patchParams(http, GUEST, jobId, newParamsAsJson);
+
+    params = jobFixture.jobParams(jobId);
+    assertThat(params)
+        .doesNotContainKey(solvingMethod)
+        .containsKey(precision)
+        .containsValue(precisionValue);
+  }
+
+  @Test
+  void testNoOperation() throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, port);
+    var sessionId = newSessionId();
+    var jobType = "solving_slae";
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
+    var jobId = createJobResponse.getJobId();
+    var solvingMethod = "solvingMethod";
+    var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
+
+    var precision = "precision";
+    var precisionValue = MAPPER.readTree("0.001");
+
+    var paramsAsJson =
+        JsonHelper.toJson(Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
+    patchParams(http, GUEST, jobId, paramsAsJson);
+    var params = jobFixture.jobParams(jobId);
+
+    assertThat(params)
+        .containsKey(solvingMethod)
+        .containsValue(solvingMethodValue)
+        .containsKey(precision)
+        .containsValue(precisionValue);
+
+    var newParamsAsJson = "{}";
+    patchParams(http, GUEST, jobId, newParamsAsJson);
+
+    params = jobFixture.jobParams(jobId);
+    assertThat(params)
+        .containsKey(solvingMethod)
+        .containsValue(solvingMethodValue)
+        .containsKey(precision)
+        .containsValue(precisionValue);
   }
 
   @Test
@@ -179,7 +251,7 @@ class TestJobParamsRestApiIntegration {
 
     var paramsAsJson =
         JsonHelper.toJson(Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
-    replaceParams(http, GUEST, jobId, paramsAsJson);
+    patchParams(http, GUEST, jobId, paramsAsJson);
     var params = jobFixture.jobParams(jobId);
 
     assertThat(params)
@@ -188,8 +260,12 @@ class TestJobParamsRestApiIntegration {
         .containsKey(precision)
         .containsValue(precisionValue);
 
-    var newParamsAsJson = JsonHelper.toJson(Map.of());
-    replaceParams(http, GUEST, jobId, newParamsAsJson);
+    var nullSolvingMethodValue = MAPPER.readTree("null");
+    var nullPrecisionValue = MAPPER.readTree("null");
+    var newParamsAsJson =
+        JsonHelper.toJson(
+            Map.of(solvingMethod, nullSolvingMethodValue, precision, nullPrecisionValue));
+    patchParams(http, GUEST, jobId, newParamsAsJson);
 
     params = jobFixture.jobParams(jobId);
     assertThat(params).isEmpty();
@@ -205,60 +281,86 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
     assertThat(message(response.body())).isEqualTo("Job with id '" + jobId + "' does not exist.");
   }
 
-  @Test
-  void testJobDoesNotExistForOtherUser() throws IOException, InterruptedException {
+  @ParameterizedTest
+  @MethodSource("mapParametersValues")
+  void testJobDoesNotExistForOtherUser(Map<String, JsonNode> params)
+      throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
-    var paramName = "solvingMethod";
-    var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
-    var paramsAsMap = Map.of(paramName, paramValue);
-    var paramsAsJson = JsonHelper.toJson(paramsAsMap);
+    var paramsAsJson = JsonHelper.toJson(params);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
     assertThat(message(response.body())).isEqualTo("Job with id '" + jobId + "' does not exist.");
   }
 
-  @Test
-  void testJobIsNotDraft() throws IOException, InterruptedException {
+  private static Stream<String> invalidJsonDoc() {
+    return Stream.of("[]", "123", "null", "\"solvingMethod\"", "\"numpy_exact_solver\"");
+  }
+
+  @ParameterizedTest
+  @MethodSource("invalidJsonDoc")
+  void testInvalidPatchJsonDocument(String paramsAsJson) throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
-    var paramName = "solvingMethod";
-    var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
-    var paramsAsMap = Map.of(paramName, paramValue);
-    var paramsAsJson = JsonHelper.toJson(paramsAsMap);
+
+    var response =
+        http.patch(
+            "/jobs/" + jobId + "/params",
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
+            paramsAsJson);
+
+    assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    assertThat(message(response.body()))
+        .isEqualTo("The merge patch document must be a JSON object.");
+  }
+
+  private static Stream<Map<String, JsonNode>> mapParametersValues()
+      throws JsonProcessingException {
+    return Stream.of(Map.of("solvingMethod", MAPPER.readTree("\"numpy_exact_solver\"")), Map.of());
+  }
+
+  @ParameterizedTest
+  @MethodSource("mapParametersValues")
+  void testJobIsNotDraft(Map<String, JsonNode> params) throws IOException, InterruptedException {
+    var http = new HttpTestClient(HOST, port);
+    var sessionId = newSessionId();
+    var jobType = "solving_slae";
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
+    var jobId = createJobResponse.getJobId();
+    var paramsAsJson = JsonHelper.toJson(params);
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
     assertThat(message(response.body()))
         .isEqualTo(
-            "Job '" + jobId + "' is not in DRAFT state and no more job parameters can be set.");
+            "Job '" + jobId + "' is not in DRAFT state and no more job parameters can be patched.");
   }
 
   @Test
@@ -274,9 +376,9 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -301,9 +403,9 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -348,9 +450,9 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -381,9 +483,9 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", user),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", user),
             paramsAsJson);
 
     assertThat(response.statusCode()).isEqualTo(statusCode);
@@ -403,7 +505,7 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
             Map.of("Content-Type", "application/xml", "X-MDDS-User-Login", GUEST),
             paramsAsJson);
@@ -423,7 +525,7 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put("/jobs/" + jobId + "/params", Map.of("X-MDDS-User-Login", GUEST), paramsAsJson);
+        http.patch("/jobs/" + jobId + "/params", Map.of("X-MDDS-User-Login", GUEST), paramsAsJson);
     assertThat(response.statusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value());
   }
 
@@ -440,8 +542,10 @@ class TestJobParamsRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
     var response =
-        http.put(
-            "/jobs/" + jobId + "/params", Map.of("Content-Type", "application/json"), paramsAsJson);
+        http.patch(
+            "/jobs/" + jobId + "/params",
+            Map.of("Content-Type", "application/merge-patch+json"),
+            paramsAsJson);
     assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
     assertThat(message(response.body()))
         .isEqualTo("Required request header 'X-MDDS-User-Login' is missing.");
@@ -466,22 +570,22 @@ class TestJobParamsRestApiIntegration {
     var jobId = createJobResponse.getJobId();
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", GUEST),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", GUEST),
             jsonBody);
     assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
     assertThat(message(response.body())).isEqualTo(message);
   }
 
-  private static void replaceParams(
+  private static void patchParams(
       HttpTestClient http, String userLogin, String jobId, String rawJson)
       throws IOException, InterruptedException {
 
     var response =
-        http.put(
+        http.patch(
             "/jobs/" + jobId + "/params",
-            Map.of("Content-Type", "application/json", "X-MDDS-User-Login", userLogin),
+            Map.of("Content-Type", "application/merge-patch+json", "X-MDDS-User-Login", userLogin),
             rawJson);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());

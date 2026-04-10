@@ -74,7 +74,7 @@ class TestJobParamsServiceIntegration {
     var paramName = "solvingMethod";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var params = Map.of(paramName, paramValue);
-    jobParamsService.replaceParams(userId, jobId, params);
+    jobParamsService.mergeParams(userId, jobId, params);
     var actualParams = jobFixture.jobParams(jobId);
     assertThat(actualParams).containsKey("solvingMethod").containsValue(paramValue);
   }
@@ -93,7 +93,7 @@ class TestJobParamsServiceIntegration {
     var precision = "precision";
     var precisionValue = MAPPER.readTree("0.001");
 
-    jobParamsService.replaceParams(
+    jobParamsService.mergeParams(
         userId, jobId, Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
     var params = jobFixture.jobParams(jobId);
     assertThat(params)
@@ -105,7 +105,7 @@ class TestJobParamsServiceIntegration {
     var newSolvingMethodValue = MAPPER.readTree("\"numpy_pinv_solver\"");
     var newPrecisionValue = MAPPER.readTree("0.00001");
 
-    jobParamsService.replaceParams(
+    jobParamsService.mergeParams(
         userId, jobId, Map.of(solvingMethod, newSolvingMethodValue, precision, newPrecisionValue));
     params = jobFixture.jobParams(jobId);
     assertThat(params)
@@ -116,7 +116,7 @@ class TestJobParamsServiceIntegration {
   }
 
   @Test
-  void testDeleteOmittedJobParam() throws JsonProcessingException {
+  void testKeepAsIsOmittedJobParam() throws JsonProcessingException {
     var session = newSessionId();
     var jobType = JobType.SOLVING_SLAE;
     var userId = userLookupService.findUserId(GUEST);
@@ -129,7 +129,7 @@ class TestJobParamsServiceIntegration {
     var precision = "precision";
     var precisionValue = MAPPER.readTree("0.001");
 
-    jobParamsService.replaceParams(
+    jobParamsService.mergeParams(
         userId, jobId, Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
     var params = jobFixture.jobParams(jobId);
     assertThat(params)
@@ -140,12 +140,78 @@ class TestJobParamsServiceIntegration {
 
     var newSolvingMethodValue = MAPPER.readTree("\"numpy_pinv_solver\"");
 
-    jobParamsService.replaceParams(userId, jobId, Map.of(solvingMethod, newSolvingMethodValue));
+    jobParamsService.mergeParams(userId, jobId, Map.of(solvingMethod, newSolvingMethodValue));
     params = jobFixture.jobParams(jobId);
     assertThat(params)
         .containsKey(solvingMethod)
         .containsValue(newSolvingMethodValue)
-        .doesNotContainKey(precision);
+        .containsKey(precision)
+        .containsValue(precisionValue);
+  }
+
+  @Test
+  void testDeleteOneKeepOthers() throws JsonProcessingException {
+    var session = newSessionId();
+    var jobType = JobType.SOLVING_SLAE;
+    var userId = userLookupService.findUserId(GUEST);
+    var result = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = result.jobId();
+
+    var solvingMethod = "solvingMethod";
+    var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
+
+    var precision = "precision";
+    var precisionValue = MAPPER.readTree("0.001");
+
+    jobParamsService.mergeParams(
+        userId, jobId, Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
+    var params = jobFixture.jobParams(jobId);
+    assertThat(params)
+        .containsKey(solvingMethod)
+        .containsValue(solvingMethodValue)
+        .containsKey(precision)
+        .containsValue(precisionValue);
+
+    var newSolvingMethodValue = MAPPER.readTree("null");
+
+    jobParamsService.mergeParams(userId, jobId, Map.of(solvingMethod, newSolvingMethodValue));
+    params = jobFixture.jobParams(jobId);
+    assertThat(params)
+        .doesNotContainKey(solvingMethod)
+        .containsKey(precision)
+        .containsValue(precisionValue);
+  }
+
+  @Test
+  void testNoOperation() throws JsonProcessingException {
+    var session = newSessionId();
+    var jobType = JobType.SOLVING_SLAE;
+    var userId = userLookupService.findUserId(GUEST);
+    var result = createOrReuseDraftJob(userId, session, jobType);
+    var jobId = result.jobId();
+
+    var solvingMethod = "solvingMethod";
+    var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
+
+    var precision = "precision";
+    var precisionValue = MAPPER.readTree("0.001");
+
+    jobParamsService.mergeParams(
+        userId, jobId, Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
+    var params = jobFixture.jobParams(jobId);
+    assertThat(params)
+        .containsKey(solvingMethod)
+        .containsValue(solvingMethodValue)
+        .containsKey(precision)
+        .containsValue(precisionValue);
+
+    jobParamsService.mergeParams(userId, jobId, Map.of());
+    params = jobFixture.jobParams(jobId);
+    assertThat(params)
+        .containsKey(solvingMethod)
+        .containsValue(solvingMethodValue)
+        .containsKey(precision)
+        .containsValue(precisionValue);
   }
 
   @Test
@@ -162,7 +228,7 @@ class TestJobParamsServiceIntegration {
     var precision = "precision";
     var precisionValue = MAPPER.readTree("0.001");
 
-    jobParamsService.replaceParams(
+    jobParamsService.mergeParams(
         userId, jobId, Map.of(solvingMethod, solvingMethodValue, precision, precisionValue));
     var params = jobFixture.jobParams(jobId);
     assertThat(params)
@@ -171,7 +237,13 @@ class TestJobParamsServiceIntegration {
         .containsKey(precision)
         .containsValue(precisionValue);
 
-    jobParamsService.replaceParams(userId, jobId, Map.of());
+    var nullSolvingMethodValue = MAPPER.readTree("null");
+    var nullPrecisionValue = MAPPER.readTree("null");
+
+    jobParamsService.mergeParams(
+        userId,
+        jobId,
+        Map.of(solvingMethod, nullSolvingMethodValue, precision, nullPrecisionValue));
     params = jobFixture.jobParams(jobId);
     assertThat(params).isEmpty();
   }
@@ -184,28 +256,32 @@ class TestJobParamsServiceIntegration {
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(JobDoesNotExistException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage("Job with id '" + jobId + "' does not exist.");
   }
 
-  @Test
-  void testJobDoesNotExistForOtherUser() throws JsonProcessingException {
+  @ParameterizedTest
+  @MethodSource("mapParametersValues")
+  void testJobDoesNotExistForOtherUser(Map<String, JsonNode> params) {
     var session = newSessionId();
     var jobType = JobType.SOLVING_SLAE;
     var adminId = userLookupService.findUserId(ADMIN);
     var result = createOrReuseDraftJob(adminId, session, jobType);
     var jobId = result.jobId();
     var guestId = userLookupService.findUserId(GUEST);
-    var paramName = "solvingMethod";
-    var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
-    var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(JobDoesNotExistException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(guestId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(guestId, jobId, params))
         .withMessage("Job with id '" + jobId + "' does not exist.");
   }
 
-  @Test
-  void testJobIsNotDraft() throws JsonProcessingException {
+  private static Stream<Map<String, JsonNode>> mapParametersValues()
+      throws JsonProcessingException {
+    return Stream.of(Map.of("solvingMethod", MAPPER.readTree("\"numpy_exact_solver\"")), Map.of());
+  }
+
+  @ParameterizedTest
+  @MethodSource("mapParametersValues")
+  void testJobIsNotDraft(Map<String, JsonNode> params) {
     var session = newSessionId();
     var jobType = JobType.SOLVING_SLAE;
     var userId = userLookupService.findUserId(GUEST);
@@ -213,13 +289,10 @@ class TestJobParamsServiceIntegration {
     var jobId = result.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
 
-    var paramName = "solvingMethod";
-    var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
-    var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(JobIsNotDraftException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage(
-            "Job '" + jobId + "' is not in DRAFT state and no more job parameters can be set.");
+            "Job '" + jobId + "' is not in DRAFT state and no more job parameters can be patched.");
   }
 
   @Test
@@ -234,7 +307,7 @@ class TestJobParamsServiceIntegration {
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(JobParameterIsNullOrBlankException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage("Parameter name is blank or invalid.");
   }
 
@@ -254,7 +327,7 @@ class TestJobParamsServiceIntegration {
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(UnknownOrUnsupportedJobParameterException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage(
             "Unknown or unsupported parameter '"
                 + paramName
@@ -276,7 +349,7 @@ class TestJobParamsServiceIntegration {
     var paramType = paramValue.getNodeType();
     var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(InvalidJobParameterTypeException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage(
             "Parameter value '"
                 + paramValue.asText()
@@ -303,7 +376,7 @@ class TestJobParamsServiceIntegration {
     var paramType = paramValue.getNodeType();
     var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(InvalidJobParameterTypeException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage(
             "Parameter value '"
                 + paramValue.asText()
@@ -329,7 +402,7 @@ class TestJobParamsServiceIntegration {
     var paramValue = MAPPER.readTree("\"wrong_param_value\"");
     var params = Map.of(paramName, paramValue);
     assertThatExceptionOfType(InvalidJobParameterValueException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage(
             "Invalid value '"
                 + paramValue.asText()
@@ -352,7 +425,7 @@ class TestJobParamsServiceIntegration {
     var params = new HashMap<String, JsonNode>();
     params.put(paramName, null);
     assertThatExceptionOfType(JobParameterIsNullOrBlankException.class)
-        .isThrownBy(() -> jobParamsService.replaceParams(userId, jobId, params))
+        .isThrownBy(() -> jobParamsService.mergeParams(userId, jobId, params))
         .withMessage("Parameter '" + paramName + "' has null value.");
   }
 

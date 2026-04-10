@@ -18,12 +18,24 @@ import com.mdds.persistence.entity.JobParamId;
 import com.mdds.server.jpa.JobParamsRepository;
 import com.mdds.server.jpa.JobsRepository;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Replaces existing set of params to new one in a job. */
+/**
+ * Merges the existing parameter set of a job with an incoming patch.
+ *
+ * <ul>
+ *   <li>existing parameter + new value → update;
+ *   <li>existing parameter + null → remove;
+ *   <li>existing parameter omitted from the patch → keep unchanged;
+ *   <li>new parameter with non-null value → add;
+ *   <li>new parameter with null → do nothing.
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 public class JobParamsService {
@@ -32,11 +44,11 @@ public class JobParamsService {
   private final JobsRepository jobsRepository;
 
   @Transactional
-  public void replaceParams(
+  public void mergeParams(
       long requestedUserId, String requestedJobId, Map<String, JsonNode> params) {
 
     // Here we lock by jobId to avoid race condition with job submit operation
-    // so just one operation (job parameters replacement or job submission)
+    // so just one operation (job parameters patching or job submission)
     // will lock the job entity row and will be done.
     // Since jobId is private key in jobs table, it may seem that it is enough to lock
     // job entity only by jobId. Locking by pair jobId userId we check if a certain
@@ -55,8 +67,13 @@ public class JobParamsService {
     if (!isInDraftState(existingJob)) {
       throw new JobIsNotDraftException(
           String.format(
-              "Job '%s' is not in DRAFT state and no more job parameters can be set.",
+              "Job '%s' is not in DRAFT state and no more job parameters can be patched.",
               existingJobId));
+    }
+
+    // early exit
+    if (params.isEmpty()) {
+      return;
     }
 
     var profile = JobProfiles.forType(existingJobType);
@@ -72,7 +89,7 @@ public class JobParamsService {
                 paramName, existingJobType.value()));
       }
       var paramValue = paramEntry.getValue();
-      if (isNull(paramValue)) {
+      if (isNullReference(paramValue)) {
         throw new JobParameterIsNullOrBlankException(
             String.format("Parameter '%s' has null value.", paramName));
       }
@@ -95,17 +112,46 @@ public class JobParamsService {
       }
     }
 
-    jobParamsRepository.deleteByIdJobId(existingJobId);
+    var existingParams = jobParamsRepository.findAllByIdJobId(existingJobId);
 
-    var jobParams = new ArrayList<JobParamEntity>();
+    var newParams = new ArrayList<JobParamEntity>();
     for (Map.Entry<String, JsonNode> paramEntry : params.entrySet()) {
       var paramName = paramEntry.getKey();
       var paramValue = paramEntry.getValue();
       var jobParamId = new JobParamId(existingJobId, paramName);
       var param = new JobParamEntity(jobParamId, paramValue);
-      jobParams.add(param);
+      newParams.add(param);
     }
-    jobParamsRepository.saveAll(jobParams);
+
+    var mergedParams = merge(existingParams, newParams);
+    jobParamsRepository.deleteByIdJobId(existingJobId);
+    jobParamsRepository.saveAll(mergedParams);
+  }
+
+  private static List<JobParamEntity> merge(
+      List<JobParamEntity> existingParams, List<JobParamEntity> patchParams) {
+    Map<JobParamId, JsonNode> merged = new LinkedHashMap<>();
+
+    for (JobParamEntity existing : existingParams) {
+      merged.put(existing.getId(), existing.getParamValue());
+    }
+
+    for (JobParamEntity patchParam : patchParams) {
+      var id = patchParam.getId();
+      var value = patchParam.getParamValue();
+
+      if (value != null && value.isNull()) {
+        merged.remove(id);
+      } else {
+        merged.put(id, value);
+      }
+    }
+
+    var result = new ArrayList<JobParamEntity>();
+    for (Map.Entry<JobParamId, JsonNode> entry : merged.entrySet()) {
+      result.add(new JobParamEntity(entry.getKey(), entry.getValue()));
+    }
+    return result;
   }
 
   private static boolean validParamName(JobProfile jobProfile, String paramName) {
@@ -114,6 +160,13 @@ public class JobParamsService {
 
   private static boolean validParamValue(
       JobProfile jobProfile, String paramName, JsonNode paramValue) {
+    if (paramValue == null) {
+      return false;
+    }
+    // we allow Json null type as delete marker for parameter.
+    if (paramValue.isNull()) {
+      return true;
+    }
     var spec = jobProfile.paramSpecs().get(paramName);
     var validType = spec.type();
     if (validType == ParamType.ENUM) {
@@ -124,6 +177,11 @@ public class JobParamsService {
 
   private static boolean validParamType(
       JobProfile jobProfile, String paramName, JsonNodeType paramValueType) {
+    // we allow Json null type as delete marker for parameter.
+    if (JsonNodeType.NULL.equals(paramValueType)) {
+      return true;
+    }
+
     var spec = jobProfile.paramSpecs().get(paramName);
     var validType = spec.type();
 
@@ -147,7 +205,7 @@ public class JobParamsService {
     return value == null || value.isBlank();
   }
 
-  private static boolean isNull(JsonNode value) {
+  private static boolean isNullReference(JsonNode value) {
     return value == null;
   }
 
