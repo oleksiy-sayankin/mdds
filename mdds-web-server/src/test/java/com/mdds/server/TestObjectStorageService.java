@@ -20,9 +20,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
 @Testcontainers
-class TestObjectStoragePresignService {
+class TestObjectStorageService {
 
-  @Autowired private ObjectStoragePresignService objectStoragePresignService;
+  @Autowired private ObjectStorageService objectStorageService;
   @Autowired private ObjectStorageProperties objectStorageProperties;
 
   @Container
@@ -56,7 +56,7 @@ class TestObjectStoragePresignService {
     var jobId = UUID.randomUUID().toString();
     var fileName = "matrix.csv";
     var before = Instant.now();
-    var result = objectStoragePresignService.issueUploadUrl(userId, jobId, fileName);
+    var result = objectStorageService.issueUploadUrl(userId, jobId, fileName);
     var after = Instant.now();
 
     assertThat(result.expiresAt()).isAfterOrEqualTo(before.plus(ttl).minusSeconds(1));

@@ -8,10 +8,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.domain.UnknownJobTypeException;
 import com.mdds.dto.CreateJobRequestDTO;
 import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.server.support.JobTestFixture;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -30,10 +30,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
-@SpringBootTest
+@SpringBootTest(properties = {"spring.config.import=classpath:test-job-profiles.yml"})
 @Testcontainers
 @Import(JobTestFixture.class)
 class TestCreateOrReuseDraftJobIntegration {
@@ -53,8 +56,20 @@ class TestCreateOrReuseDraftJobIntegration {
           .withUsername("mdds")
           .withPassword("mdds123");
 
+  @Container
+  private static final RabbitMQContainer rabbitMq =
+      new RabbitMQContainer("rabbitmq:3.12-management")
+          .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
+          .withExposedPorts(5672, 15672)
+          .waitingFor(Wait.forListeningPort())
+          .withStartupTimeout(Duration.ofSeconds(30));
+
   @DynamicPropertySource
   static void registerProps(DynamicPropertyRegistry registry) {
+    registry.add("mdds.rabbitmq.host", rabbitMq::getHost);
+    registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
+    registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
+    registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
     registry.add("spring.datasource.url", postgres::getJdbcUrl);
     registry.add("spring.datasource.username", postgres::getUsername);
     registry.add("spring.datasource.password", postgres::getPassword);
@@ -80,7 +95,7 @@ class TestCreateOrReuseDraftJobIntegration {
   void testCreateOrReuseDraftJobThrowsExceptionForInvalidJobType() {
     var session = newSessionId();
     var createJobRequest = new CreateJobRequestDTO("wrong_job_type");
-    assertThatExceptionOfType(UnknownJobTypeException.class)
+    assertThatExceptionOfType(UnknownOrUnsupportedJobTypeException.class)
         .isThrownBy(() -> createOrReuseDraftJob(GUEST, session, createJobRequest))
         .withMessage("Unknown or unsupported job type: wrong_job_type.");
   }

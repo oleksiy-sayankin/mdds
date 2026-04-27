@@ -5,11 +5,8 @@
 package com.mdds.persistence.entity;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.domain.JobType;
-import com.mdds.persistence.converter.JobTypeConverter;
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.Column;
-import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -46,8 +43,7 @@ public class JobEntity {
 
   @Column(name = "job_type", nullable = false)
   @Nonnull
-  @Convert(converter = JobTypeConverter.class)
-  private JobType jobType;
+  private String jobType;
 
   @Column(name = "progress", nullable = false)
   private int progress;

@@ -1,0 +1,140 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+mdds:
+  job-profiles:
+    jobs:
+      # Production-like job profile
+      - type: solving_slae
+        enabled: true
+        inputSlots:
+          - name: matrix
+            format: csv
+            fileName: matrix.csv
+          - name: rhs
+            format: csv
+            fileName: rhs.csv
+        params:
+          - name: solvingMethod
+            type: enum
+            required: true
+            enumValues:
+              - numpy_exact_solver
+              - numpy_lstsq_solver
+              - numpy_pinv_solver
+              - petsc_solver
+              - scipy_gmres_solver
+          - name: tolerance
+            type: number
+            required: false
+        outputSlots:
+          - name: solution
+            format: csv
+            fileName: solution.csv
+      # First test job profile
+      - type: test_job_type
+        enabled: true
+        inputSlots:
+          - name: my_test_input_slot
+            format: csv
+            fileName: input.csv
+          - name: my_other_test_input_slot
+            format: csv
+            fileName: other_input.csv
+        params:
+          - name: someEnumTestParam
+            type: enum
+            required: true
+            enumValues:
+              - first_value
+              - second_value
+              - third_value
+          - name: someNumericParam
+            type: number
+            required: false
+        outputSlots:
+          - name: my_test_output_slot
+            format: csv
+            fileName: output.csv
+      # Second test job profile
+      - type: other_test_job_type
+        enabled: true
+        inputSlots:
+          - name: some_test_input_slot
+            format: csv
+            fileName: input.csv
+        params:
+          - name: someStringTestParam
+            type: string
+            required: true
+          - name: someMapTestParam
+            type: map
+            required: false
+          - name: someNumberTestParam
+            type: number
+            required: true
+          - name: someBooleanTestParam
+            type: boolean
+            required: false
+          - name: someEnumTestParam
+            type: enum
+            required: false
+            enumValues:
+              - first_value
+              - second_value
+              - third_value
+        outputSlots:
+          - name: my_other_test_output_slot
+            format: csv
+            fileName: other_output.csv
+      # No input slot job profile
+      - type: no_input_slot_job_type
+        enabled: true
+        inputSlots: []
+        params:
+          - name: someStringTestParam
+            type: string
+            required: true
+        outputSlots:
+          - name: my_other_test_output_slot
+            format: csv
+            fileName: other_output.csv
+      # Production-like job profile
+      - type: solving_slae_parallel
+        enabled: true
+        inputSlots:
+          - name: matrix
+            format: csv
+            fileName: matrix.csv
+          - name: rhs
+            format: csv
+            fileName: rhs.csv
+        params:
+          - name: solvingMethod
+            type: enum
+            required: true
+            enumValues:
+              - numpy_exact_solver
+              - numpy_lstsq_solver
+              - numpy_pinv_solver
+              - petsc_solver
+              - scipy_gmres_solver
+          - name: tolerance
+            type: number
+            required: false
+        outputSlots:
+          - name: solution
+            format: csv
+            fileName: solution.csv
+      # Disabled job profile
+      - type: disabled_job_type
+        enabled: false
+        inputSlots: []
+        params:
+          - name: someStringTestParam
+            type: string
+            required: true
+        outputSlots:
+          - name: my_other_test_output_slot
+            format: csv
+            fileName: other_output.csv

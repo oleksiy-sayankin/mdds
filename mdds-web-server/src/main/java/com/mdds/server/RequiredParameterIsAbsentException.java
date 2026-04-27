@@ -4,9 +4,9 @@
  */
 package com.mdds.server;
 
-/** Given slot is not enabled for job type. */
-public class UnknownOrUnsupportedInputSlotException extends RuntimeException {
-  public UnknownOrUnsupportedInputSlotException(String message) {
+/** Required parameter is absent. */
+public class RequiredParameterIsAbsentException extends RuntimeException {
+  public RequiredParameterIsAbsentException(String message) {
     super(message);
   }
 }

@@ -45,13 +45,17 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
 @Slf4j
 @SpringBootTest(
     classes = ServerApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "mdds.job-profile.mode=yaml")
 @Testcontainers
 @Import(JobTestFixture.class)
 class TestJobInputUploadRestApiIntegration {
@@ -82,8 +86,20 @@ class TestJobInputUploadRestApiIntegration {
           .withUserName(MINIO_USER)
           .withPassword(MINIO_PASSWORD);
 
+  @Container
+  private static final RabbitMQContainer rabbitMq =
+      new RabbitMQContainer("rabbitmq:3.12-management")
+          .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
+          .withExposedPorts(5672, 15672)
+          .waitingFor(Wait.forListeningPort())
+          .withStartupTimeout(Duration.ofSeconds(30));
+
   @DynamicPropertySource
   static void initProps(DynamicPropertyRegistry registry) {
+    registry.add("mdds.rabbitmq.host", rabbitMq::getHost);
+    registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
+    registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
+    registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
     registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);

@@ -2,7 +2,9 @@
 # Refer to the LICENSE file in the root directory for full license details.
 spring:
   config:
-    import: "classpath:mdds-common.yml"
+    import:
+      - "classpath:mdds-common.yml"
+      - "classpath:job-profiles.yml"
   application:
     name: web-server
 
@@ -39,3 +41,5 @@ mdds:
     secret-key: ${MDDS_OBJECT_STORAGE_SECRET_KEY}
     path-style-access-enabled: ${MDDS_OBJECT_STORAGE_PATH_STYLE_ACCESS_ENABLED:true}
     presign-put-ttl: ${MDDS_OBJECT_STORAGE_PRESIGN_PUT_TTL:PT15M}
+  job-profile:
+    mode: yaml # Change to 'inmemory' to switch implementations

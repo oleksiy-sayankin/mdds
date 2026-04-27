@@ -65,7 +65,8 @@ import software.amazon.awssdk.utils.AttributeMap;
 @Slf4j
 @SpringBootTest(
     classes = ServerApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = {"spring.config.import=classpath:test-job-profiles.yml"})
 class TestServerApplication {
   @Autowired private JobsRepository jobsRepository;
   @LocalServerPort private int port;

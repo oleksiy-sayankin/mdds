@@ -9,7 +9,6 @@ import static com.mdds.server.JsonTypeFormatter.describeJsonType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.mdds.domain.JobProfile;
-import com.mdds.domain.JobProfiles;
 import com.mdds.domain.JobStatus;
 import com.mdds.domain.ParamType;
 import com.mdds.persistence.entity.JobEntity;
@@ -42,6 +41,7 @@ public class JobParamsService {
 
   private final JobParamsRepository jobParamsRepository;
   private final JobsRepository jobsRepository;
+  private final JobProfileRegistry jobProfileRegistry;
 
   @Transactional
   public void mergeParams(
@@ -76,7 +76,7 @@ public class JobParamsService {
       return;
     }
 
-    var profile = JobProfiles.forType(existingJobType);
+    var profile = jobProfileRegistry.forType(existingJobType);
     for (Map.Entry<String, JsonNode> paramEntry : params.entrySet()) {
       var paramName = paramEntry.getKey();
       if (isNullOrBlank(paramName)) {
@@ -86,7 +86,7 @@ public class JobParamsService {
         throw new UnknownOrUnsupportedJobParameterException(
             String.format(
                 "Unknown or unsupported parameter '%s' for the given job type: '%s'.",
-                paramName, existingJobType.value()));
+                paramName, existingJobType));
       }
       var paramValue = paramEntry.getValue();
       if (isNullReference(paramValue)) {
@@ -102,13 +102,13 @@ public class JobParamsService {
                 formatParamValue(paramValue),
                 paramName,
                 describeJsonType(paramType),
-                existingJobType.value()));
+                existingJobType));
       }
       if (!validParamValue(profile, paramName, paramValue)) {
         throw new InvalidJobParameterValueException(
             String.format(
                 "Invalid value '%s' of parameter '%s' for the given job type '%s'.",
-                formatParamValue(paramValue), paramName, existingJobType.value()));
+                formatParamValue(paramValue), paramName, existingJobType));
       }
     }
 
@@ -193,6 +193,7 @@ public class JobParamsService {
       case BOOLEAN -> paramValueType == JsonNodeType.BOOLEAN;
       case NUMBER -> paramValueType == JsonNodeType.NUMBER;
       case STRING -> paramValueType == JsonNodeType.STRING;
+      case MAP -> paramValueType == JsonNodeType.OBJECT;
       default -> false;
     };
   }

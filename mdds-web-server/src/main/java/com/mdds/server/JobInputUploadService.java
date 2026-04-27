@@ -4,7 +4,6 @@
  */
 package com.mdds.server;
 
-import com.mdds.domain.JobProfiles;
 import com.mdds.domain.JobStatus;
 import com.mdds.persistence.entity.JobEntity;
 import com.mdds.server.jpa.JobsRepository;
@@ -20,7 +19,8 @@ import org.springframework.stereotype.Service;
 public class JobInputUploadService {
 
   private final JobsRepository jobsRepository;
-  private final ObjectStoragePresignService objectStoragePresignService;
+  private final ObjectStorageService objectStorageService;
+  private final JobProfileRegistry jobProfileRegistry;
 
   public IssueUploadUrlResult issueUploadUrl(
       long requestedUserId, String requestedJobId, String inputSlot) {
@@ -34,13 +34,13 @@ public class JobInputUploadService {
     var existingUserId = existingJob.getUserId();
     var existingJobId = existingJob.getId();
     var existingJobType = existingJob.getJobType();
-    var profile = JobProfiles.forType(existingJobType);
+    var profile = jobProfileRegistry.forType(existingJobType);
 
-    if (!profile.supportsInputUploadUrl()) {
+    if (profile.inputArtifacts().isEmpty()) {
       throw new InputUploadUrlNotSupportedForJobTypeException(
           String.format(
               "Input upload URL requests are not supported for the given jobType: '%s'.",
-              existingJobType.value()));
+              existingJobType));
     }
 
     var normalizedInputSlot = normalize(inputSlot);
@@ -59,12 +59,11 @@ public class JobInputUploadService {
       throw new UnknownOrUnsupportedInputSlotException(
           String.format(
               "Unknown or unsupported input slot '%s' for the given jobType '%s'.",
-              normalizedInputSlot, existingJobType.value()));
+              normalizedInputSlot, existingJobType));
     }
     var fileName = artifact.fileName();
 
-    var presigned =
-        objectStoragePresignService.issueUploadUrl(existingUserId, existingJobId, fileName);
+    var presigned = objectStorageService.issueUploadUrl(existingUserId, existingJobId, fileName);
     return new IssueUploadUrlResult(presigned.uploadUrl(), presigned.expiresAt());
   }
 

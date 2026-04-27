@@ -12,7 +12,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mdds.domain.JobStatus;
-import com.mdds.domain.JobType;
 import com.mdds.server.support.JobTestFixture;
 import java.util.HashMap;
 import java.util.Map;
@@ -66,7 +65,7 @@ class TestJobParamsServiceIntegration {
   @MethodSource("userLoginValues")
   void testStoreSingleJobParameter(String login) throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -82,7 +81,7 @@ class TestJobParamsServiceIntegration {
   @Test
   void testUpdateExistingJobParams() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -90,7 +89,7 @@ class TestJobParamsServiceIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     jobParamsService.mergeParams(
@@ -118,7 +117,7 @@ class TestJobParamsServiceIntegration {
   @Test
   void testKeepAsIsOmittedJobParam() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -126,7 +125,7 @@ class TestJobParamsServiceIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     jobParamsService.mergeParams(
@@ -152,7 +151,7 @@ class TestJobParamsServiceIntegration {
   @Test
   void testDeleteOneKeepOthers() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -160,7 +159,7 @@ class TestJobParamsServiceIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     jobParamsService.mergeParams(
@@ -185,7 +184,7 @@ class TestJobParamsServiceIntegration {
   @Test
   void testNoOperation() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -193,7 +192,7 @@ class TestJobParamsServiceIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     jobParamsService.mergeParams(
@@ -217,7 +216,7 @@ class TestJobParamsServiceIntegration {
   @Test
   void testClearExistingJobParams() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -225,7 +224,7 @@ class TestJobParamsServiceIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     jobParamsService.mergeParams(
@@ -264,7 +263,7 @@ class TestJobParamsServiceIntegration {
   @MethodSource("mapParametersValues")
   void testJobDoesNotExistForOtherUser(Map<String, JsonNode> params) {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var adminId = userLookupService.findUserId(ADMIN);
     var result = createOrReuseDraftJob(adminId, session, jobType);
     var jobId = result.jobId();
@@ -283,7 +282,7 @@ class TestJobParamsServiceIntegration {
   @MethodSource("mapParametersValues")
   void testJobIsNotDraft(Map<String, JsonNode> params) {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -298,7 +297,7 @@ class TestJobParamsServiceIntegration {
   @Test
   void testJobParameterIsNullOrBlank() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -319,7 +318,7 @@ class TestJobParamsServiceIntegration {
   @MethodSource("parametersValues")
   void testUnknownOrUnsupportedJobParameter(String paramName) throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -332,14 +331,14 @@ class TestJobParamsServiceIntegration {
             "Unknown or unsupported parameter '"
                 + paramName
                 + "' for the given job type: '"
-                + jobType.value()
+                + jobType
                 + "'.");
   }
 
   @Test
   void testInvalidStringJobParameterType() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -359,19 +358,19 @@ class TestJobParamsServiceIntegration {
                 + describeJsonType(paramType)
                 + "' for the given job type"
                 + " '"
-                + jobType.value()
+                + jobType
                 + "'.");
   }
 
   @Test
   void testInvalidNumericJobParameterType() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
 
-    var paramName = "precision";
+    var paramName = "tolerance";
     var paramValue = MAPPER.readTree("\"abc\"");
     var paramType = paramValue.getNodeType();
     var params = Map.of(paramName, paramValue);
@@ -386,14 +385,14 @@ class TestJobParamsServiceIntegration {
                 + describeJsonType(paramType)
                 + "' for the given job type"
                 + " '"
-                + jobType.value()
+                + jobType
                 + "'.");
   }
 
   @Test
   void testInvalidJobParameterValue() throws JsonProcessingException {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -409,14 +408,14 @@ class TestJobParamsServiceIntegration {
                 + "' of parameter '"
                 + paramName
                 + "' for the given job type '"
-                + jobType.value()
+                + jobType
                 + "'.");
   }
 
   @Test
   void testNullJobParameterValue() {
     var session = newSessionId();
-    var jobType = JobType.SOLVING_SLAE;
+    var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var result = createOrReuseDraftJob(userId, session, jobType);
     var jobId = result.jobId();
@@ -433,7 +432,7 @@ class TestJobParamsServiceIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private JobCreationResult createOrReuseDraftJob(long user, String session, JobType jobType) {
+  private JobCreationResult createOrReuseDraftJob(long user, String session, String jobType) {
     return jobCreationService.createOrReuseDraftJob(user, session, jobType);
   }
 }

@@ -17,6 +17,7 @@ import com.mdds.dto.ErrorResponseDTO;
 import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.server.support.JobTestFixture;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -33,8 +34,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
 @Slf4j
 @SpringBootTest(
@@ -58,8 +62,20 @@ class TestJobParamsRestApiIntegration {
           .withUsername("mdds")
           .withPassword("mdds123");
 
+  @Container
+  private static final RabbitMQContainer rabbitMq =
+      new RabbitMQContainer("rabbitmq:3.12-management")
+          .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
+          .withExposedPorts(5672, 15672)
+          .waitingFor(Wait.forListeningPort())
+          .withStartupTimeout(Duration.ofSeconds(30));
+
   @DynamicPropertySource
   static void initProps(DynamicPropertyRegistry registry) {
+    registry.add("mdds.rabbitmq.host", rabbitMq::getHost);
+    registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
+    registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
+    registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
     registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);
@@ -98,7 +114,7 @@ class TestJobParamsRestApiIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     var paramsAsJson =
@@ -138,7 +154,7 @@ class TestJobParamsRestApiIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     var paramsAsJson =
@@ -175,7 +191,7 @@ class TestJobParamsRestApiIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     var paramsAsJson =
@@ -211,7 +227,7 @@ class TestJobParamsRestApiIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     var paramsAsJson =
@@ -246,7 +262,7 @@ class TestJobParamsRestApiIntegration {
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
-    var precision = "precision";
+    var precision = "tolerance";
     var precisionValue = MAPPER.readTree("0.001");
 
     var paramsAsJson =
@@ -426,9 +442,9 @@ class TestJobParamsRestApiIntegration {
             "Parameter value '1.29' for parameter 'solvingMethod' has an invalid type 'number' for"
                 + " the given job type 'solving_slae'."),
         Arguments.of(
-            "precision",
+            "tolerance",
             MAPPER.readTree("\"abc\""),
-            "Parameter value 'abc' for parameter 'precision' has an invalid type 'string' for the"
+            "Parameter value 'abc' for parameter 'tolerance' has an invalid type 'string' for the"
                 + " given job type 'solving_slae'."),
         Arguments.of(
             "solvingMethod",

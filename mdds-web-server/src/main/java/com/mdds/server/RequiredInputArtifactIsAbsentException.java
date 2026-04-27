@@ -4,9 +4,9 @@
  */
 package com.mdds.server;
 
-/** Given slot is not enabled for job type. */
-public class UnknownOrUnsupportedInputSlotException extends RuntimeException {
-  public UnknownOrUnsupportedInputSlotException(String message) {
+/** Required input artifact is absent in storage. */
+public class RequiredInputArtifactIsAbsentException extends RuntimeException {
+  public RequiredInputArtifactIsAbsentException(String message) {
     super(message);
   }
 }

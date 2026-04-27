@@ -1,0 +1,350 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+mdds:
+  job-profiles:
+    jobs:
+      # Sequential / non-distributed SLAE solve.
+      #
+      # This job is intended for solving Ax = b on a single process without distributed-memory
+      # parallelism. It serves several practical purposes:
+      # - as the simplest baseline implementation for ordinary local runs;
+      # - as a reference path for correctness checks against the parallel job;
+      # - as a convenient option for debugging, CI, development, and environments without MPI;
+      # - as a natural choice for small and medium dense systems where distributed execution
+      #   would add complexity without clear benefit.
+      #
+      # The methods in this job deliberately cover several local solving modes:
+      # - exact dense solving for well-determined nonsingular systems;
+      # - least-squares solving for underdetermined or overdetermined systems;
+      # - pseudoinverse-based solving for singular or ill-conditioned cases;
+      # - single-process PETSc solving for backend consistency with the parallel job;
+      # - single-process iterative GMRES for sparse or nonsymmetric systems.
+      #
+      # In short, this job is the local and reference-oriented SLAE path:
+      # simple, reproducible, and convenient when scalability is not the main goal.
+      - type: solving_slae
+        enabled: true
+        inputSlots:
+
+          # Input coefficient matrix A for the linear system Ax = b.
+          # Expected as CSV file.
+          - name: matrix
+            format: csv
+            fileName: matrix.csv
+
+          # Right-hand side vector or matrix b.
+          # Expected as CSV file.
+          - name: rhs
+            format: csv
+            fileName: rhs.csv
+        params:
+          # Solving method for the sequential / non-distributed SLAE job.
+          - name: solvingMethod
+            type: enum
+            required: true
+            enumValues:
+
+              # Direct dense solve for a square nonsingular system.
+              # Best for ordinary dense matrices when an exact solve is needed.
+              - numpy_exact_solver
+
+              # Least-squares solver.
+              # Useful for overdetermined systems or rank-deficient problems.
+              - numpy_lstsq_solver
+
+              # Solution through Moore-Penrose pseudoinverse.
+              # Useful for singular or ill-conditioned systems, but usually slower.
+              - numpy_pinv_solver
+
+              # Sequential PETSc-based solve on one process.
+              # Useful when the same backend is desired in both sequential and parallel jobs.
+              - petsc_solver
+
+              # Iterative GMRES solver from SciPy.
+              # Intended mainly for sparse or large nonsymmetric systems.
+              - scipy_gmres_solver
+
+          # Solver tolerance parameter.
+          #
+          # Interpretation depends on the selected method:
+          # - for iterative solvers, usually used as convergence tolerance;
+          # - for direct solvers, may be ignored or used only in validation logic.
+          - name: tolerance
+            type: number
+            required: false
+        outputSlots:
+
+          # Solution vector or solution matrix x written as CSV.
+          - name: solution
+            format: csv
+            fileName: solution.csv
+
+      # Parallel / distributed SLAE solve based on PETSc.
+      #
+      # This job is intended for solving large linear systems where sequential execution
+      # is too slow or too memory-intensive. It represents the scalable path of the system
+      # and is designed primarily for sparse matrices, PDE discretizations, and other
+      # computational workloads that benefit from MPI-based parallel execution.
+      #
+      # The job supports two configuration styles:
+      # - high-level presets for common solver configurations;
+      # - low-level explicit control over KSP type, PC type, factorization backend,
+      #   tolerances, MPI layout, and advanced AMG / HYPRE settings.
+      #
+      # This separation makes the job suitable for both:
+      # - ordinary users who want a safe preconfigured parallel solver;
+      # - advanced users who need fine-grained PETSc tuning for performance, robustness,
+      #   or special matrix structure.
+      #
+      # In short, this job is the scalable HPC-oriented SLAE path:
+      # intended for distributed-memory solving, advanced preconditioning, and expert tuning.
+      - type: solving_slae_parallel
+        enabled: false
+        inputSlots:
+
+          # Input coefficient matrix A for the linear system Ax = b.
+          # Expected as CSV file.
+          - name: matrix
+            format: csv
+            fileName: matrix.csv
+
+          # Right-hand side vector or matrix b.
+          # Expected as CSV file.
+          - name: rhs
+            format: csv
+            fileName: rhs.csv
+
+        params:
+          # High-level preset for common cases.
+          # Recommended for most users because it encodes a valid KSP + PC combination.
+          # Use either solverPreset OR explicit kspType/pcType/factorSolverPackage below.
+          - name: solverPreset
+            type: enum
+            required: false
+            enumValues:
+              - petsc_cg
+              - petsc_gmres
+              - petsc_bcgs
+              - petsc_minres
+              - petsc_preonly_lu_mumps
+              - petsc_preonly_cholesky_mumps
+              - petsc_gmres_hypre_boomeramg
+              - petsc_cg_gamg
+
+          # Low-level explicit PETSc solver selection.
+          # Use this block when preset is too restrictive.
+          - name: kspType
+            type: enum
+            required: false
+            enumValues:
+              - cg
+              - gmres
+              - bcgs
+              - minres
+              - preonly
+
+          # PETSc preconditioner / direct-factorization mode.
+          # For direct solve use: kspType=preonly and pcType=lu or cholesky.
+          - name: pcType
+            type: enum
+            required: false
+            enumValues:
+              - none
+              - jacobi
+              - bjacobi
+              - asm
+              - gasm
+              - gamg
+              - hypre
+              - lu
+              - cholesky
+
+          # External sparse direct solver package.
+          # Relevant only when pcType=lu or pcType=cholesky.
+          - name: factorSolverPackage
+            type: enum
+            required: false
+            enumValues:
+              - mumps
+
+          # Declares matrix properties for validation and solver selection.
+          # Example:
+          #   general  -> GMRES / BCGS
+          #   symmetric -> MINRES
+          #   spd -> CG or Cholesky
+          #   singular_with_known_nullspace -> requires null-space handling
+          - name: matrixProperty
+            type: enum
+            required: true
+            enumValues:
+              - general
+              - symmetric
+              - spd
+              - singular_with_known_nullspace
+
+          # Iterative stopping criteria.
+          # These replace the vague "precision" parameter.
+          - name: relativeTolerance
+            type: number
+            required: false
+
+          # Absolute convergence tolerance.
+          # The solver may stop when the residual norm becomes smaller than this value,
+          # regardless of the scale of the right-hand side.
+          # Useful when the right-hand side is very small or close to zero.
+          - name: absoluteTolerance
+            type: number
+            required: false
+
+          # Divergence tolerance.
+          # Protects against unstable or diverging iterations.
+          # The solver may stop with a divergence status when the residual norm
+          # grows too large relative to its initial value.
+          - name: divergenceTolerance
+            type: number
+            required: false
+
+          # Maximum number of solver iterations.
+          # Prevents infinite or excessively long iterative runs.
+          # Mainly relevant for iterative methods such as CG, GMRES, BCGS, and MINRES.
+          # Usually ignored by direct solvers such as LU or Cholesky.
+          - name: maxIterations
+            type: number
+            required: false
+
+          # Parallel execution parameters.
+          # PETSc parallelism is primarily MPI-based.
+          - name: num_mpi_ranks
+            type: number
+            required: true
+
+          # Threads per MPI rank.
+          # Useful for BLAS/OpenMP inside one process or hybrid MPI+threads runs.
+          - name: num_threads_per_rank
+            type: number
+            required: false
+
+          # Whether the solver should treat the provided initial guess as nonzero.
+          - name: initialGuessNonzero
+            type: boolean
+            required: false
+
+          # GMRES-specific tuning.
+          # Used only when kspType=gmres or a GMRES-based preset is selected.
+          - name: gmresRestart
+            type: number
+            required: false
+
+          # HYPRE-specific tuning.
+          # Used only when pcType=hypre or a hypre-based preset is selected.
+          - name: hypreType
+            type: enum
+            required: false
+            enumValues:
+              - boomeramg
+
+          # BoomerAMG nodal coarsening mode.
+          # PETSc/HYPRE expects an integer variant in the range 1..6.
+          # Mainly relevant for systems of PDEs and vector-valued problems.
+          # Often used together with boomeramgVecInterpVariant so that near-null-space
+          # information can be taken into account by BoomerAMG.
+          - name: boomeramgNodalCoarsen
+            type: number
+            required: false
+
+          # BoomerAMG vector interpolation variant.
+          # PETSc/HYPRE expects an integer variant in the range 1..3.
+          # Used together with boomeramgNodalCoarsen for vector / nodal problems,
+          # especially when near-null-space information should be respected.
+          - name: boomeramgVecInterpVariant
+            type: number
+            required: false
+
+          # Usually small values are used when BoomerAMG acts as a preconditioner.
+          - name: boomeramgMaxIterPerApply
+            type: number
+            required: false
+
+          # BoomerAMG tolerance used on each individual preconditioner application.
+          # This is not the global Krylov solver tolerance.
+          # When BoomerAMG is used as a preconditioner, this value controls
+          # how accurately one BoomerAMG call is performed.
+          # In many preconditioning setups this is left at 0.0 so that a fixed number
+          # of V-cycles is used per apply.
+          - name: boomeramgTolerancePerApply
+            type: number
+            required: false
+
+          # GAMG-specific tuning.
+          # Used only when pcType=gamg or a GAMG-based preset is selected.
+          - name: gamgType
+            type: enum
+            required: false
+            enumValues:
+              - agg
+              - geo
+              - classical
+
+          # Target maximum number of equations on the coarsest GAMG level.
+          # Coarsening stops once the coarse grid becomes small enough.
+          # Larger values usually keep the coarsest problem bigger; smaller values
+          # push GAMG toward a smaller coarsest grid.
+          - name: gamgCoarseEqLimit
+            type: number
+            required: false
+
+          # Target number of equations per MPI process on coarse GAMG levels.
+          # GAMG may reduce the number of MPI ranks used directly on coarse grids
+          # so that each active process has roughly this many equations.
+          # Useful for avoiding excessive parallel overhead on very small coarse levels.
+          - name: gamgProcessEqLimit
+            type: number
+            required: false
+
+          # Important for block-structured systems, especially vector PDE discretizations.
+          - name: blockSize
+            type: number
+            required: false
+
+          # For intentionally singular systems, for example pure Neumann-type problems.
+          - name: nullSpaceKind
+            type: enum
+            required: false
+            enumValues:
+              - none
+              - constant
+
+          # Diagnostics.
+          # Helpful when a Krylov method converges slowly or does not converge.
+          - name: enableKspMonitorTrueResidual
+            type: boolean
+            required: false
+
+          # Enables reporting of the final PETSc KSP convergence status.
+          # Useful for diagnostics because it shows why the solver stopped:
+          # for example, successful convergence, reaching the iteration limit,
+          # or detected divergence.
+          - name: enableKspConvergedReason
+            type: boolean
+            required: false
+
+          # Escape hatch: raw PETSc options passed into the options database.
+          # Example idea:
+          #   ksp_rtol: 1.0e-8
+          #   pc_hypre_boomeramg_max_iter: 1
+          #   pc_factor_mat_solver_type: mumps
+          - name: petscOptions
+            type: map
+            required: false
+
+        outputSlots:
+
+          # Solution vector or solution matrix x written as CSV.
+          - name: solution
+            format: csv
+            fileName: solution.csv
+
+          # Recommended extra artifact with metadata about the solver run.
+          - name: solverReport
+            format: json
+            fileName: solver-report.json

@@ -5,7 +5,7 @@
 package com.mdds.server;
 
 /**
- * We use this exception type to show that some job types are not supported yet, so can not upload
+ * We use this exception type to show that some job types are not enabled yet, so can not upload
  * data for it in input slots.
  */
 public class InputUploadUrlNotSupportedForJobTypeException extends RuntimeException {

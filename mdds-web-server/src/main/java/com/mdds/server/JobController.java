@@ -5,9 +5,10 @@
 package com.mdds.server;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.mdds.domain.JobType;
+import com.mdds.domain.JobStatus;
 import com.mdds.dto.CreateJobRequestDTO;
 import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.JobSubmitResponseDTO;
 import com.mdds.dto.JobUploadUrlRequestDTO;
 import com.mdds.dto.JobUploadUrlResponseDTO;
 import jakarta.validation.Valid;
@@ -39,6 +40,7 @@ public class JobController {
   private final JobCreationService jobCreationService;
   private final JobInputUploadService jobInputUploadService;
   private final JobParamsService jobParamsService;
+  private final JobSubmissionService jobSubmissionService;
 
   private static final String JOB_ID = "jobId";
   private static final String USER_ID = "userId";
@@ -54,7 +56,7 @@ public class JobController {
       @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin,
       @RequestHeader(value = "X-MDDS-Upload-Session-Id", required = true) String uploadSessionId,
       @Valid @RequestBody CreateJobRequestDTO createJobRequestDTO) {
-    var jobType = JobType.from(createJobRequestDTO.jobType());
+    var jobType = createJobRequestDTO.jobType();
     var userId = userLookupService.findUserId(userLogin);
     var result = jobCreationService.createOrReuseDraftJob(userId, uploadSessionId, jobType);
     var created = result.created();
@@ -103,6 +105,23 @@ public class JobController {
       jobParamsService.mergeParams(userId, jobId, params);
       log.info("Job parameters patch was applied.");
       return ResponseEntity.ok().build();
+    }
+  }
+
+  @PostMapping(path = "/jobs/{jobId}/submit")
+  public ResponseEntity<JobSubmitResponseDTO> submit(
+      @PathVariable("jobId") String jobId,
+      @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin) {
+
+    var userId = userLookupService.findUserId(userLogin);
+
+    try (var ignoredJobId = MDC.putCloseable(JOB_ID, jobId);
+        var ignoredUserId = MDC.putCloseable(USER_ID, Long.toString(userId));
+        var ignoredEvent = MDC.putCloseable(EVENT, "submit_job")) {
+      jobSubmissionService.submit(userId, jobId);
+      log.info("Submitted job.");
+      return ResponseEntity.accepted()
+          .body(new JobSubmitResponseDTO(jobId, JobStatus.SUBMITTED.toString()));
     }
   }
 

@@ -5,7 +5,6 @@
 package com.mdds.server;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.domain.JobType;
 import com.mdds.persistence.entity.JobEntity;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.jpa.UsersRepository;
@@ -24,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class JobCreationService {
   private final JobsRepository jobsRepository;
   private final UsersRepository usersRepository;
+  private final JobProfileRegistry jobProfileRegistry;
 
   /**
    * Looks up for pair (<i>userId</i>, <i>uploadSessionId</i>). If exists, it returns record
@@ -39,7 +39,11 @@ public class JobCreationService {
    */
   @Transactional
   public JobCreationResult createOrReuseDraftJob(
-      long userId, String uploadSessionId, JobType jobType) {
+      long userId, String uploadSessionId, String jobType) {
+    if (!isValid(jobType) || !enabled(jobType)) {
+      throw new UnknownOrUnsupportedJobTypeException(
+          String.format("Unknown or unsupported job type: %s.", jobType));
+    }
     if (uploadSessionId == null || uploadSessionId.isBlank()) {
       throw new UploadSessionIdIsNullOrBlankException("Upload session id is null or blank.");
     }
@@ -70,9 +74,9 @@ public class JobCreationService {
                 + " '"
                 + uploadSessionId
                 + "' with job type '"
-                + existingJobType.value()
+                + existingJobType
                 + "', which does not match requested job type '"
-                + jobType.value()
+                + jobType
                 + "'.");
       }
       return new JobCreationResult(existingJob.getId(), false);
@@ -89,5 +93,13 @@ public class JobCreationService {
       jobsRepository.save(job);
       return new JobCreationResult(jobId, true);
     }
+  }
+
+  private boolean isValid(String jobType) {
+    return jobProfileRegistry.jobTypes().contains(jobType);
+  }
+
+  private boolean enabled(String jobType) {
+    return jobProfileRegistry.forType(jobType).enabled();
   }
 }

@@ -9,15 +9,13 @@ import java.util.Map;
 /**
  * Storage for job profile.
  *
- * @param jobType a value, showing what job needs to be done.
+ * @param enabled whether job profile is enabled.
  * @param inputArtifacts map with all input artifacts for the job.
  * @param outputArtifacts map with all output artifacts for the job.
  * @param paramSpecs map for job parameters.
- * @param supportsInputUploadUrl indicates if job profile is supported.
  */
 public record JobProfile(
-    JobType jobType,
+    boolean enabled,
     Map<String, ArtifactSpec> inputArtifacts,
     Map<String, ArtifactSpec> outputArtifacts,
-    Map<String, JobParamSpec> paramSpecs,
-    boolean supportsInputUploadUrl) {}
+    Map<String, JobParamSpec> paramSpecs) {}

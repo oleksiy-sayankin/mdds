@@ -4,7 +4,6 @@
  */
 package com.mdds.server;
 
-import com.mdds.domain.UnknownJobTypeException;
 import com.mdds.dto.ErrorResponseDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,8 +36,9 @@ public class GlobalExceptionHandler {
         .body(new ErrorResponseDTO(ex.getMessage()));
   }
 
-  @ExceptionHandler(UnknownJobTypeException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUnknownJobType(UnknownJobTypeException ex) {
+  @ExceptionHandler(UnknownOrUnsupportedJobTypeException.class)
+  public ResponseEntity<ErrorResponseDTO> handleUnknownJobType(
+      UnknownOrUnsupportedJobTypeException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDTO(ex.getMessage()));
   }
@@ -160,6 +160,20 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(MergePatchDocumentMustBeJsonObjectException.class)
   public ResponseEntity<ErrorResponseDTO> handleMergePatchDocumentMustBeJsonObject(
       MergePatchDocumentMustBeJsonObjectException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(RequiredParameterIsAbsentException.class)
+  public ResponseEntity<ErrorResponseDTO> handleRequiredParameterIsAbsent(
+      RequiredParameterIsAbsentException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(RequiredInputArtifactIsAbsentException.class)
+  public ResponseEntity<ErrorResponseDTO> handleRequiredInputArtifactIsAbsent(
+      RequiredInputArtifactIsAbsentException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDTO(ex.getMessage()));
   }

@@ -366,7 +366,7 @@ For `jobType` = `solving_slae`, supported values for `<input-slot>` in v1 are:
 
 Note, the server performs trim/lowercase normalization for `<inputSlot>` value. 
 
-For jobs with `jobType` = `solving_slae_parallel`, input upload URL requests are not supported in this version.
+The `jobType` = `solving_slae_parallel`, is not supported in this version.
 
 **Required headers**
 
@@ -462,7 +462,7 @@ PATCH /jobs/{jobId}/params
 ```json
 {
   "solvingMethod": "numpy_exact_solver",
-  "precision": 1e-9
+  "tolerance": 1e-9
 }
 ```
 
@@ -679,6 +679,7 @@ The Web Server generates the manifest when the job is submitted. The Worker read
 ```json
 {
   "manifestVersion": 1,
+  "userId": 12345,
   "jobId": "<job-id>",
   "jobType": "solving_slae",
   "inputs": {
@@ -706,6 +707,7 @@ The Web Server generates the manifest when the job is submitted. The Worker read
 ### Field meaning
 
 - `manifestVersion` — version of the manifest schema;
+- `userId` — identifier of the user;
 - `jobId` — identifier of the job;
 - `jobType` — logical type of work to execute;
 - `inputs` — declared input artifacts;
