@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.mdds.domain.JobStatus;
 import com.mdds.dto.CreateJobRequestDTO;
 import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.JobStatusResponseDTO;
 import com.mdds.dto.JobSubmitResponseDTO;
 import com.mdds.dto.JobUploadUrlRequestDTO;
 import com.mdds.dto.JobUploadUrlResponseDTO;
@@ -20,6 +21,7 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,6 +43,7 @@ public class JobController {
   private final JobInputUploadService jobInputUploadService;
   private final JobParamsService jobParamsService;
   private final JobSubmissionService jobSubmissionService;
+  private final JobStatusService jobStatusService;
 
   private static final String JOB_ID = "jobId";
   private static final String USER_ID = "userId";
@@ -122,6 +125,31 @@ public class JobController {
       log.info("Submitted job.");
       return ResponseEntity.accepted()
           .body(new JobSubmitResponseDTO(jobId, JobStatus.SUBMITTED.toString()));
+    }
+  }
+
+  @GetMapping(path = "/jobs/{jobId}/status")
+  public ResponseEntity<JobStatusResponseDTO> status(
+      @PathVariable("jobId") String jobId,
+      @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin) {
+    var userId = userLookupService.findUserId(userLogin);
+    try (var ignoredJobId = MDC.putCloseable(JOB_ID, jobId);
+        var ignoredUserId = MDC.putCloseable(USER_ID, Long.toString(userId));
+        var ignoredEvent = MDC.putCloseable(EVENT, "get_job_status")) {
+      var result = jobStatusService.status(userId, jobId);
+      log.info("Get job status.");
+      return ResponseEntity.ok()
+          .body(
+              new JobStatusResponseDTO(
+                  result.jobId(),
+                  result.jobType(),
+                  result.status(),
+                  result.progress(),
+                  result.message(),
+                  result.createdAt(),
+                  result.submittedAt(),
+                  result.startedAt(),
+                  result.finishedAt()));
     }
   }
 

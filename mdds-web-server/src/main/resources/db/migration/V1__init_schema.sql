@@ -20,6 +20,7 @@ create table if not exists jobs (
     status text not null,
     job_type text not null,
     progress int not null default 0,
+    message text,
     upload_session_id text not null,
     created_at timestamptz not null default now(),
     submitted_at timestamptz null,

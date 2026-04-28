@@ -48,6 +48,9 @@ public class JobEntity {
   @Column(name = "progress", nullable = false)
   private int progress;
 
+  @Column(name = "message")
+  private String message;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 

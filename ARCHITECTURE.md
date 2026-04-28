@@ -219,7 +219,7 @@ sequenceDiagram
        Queue-->>Server: Status update: IN_PROGRESS
        Server->>RDBMS: Update Job status to IN_PROGRESS
 
-       Client->>Server: GET /jobs/{jobId}
+       Client->>Server: GET /jobs/{jobId}/status
        Server->>RDBMS: Read Job status
        Server-->>Client: 200 OK, {jobId, status=IN_PROGRESS}
        
@@ -228,7 +228,7 @@ sequenceDiagram
     Worker-->>Queue: Status update: DONE
     Queue-->>Server: Status update: DONE
     Server->>RDBMS: Update Job status to DONE
-    Client->>Server: GET /jobs/{jobId}
+    Client->>Server: GET /jobs/{jobId}/status
     Server->>RDBMS: Get Job status
     Server-->>Client: 200 OK, {jobId, status=DONE}
     Note over Client, Server: Job is done
@@ -568,7 +568,17 @@ If the request is accepted, the job status is updated to `SUBMITTED`.
 **Endpoint**
 
 ```http
-GET /jobs/{jobId}
+GET /jobs/{jobId}/status
+```
+
+**Request**
+
+Empty body.
+
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
 ```
 
 **Response**
@@ -583,11 +593,20 @@ GET /jobs/{jobId}
   "progress": 42,
   "message": null,
   "createdAt": "<timestamp>",
-  "submittedAt": "<timestamp>",
+  "submittedAt": "<timestamp-or-null>",
   "startedAt": "<timestamp-or-null>",
   "finishedAt": "<timestamp-or-null>"
 }
 ```
+Here:
+* `progress` is an integer in range 0..100;
+* for terminal states it is typically 100 for `DONE`, and implementation-defined for failed/cancelled jobs;
+* for `DRAFT` it is usually 0;
+* `submittedAt` is `null` while job is still in `DRAFT`;
+* `startedAt` is `null` until execution actually starts;
+* `finishedAt` is `null` until a terminal state is reached.
+
+Note: `<timestamp>` uses RFC 3339 format, for example `2026-03-20T14:30:00Z` or `2026-03-20T14:30:00+02:00`.
 
 **Meaning**
 
@@ -595,10 +614,13 @@ Returns the latest persisted job state from the Metadata Store for UI and admini
 The endpoint does not synchronously query Workers during request processing. Note that if a field 
 has a `null` or empty value, the response still contains that field with the value `null` or `""`.
 `message` may contain validation failure details or execution error details for statuses like `VALIDATION_FAILED` and `ERROR`.
+This endpoint is observational only and does not change job state.
 
 **Possible errors**
 
-- `404 Not Found` — the job does not exist.
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `401 Unauthorized` — unknown user login;
+- `404 Not Found` — the job does not exist (or is not accessible to the current user).
 ---
 
 ### 6. Request Job Cancellation
@@ -612,6 +634,12 @@ POST /jobs/{jobId}/cancel
 **Request**
 
 Empty body.
+
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
+```
 
 **Response**
 
@@ -631,7 +659,9 @@ state, repeated cancellation returns `202 Accepted`.
 
 **Possible errors**
 
-- `404 Not Found` — the job does not exist;
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `401 Unauthorized` — unknown user login;
+- `404 Not Found` — the job does not exist (or is not accessible to the current user);
 - `409 Conflict` — the job is already terminal and can no longer be cancelled.
 
 ---
@@ -642,6 +672,12 @@ state, repeated cancellation returns `202 Accepted`.
 
 ```http
 GET /jobs/{jobId}/outputs?outputSlot=<output-slot>
+```
+
+**Required headers**
+
+```http
+X-MDDS-User-Login: <user-login>
 ```
 
 **Response**
@@ -663,7 +699,11 @@ The returned URL is temporary, and its expiration is defined by server configura
 
 **Possible errors**
 
-- `404 Not Found` — the job does not exist;
+- `400 Bad Request` — `outputSlot` is null or blank;
+- `400 Bad Request` — unknown or unsupported output slot for the given `jobType`;
+- `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `401 Unauthorized` — unknown user login;
+- `404 Not Found` — the job does not exist (or is not accessible to the current user);
 - `409 Conflict` — the result is not available because the job is not `DONE`.
 
 ---
@@ -760,7 +800,7 @@ This means that the public lifecycle API can remain the same:
 - `POST /jobs/{jobId}/inputs`
 - `PATCH /jobs/{jobId}/params`
 - `POST /jobs/{jobId}/submit`
-- `GET /jobs/{jobId}`
+- `GET /jobs/{jobId}/status`
 - `POST /jobs/{jobId}/cancel`
 - `GET /jobs/{jobId}/outputs?outputSlot=<output-slot>`
 
