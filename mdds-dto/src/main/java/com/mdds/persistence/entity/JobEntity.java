@@ -5,11 +5,11 @@
 package com.mdds.persistence.entity;
 
 import com.mdds.domain.JobStatus;
+import com.mdds.persistence.converter.JobStatusConverter;
 import jakarta.annotation.Nonnull;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -36,14 +36,17 @@ public class JobEntity {
   @Nonnull
   private String uploadSessionId;
 
-  @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
   @Nonnull
+  @Convert(converter = JobStatusConverter.class)
   private JobStatus status;
 
   @Column(name = "job_type", nullable = false)
   @Nonnull
   private String jobType;
+
+  @Column(name = "worker_id")
+  private String workerId;
 
   @Column(name = "progress", nullable = false)
   private int progress;

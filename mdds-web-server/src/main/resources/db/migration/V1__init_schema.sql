@@ -19,6 +19,7 @@ create table if not exists jobs (
     user_id bigint not null references users(id),
     status text not null,
     job_type text not null,
+    worker_id text,
     progress int not null default 0,
     message text,
     upload_session_id text not null,

@@ -30,24 +30,6 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(ex.getHttpStatus()).body(new ErrorResponseDTO(ex.getMessage()));
   }
 
-  @ExceptionHandler(UnknownUserException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUnknownUser(UnknownUserException ex) {
-    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(UnknownOrUnsupportedJobTypeException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUnknownJobType(
-      UnknownOrUnsupportedJobTypeException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(JobTypeConflictException.class)
-  public ResponseEntity<ErrorResponseDTO> handleJobTypeConflict(JobTypeConflictException ex) {
-    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
   @ExceptionHandler(MissingRequestHeaderException.class)
   public ResponseEntity<ErrorResponseDTO> handleMissingRequestHeader(
       MissingRequestHeaderException ex) {
@@ -90,90 +72,14 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDTO(ex.getMessage()));
   }
 
-  @ExceptionHandler(UserIsNullOrBlankException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUserIsNullOrBlank(UserIsNullOrBlankException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(UploadSessionIdIsNullOrBlankException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUploadSessionIdIsNullOrBlank(
-      UploadSessionIdIsNullOrBlankException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(InputSlotIsNullOrBlankException.class)
-  public ResponseEntity<ErrorResponseDTO> handleInputSlotIsNullOrBlank(
-      InputSlotIsNullOrBlankException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(InputUploadUrlNotSupportedForJobTypeException.class)
-  public ResponseEntity<ErrorResponseDTO> handleInputUploadUrlNotSupported(
-      InputUploadUrlNotSupportedForJobTypeException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(UnknownOrUnsupportedInputSlotException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUnknownOrUnsupportedInputSlot(
-      UnknownOrUnsupportedInputSlotException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
   @ExceptionHandler(JobDoesNotExistException.class)
   public ResponseEntity<ErrorResponseDTO> handleJobDoesNotExist(JobDoesNotExistException ex) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDTO(ex.getMessage()));
   }
 
-  @ExceptionHandler(UnknownOrUnsupportedJobParameterException.class)
-  public ResponseEntity<ErrorResponseDTO> handleUnknownOrUnsupportedJobParameter(
-      UnknownOrUnsupportedJobParameterException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(JobParameterIsNullOrBlankException.class)
-  public ResponseEntity<ErrorResponseDTO> handleNullOrBlankJobParameter(
-      JobParameterIsNullOrBlankException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(InvalidJobParameterTypeException.class)
-  public ResponseEntity<ErrorResponseDTO> handleInvalidJobParameterType(
-      InvalidJobParameterTypeException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(InvalidJobParameterValueException.class)
-  public ResponseEntity<ErrorResponseDTO> handleInvalidJobParameterValue(
-      InvalidJobParameterValueException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
   @ExceptionHandler(MergePatchDocumentMustBeJsonObjectException.class)
   public ResponseEntity<ErrorResponseDTO> handleMergePatchDocumentMustBeJsonObject(
       MergePatchDocumentMustBeJsonObjectException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(RequiredParameterIsAbsentException.class)
-  public ResponseEntity<ErrorResponseDTO> handleRequiredParameterIsAbsent(
-      RequiredParameterIsAbsentException ex) {
-    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-        .body(new ErrorResponseDTO(ex.getMessage()));
-  }
-
-  @ExceptionHandler(RequiredInputArtifactIsAbsentException.class)
-  public ResponseEntity<ErrorResponseDTO> handleRequiredInputArtifactIsAbsent(
-      RequiredInputArtifactIsAbsentException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDTO(ex.getMessage()));
   }

@@ -93,6 +93,7 @@ The Web Server is responsible for:
 - consuming asynchronous lifecycle updates from Workers;
 - persisting updates from Workers to Metadata Store;
 - issuing pre-signed download URLs for results;
+- persisting the latest known `workerId` for the job in Metadata Store.
 - optionally reconciling stale jobs that remain in non-terminal states for too long. 
 
 The Web Server should not contain job-specific execution logic.
@@ -112,7 +113,7 @@ The Worker is responsible for:
 - publishing lifecycle updates, including `VALIDATION_FAILED` when inputs or parameters are semantically invalid for the given `jobType`;
 - executing the actual job logic;
 - uploading output artifacts;
-- publishing lifecycle status updates.
+- publishing lifecycle status updates including its `workerId` when it claims a job for execution.
 
 ### Object Storage (S3 / MinIO)
 
@@ -132,7 +133,8 @@ The relational database is responsible for:
 - storing timestamps;
 - storing user/job relationships;
 - storing job parameter data and relationships to jobs;
-- supporting filtering, querying, and future administrative pages.
+- supporting filtering, querying, and future administrative pages;
+- storing `workerId` as nullable current job owner identifier.
 
 ---
 
@@ -149,7 +151,6 @@ graph TD;
     DRAFT-->SUBMITTED;
     SUBMITTED-->IN_PROGRESS;
     SUBMITTED-->VALIDATION_FAILED;
-    SUBMITTED-->CANCEL_REQUESTED;
     IN_PROGRESS-->DONE;
     IN_PROGRESS-->CANCEL_REQUESTED;
     CANCEL_REQUESTED-->CANCELLED
@@ -160,7 +161,7 @@ graph TD;
 - `SUBMITTED` — the job has been sent to the execution pipeline;
 - `VALIDATION_FAILED` — worker-side validation failed before execution;
 - `IN_PROGRESS` — a Worker has started executing the job;
-- `CANCEL_REQUESTED` — a cancellation request has been accepted and forwarded;
+- `CANCEL_REQUESTED` — a cancellation request has been accepted for a running job and forwarded to the Worker that owns the job;
 - `CANCELLED` — the Worker confirmed that execution was cancelled;
 - `DONE` — the job completed successfully;
 - `ERROR` — the job failed.
@@ -171,6 +172,9 @@ graph TD;
 - A job can be submitted only after all required inputs and required parameters have been provided.
 - After a job is submitted, its input artifacts and parameters must be treated as immutable.
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
+- Cancellation is supported only for jobs that are already in `IN_PROGRESS` state and have a known `workerId`;
+- Jobs in `DRAFT` are not cancellable; the client may simply stop using the draft job;
+- Jobs in `SUBMITTED` are already accepted into the execution pipeline but are not yet owned by a specific Worker, therefore cancellation of `SUBMITTED` jobs is not supported in v1.
 - Downloading results is allowed only when the job is in `DONE`.
 - An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
 - `SUBMITTED` means the job has been accepted into the execution pipeline and became immutable.
@@ -654,14 +658,19 @@ X-MDDS-User-Login: <user-login>
 
 **Meaning**
 
-Accepts a cancellation request and forwards it to the execution pipeline. If a job is already in `CANCEL_REQUESTED`
-state, repeated cancellation returns `202 Accepted`.
+Accepts a cancellation request for a running job.
+The job must be in `IN_PROGRESS` state and must have a known `workerId`.
+The Web Server records the job as `CANCEL_REQUESTED` and forwards a targeted cancellation signal to the Worker identified by `workerId`.
+If a job is already in `CANCEL_REQUESTED` state, repeated cancellation returns `202 Accepted`.
+Cancellation of `DRAFT` or `SUBMITTED` jobs is not supported in v1.
 
 **Possible errors**
 
 - `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `400 Bad Request` — required headers are missing;
 - `401 Unauthorized` — unknown user login;
 - `404 Not Found` — the job does not exist (or is not accessible to the current user);
+- `409 Conflict` — the job is in `DRAFT` or `SUBMITTED` state and cancellation is not supported in v1;
 - `409 Conflict` — the job is already terminal and can no longer be cancelled.
 
 ---

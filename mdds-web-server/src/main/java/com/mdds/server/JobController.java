@@ -7,6 +7,7 @@ package com.mdds.server;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.mdds.domain.JobStatus;
 import com.mdds.dto.CreateJobRequestDTO;
+import com.mdds.dto.JobCancelResponseDTO;
 import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.JobStatusResponseDTO;
 import com.mdds.dto.JobSubmitResponseDTO;
@@ -44,6 +45,7 @@ public class JobController {
   private final JobParamsService jobParamsService;
   private final JobSubmissionService jobSubmissionService;
   private final JobStatusService jobStatusService;
+  private final JobCancellationService jobCancellationService;
 
   private static final String JOB_ID = "jobId";
   private static final String USER_ID = "userId";
@@ -124,7 +126,7 @@ public class JobController {
       jobSubmissionService.submit(userId, jobId);
       log.info("Submitted job.");
       return ResponseEntity.accepted()
-          .body(new JobSubmitResponseDTO(jobId, JobStatus.SUBMITTED.toString()));
+          .body(new JobSubmitResponseDTO(jobId, JobStatus.SUBMITTED.getCode()));
     }
   }
 
@@ -150,6 +152,22 @@ public class JobController {
                   result.submittedAt(),
                   result.startedAt(),
                   result.finishedAt()));
+    }
+  }
+
+  @PostMapping(path = "/jobs/{jobId}/cancel")
+  public ResponseEntity<JobCancelResponseDTO> cancel(
+      @PathVariable("jobId") String jobId,
+      @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin) {
+    var userId = userLookupService.findUserId(userLogin);
+
+    try (var ignoredJobId = MDC.putCloseable(JOB_ID, jobId);
+        var ignoredUserId = MDC.putCloseable(USER_ID, Long.toString(userId));
+        var ignoredEvent = MDC.putCloseable(EVENT, "cancel_request_job")) {
+      jobCancellationService.cancel(userId, jobId);
+      log.info("Cancel requested for job.");
+      return ResponseEntity.accepted()
+          .body(new JobCancelResponseDTO(jobId, JobStatus.CANCEL_REQUESTED.getCode()));
     }
   }
 

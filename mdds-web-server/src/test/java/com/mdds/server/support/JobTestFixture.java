@@ -34,6 +34,17 @@ public class JobTestFixture {
     jobsRepository.save(job);
   }
 
+  @Transactional
+  public void forceWorkerId(String jobId, String workerId) {
+    var job =
+        jobsRepository
+            .findById(jobId)
+            .orElseThrow(() -> new IllegalStateException("Job not found in fixture: " + jobId));
+
+    job.setWorkerId(workerId);
+    jobsRepository.save(job);
+  }
+
   public Map<String, JsonNode> jobParams(String jobId) {
     var result = new HashMap<String, JsonNode>();
 
