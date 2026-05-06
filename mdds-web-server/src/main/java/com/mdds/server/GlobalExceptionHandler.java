@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -82,5 +83,12 @@ public class GlobalExceptionHandler {
       MergePatchDocumentMustBeJsonObjectException ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDTO(ex.getMessage()));
+  }
+
+  @ExceptionHandler(MissingServletRequestParameterException.class)
+  public ResponseEntity<ErrorResponseDTO> handleMissingRequestParam(
+      MissingServletRequestParameterException ex) {
+    var errorMessage = "Required request parameter '" + ex.getParameterName() + "' is missing.";
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponseDTO(errorMessage));
   }
 }

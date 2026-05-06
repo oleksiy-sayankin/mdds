@@ -9,6 +9,7 @@ import com.mdds.domain.JobStatus;
 import com.mdds.dto.CreateJobRequestDTO;
 import com.mdds.dto.JobCancelResponseDTO;
 import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.JobOutputResponseDTO;
 import com.mdds.dto.JobStatusResponseDTO;
 import com.mdds.dto.JobSubmitResponseDTO;
 import com.mdds.dto.JobUploadUrlRequestDTO;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -46,6 +48,7 @@ public class JobController {
   private final JobSubmissionService jobSubmissionService;
   private final JobStatusService jobStatusService;
   private final JobCancellationService jobCancellationService;
+  private final JobOutputsService jobOutputsService;
 
   private static final String JOB_ID = "jobId";
   private static final String USER_ID = "userId";
@@ -168,6 +171,22 @@ public class JobController {
       log.info("Cancel requested for job.");
       return ResponseEntity.accepted()
           .body(new JobCancelResponseDTO(jobId, JobStatus.CANCEL_REQUESTED.getCode()));
+    }
+  }
+
+  @GetMapping(path = "/jobs/{jobId}/outputs", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<JobOutputResponseDTO> outputs(
+      @PathVariable("jobId") String jobId,
+      @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin,
+      @RequestParam(name = "outputSlot", required = true) String outputSlot) {
+    var userId = userLookupService.findUserId(userLogin);
+    try (var ignoredJobId = MDC.putCloseable(JOB_ID, jobId);
+        var ignoredUserId = MDC.putCloseable(USER_ID, Long.toString(userId));
+        var ignoredEvent = MDC.putCloseable(EVENT, "get_job_outputs")) {
+      var result = jobOutputsService.issueDownloadUrl(userId, jobId, outputSlot);
+      return ResponseEntity.ok()
+          .body(
+              new JobOutputResponseDTO(jobId, result.downloadUrl().toString(), result.expiresAt()));
     }
   }
 

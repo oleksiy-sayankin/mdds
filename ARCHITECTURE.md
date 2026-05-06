@@ -706,14 +706,21 @@ X-MDDS-User-Login: <user-login>
 Returns a pre-signed URL that allows the client to download the result artifact directly from object storage.
 The returned URL is temporary, and its expiration is defined by server configuration.
 
+Note, 
+* the server performs trim/lowercase normalization for `outputSlot` value.
+* `<timestamp>` uses RFC 3339 format, for example `2026-03-20T14:30:00Z` or `2026-03-20T14:30:00+02:00`.
+
 **Possible errors**
 
 - `400 Bad Request` — `outputSlot` is null or blank;
 - `400 Bad Request` — unknown or unsupported output slot for the given `jobType`;
 - `400 Bad Request` — `X-MDDS-User-Login` is blank;
+- `400 Bad Request` — required headers are missing; 
+- `400 Bad Request` — required query parameters are missing;
 - `401 Unauthorized` — unknown user login;
 - `404 Not Found` — the job does not exist (or is not accessible to the current user);
-- `409 Conflict` — the result is not available because the job is not `DONE`.
+- `409 Conflict` — the result is not available because the job is not `DONE`;
+- `500 Internal Server Error` — the job is `DONE` but the expected output artifact is missing in object storage.
 
 ---
 

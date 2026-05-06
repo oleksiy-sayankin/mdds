@@ -15,9 +15,10 @@ import org.springframework.validation.annotation.Validated;
 public record ObjectStorageProperties(
     @NotBlank(message = "must not be null or blank.") String bucket,
     @NotBlank(message = "must not be null or blank.") String region,
-    String internalEndpoint,
+    @NotBlank(message = "must not be null or blank.") String internalEndpoint,
     @NotBlank(message = "must not be null or blank.") String publicEndpoint,
     @NotBlank(message = "must not be null or blank.") String accessKey,
     @NotBlank(message = "must not be null or blank.") String secretKey,
     boolean pathStyleAccessEnabled,
-    @NotNull(message = "must not be null.") Duration presignPutTtl) {}
+    @NotNull(message = "must not be null.") Duration presignPutTtl,
+    @NotNull(message = "must not be null.") Duration presignGetTtl) {}

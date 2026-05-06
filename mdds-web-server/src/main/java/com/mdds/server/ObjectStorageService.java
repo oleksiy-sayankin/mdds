@@ -34,6 +34,7 @@ public class ObjectStorageService {
   private final ObjectStorageProperties objectStorageProperties;
   private S3Presigner preSigner;
   private Duration presignedPutTtl;
+  private Duration presignedGetTtl;
   private S3Client s3;
   private String bucket;
 
@@ -42,6 +43,7 @@ public class ObjectStorageService {
     var region = Region.of(objectStorageProperties.region());
     bucket = objectStorageProperties.bucket();
     presignedPutTtl = objectStorageProperties.presignPutTtl();
+    presignedGetTtl = objectStorageProperties.presignGetTtl();
     var credentialsProvider =
         StaticCredentialsProvider.create(
             AwsBasicCredentials.create(
@@ -81,6 +83,17 @@ public class ObjectStorageService {
     return new PresignedUpload(presigned.url(), presigned.expiration());
   }
 
+  public PresignedDownload issueDownloadUrl(long userId, String jobId, String fileName) {
+    var bucketName = objectStorageProperties.bucket();
+    var objectKey = ObjectKeyBuilder.canonicalOutputObjectKey(userId, jobId, fileName);
+    var presigned =
+        preSigner.presignGetObject(
+            b ->
+                b.signatureDuration(presignedGetTtl)
+                    .getObjectRequest(r -> r.bucket(bucketName).key(objectKey)));
+    return new PresignedDownload(presigned.url(), presigned.expiration());
+  }
+
   public boolean exists(String key) {
     try {
       var request = HeadObjectRequest.builder().bucket(bucket).key(key).build();
@@ -111,4 +124,6 @@ public class ObjectStorageService {
   }
 
   public record PresignedUpload(URL uploadUrl, Instant expiresAt) {}
+
+  public record PresignedDownload(URL downloadUrl, Instant expiresAt) {}
 }
