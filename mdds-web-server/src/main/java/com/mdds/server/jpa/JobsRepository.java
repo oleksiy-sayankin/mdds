@@ -25,6 +25,10 @@ public interface JobsRepository extends JpaRepository<JobEntity, String> {
   @Query("select je from JobEntity je where je.id = :id and je.userId = :userId")
   Optional<JobEntity> lockByIdAndUserId(@Param("id") String id, @Param("userId") Long userId);
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select je from JobEntity je where je.id = :id")
+  Optional<JobEntity> lockById(@Param("id") String id);
+
   @Query("select je from JobEntity je where je.id = :id and je.userId = :userId")
   Optional<JobEntity> findByIdAndUserId(@Param("id") String id, @Param("userId") Long userId);
 }

@@ -22,6 +22,27 @@ public enum JobStatus {
 
   @Getter private final String code;
 
+  public boolean canSwitchTo(JobStatus newStatus) {
+    return switch (this) {
+      case DRAFT -> newStatus == SUBMITTED;
+      case SUBMITTED -> newStatus == IN_PROGRESS || newStatus == VALIDATION_FAILED;
+      case IN_PROGRESS ->
+          newStatus == IN_PROGRESS
+              || newStatus == DONE
+              || newStatus == ERROR
+              || newStatus == CANCEL_REQUESTED;
+      case CANCEL_REQUESTED -> newStatus == CANCELLED;
+      case VALIDATION_FAILED, DONE, ERROR, CANCELLED -> false;
+    };
+  }
+
+  public boolean isTerminal() {
+    return switch (this) {
+      case VALIDATION_FAILED, DONE, ERROR, CANCELLED -> true;
+      default -> false;
+    };
+  }
+
   public static JobStatus from(String raw) {
     if (raw == null || raw.isBlank()) {
       throw new UnknownJobStatusException("Job status must not be null or blank.");

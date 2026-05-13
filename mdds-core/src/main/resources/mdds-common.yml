@@ -4,3 +4,4 @@
 mdds.common:
   job-queue-name: mdds_job_queue
   result-queue-name: mdds_result_queue
+  status-queue-name: mdds_status_queue

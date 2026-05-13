@@ -34,6 +34,16 @@ public class QueueConfig {
         properties.getMaxInboundMessageBodySize());
   }
 
+  @Bean(name = "statusQueue")
+  public Queue statusQueue(RabbitMqProperties properties) {
+    return new RabbitMqQueue(
+        properties.getHost(),
+        properties.getPort(),
+        properties.getUser(),
+        properties.getPassword(),
+        properties.getMaxInboundMessageBodySize());
+  }
+
   @Bean(name = "cancelQueue")
   public Queue cancelQueue(RabbitMqProperties properties) {
     return new RabbitMqQueue(

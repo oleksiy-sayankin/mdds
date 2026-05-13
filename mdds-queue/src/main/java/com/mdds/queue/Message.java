@@ -4,6 +4,8 @@
  */
 package com.mdds.queue;
 
+import static java.util.Objects.requireNonNull;
+
 import jakarta.annotation.Nonnull;
 import java.time.Instant;
 import java.util.Map;
@@ -17,4 +19,10 @@ import java.util.Map;
  * @param <T> type of payload
  */
 public record Message<T>(
-    @Nonnull T payload, @Nonnull Map<String, Object> headers, @Nonnull Instant timestamp) {}
+    @Nonnull T payload, @Nonnull Map<String, Object> headers, @Nonnull Instant timestamp) {
+  public Message {
+    requireNonNull(payload, "payload cannot be null.");
+    requireNonNull(headers, "headers cannot be null.");
+    requireNonNull(timestamp, "timestamp cannot be null.");
+  }
+}

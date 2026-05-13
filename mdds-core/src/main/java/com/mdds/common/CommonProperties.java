@@ -14,4 +14,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class CommonProperties {
   private String jobQueueName = "default_mdds_job_queue";
   private String resultQueueName = "default_mdds_result_queue";
+  private String statusQueueName = "default_mdds_status_queue";
 }
