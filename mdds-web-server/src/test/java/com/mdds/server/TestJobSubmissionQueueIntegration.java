@@ -70,7 +70,7 @@ class TestJobSubmissionQueueIntegration {
           .withPassword("mdds123");
 
   @Container
-  private static final RabbitMQContainer rabbitMq =
+  private static final RabbitMQContainer RABBIT_MQ =
       new RabbitMQContainer("rabbitmq:3.12-management")
           .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
           .withExposedPorts(5672, 15672)
@@ -85,10 +85,10 @@ class TestJobSubmissionQueueIntegration {
 
   @DynamicPropertySource
   static void initProps(DynamicPropertyRegistry registry) {
-    registry.add("mdds.rabbitmq.host", rabbitMq::getHost);
-    registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
-    registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
-    registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
+    registry.add("mdds.rabbitmq.host", RABBIT_MQ::getHost);
+    registry.add("mdds.rabbitmq.port", RABBIT_MQ::getAmqpPort);
+    registry.add("mdds.rabbitmq.user", RABBIT_MQ::getAdminUsername);
+    registry.add("mdds.rabbitmq.password", RABBIT_MQ::getAdminPassword);
     registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);
@@ -121,10 +121,10 @@ class TestJobSubmissionQueueIntegration {
   @MethodSource("userLoginValues")
   void testSubmissionJobIsInTheQueue(String login)
       throws IOException, URISyntaxException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "matrix");
     var matrixKey = extractObjectKeyFromPresignedUrl(result.uploadUrl());

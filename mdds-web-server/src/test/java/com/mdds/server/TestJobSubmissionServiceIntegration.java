@@ -117,10 +117,10 @@ class TestJobSubmissionServiceIntegration {
   @MethodSource("userLoginValues")
   void testSubmissionJobStatus(String login)
       throws IOException, URISyntaxException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "matrix");
     var matrixKey = extractObjectKeyFromPresignedUrl(result.uploadUrl());
@@ -145,10 +145,10 @@ class TestJobSubmissionServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testSubmissionManifest(String login) throws IOException, URISyntaxException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "matrix");
     var matrixKey = extractObjectKeyFromPresignedUrl(result.uploadUrl());
@@ -190,10 +190,10 @@ class TestJobSubmissionServiceIntegration {
 
   @Test
   void testSubmissionNoRhs() throws URISyntaxException, JsonProcessingException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "matrix");
     var key = extractObjectKeyFromPresignedUrl(result.uploadUrl());
@@ -212,10 +212,10 @@ class TestJobSubmissionServiceIntegration {
 
   @Test
   void testSubmissionNoMatrix() throws URISyntaxException, JsonProcessingException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "rhs");
     var key = extractObjectKeyFromPresignedUrl(result.uploadUrl());
@@ -234,10 +234,10 @@ class TestJobSubmissionServiceIntegration {
 
   @Test
   void testSubmissionNoParams() throws URISyntaxException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "matrix");
     var key = extractObjectKeyFromPresignedUrl(result.uploadUrl());
@@ -256,10 +256,10 @@ class TestJobSubmissionServiceIntegration {
   @Test
   void testSubmissionNotInDraft()
       throws URISyntaxException, JsonProcessingException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, "matrix");
     var key = extractObjectKeyFromPresignedUrl(result.uploadUrl());
@@ -284,10 +284,10 @@ class TestJobSubmissionServiceIntegration {
 
   @Test
   void testSubmissionNoJob() throws URISyntaxException, JsonProcessingException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var adminUserId = userLookupService.findUserId(ADMIN);
-    var jobId = jobCreationService.createOrReuseDraftJob(adminUserId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(adminUserId, sessionId, jobType).jobId();
 
     var result = jobInputUploadService.issueUploadUrl(adminUserId, jobId, "matrix");
     var key = extractObjectKeyFromPresignedUrl(result.uploadUrl());

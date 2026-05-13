@@ -85,10 +85,10 @@ class TestJobCancellationServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testCancellation(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     var workerId = newWorkerId();
     var job = jobsRepository.findById(jobId).orElseThrow();
     job.setWorkerId(workerId);
@@ -116,10 +116,10 @@ class TestJobCancellationServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobTerminalStatusValues")
   void testCancellationInTerminalJobState(JobStatus jobStatus) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     var workerId = newWorkerId();
     var job = jobsRepository.findById(jobId);
 
@@ -151,10 +151,10 @@ class TestJobCancellationServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobInvalidStatusValues")
   void testCancellationInvalidJobState(JobStatus jobStatus) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     var workerId = newWorkerId();
     var job = jobsRepository.findById(jobId);
 
@@ -181,10 +181,10 @@ class TestJobCancellationServiceIntegration {
 
   @Test
   void testCancellationJobFromOtherUser() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var adminUserId = userLookupService.findUserId(ADMIN);
-    var jobId = jobCreationService.createOrReuseDraftJob(adminUserId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(adminUserId, sessionId, jobType).jobId();
     var workerId = newWorkerId();
     var job = jobsRepository.findById(jobId);
 
@@ -206,10 +206,10 @@ class TestJobCancellationServiceIntegration {
 
   @Test
   void testCancellationNoWorker() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     var job = jobsRepository.findById(jobId);
 
     job.ifPresentOrElse(
@@ -239,10 +239,10 @@ class TestJobCancellationServiceIntegration {
 
   @Test
   void testCancellationWhenCancelAlreadyRequested() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     var workerId = newWorkerId();
     var job = jobsRepository.findById(jobId).orElseThrow();
     job.setStatus(JobStatus.CANCEL_REQUESTED);

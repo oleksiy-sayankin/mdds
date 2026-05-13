@@ -102,11 +102,11 @@ class TestJobStatusServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testJobStatus(String login) throws IOException, URISyntaxException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
     var beforeCreation = Instant.now();
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     var afterCreation = Instant.now();
 
     var statusResponse = jobStatusService.status(userId, jobId);

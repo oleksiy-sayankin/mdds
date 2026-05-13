@@ -63,7 +63,7 @@ class TestJobParamsRestApiIntegration {
           .withPassword("mdds123");
 
   @Container
-  private static final RabbitMQContainer rabbitMq =
+  private static final RabbitMQContainer RABBIT_MQ =
       new RabbitMQContainer("rabbitmq:3.12-management")
           .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
           .withExposedPorts(5672, 15672)
@@ -72,10 +72,10 @@ class TestJobParamsRestApiIntegration {
 
   @DynamicPropertySource
   static void initProps(DynamicPropertyRegistry registry) {
-    registry.add("mdds.rabbitmq.host", rabbitMq::getHost);
-    registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
-    registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
-    registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
+    registry.add("mdds.rabbitmq.host", RABBIT_MQ::getHost);
+    registry.add("mdds.rabbitmq.port", RABBIT_MQ::getAmqpPort);
+    registry.add("mdds.rabbitmq.user", RABBIT_MQ::getAdminUsername);
+    registry.add("mdds.rabbitmq.password", RABBIT_MQ::getAdminPassword);
     registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);

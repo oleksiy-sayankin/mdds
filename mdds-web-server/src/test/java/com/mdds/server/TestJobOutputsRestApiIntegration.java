@@ -125,10 +125,10 @@ class TestJobOutputsRestApiIntegration {
   @MethodSource("userLoginValues")
   void testJobOutput(String login) throws IOException, MinioException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var createJobResponse = createOrReuseJob(http, login, session, jobType);
+    var createJobResponse = createOrReuseJob(http, login, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -164,10 +164,10 @@ class TestJobOutputsRestApiIntegration {
   void testInvalidJobStatus(JobStatus status)
       throws IOException, MinioException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, status);
@@ -186,10 +186,10 @@ class TestJobOutputsRestApiIntegration {
   @Test
   void testJobOfOtherUser() throws IOException, InterruptedException, MinioException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(ADMIN);
-    var createJobResponse = createOrReuseJob(http, ADMIN, session, jobType);
+    var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -219,9 +219,9 @@ class TestJobOutputsRestApiIntegration {
   @Test
   void testMissingOutputSlot() throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
 
     var response =
@@ -237,10 +237,10 @@ class TestJobOutputsRestApiIntegration {
   @Test
   void testOutputSlotIsNullOrBlank() throws IOException, InterruptedException, MinioException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -263,10 +263,10 @@ class TestJobOutputsRestApiIntegration {
   void testOutputSlotIsUnsupported(String outputSlot)
       throws IOException, InterruptedException, MinioException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -289,9 +289,9 @@ class TestJobOutputsRestApiIntegration {
   @Test
   void testNoOutputArtifacts() throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -313,10 +313,10 @@ class TestJobOutputsRestApiIntegration {
   void testNormalizedOutputSlotValues(String outputSlot)
       throws IOException, MinioException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -339,10 +339,10 @@ class TestJobOutputsRestApiIntegration {
   @Test
   void testErrorForMissingUser() throws IOException, InterruptedException, MinioException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -357,10 +357,10 @@ class TestJobOutputsRestApiIntegration {
   @Test
   void testOkForMissingContentType() throws IOException, InterruptedException, MinioException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
@@ -394,10 +394,10 @@ class TestJobOutputsRestApiIntegration {
   void testInvalidUser(String user, int statusCode, String message)
       throws IOException, InterruptedException, MinioException {
     var http = new HttpTestClient(HOST, port);
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var createJobResponse = createOrReuseJob(http, GUEST, session, jobType);
+    var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);

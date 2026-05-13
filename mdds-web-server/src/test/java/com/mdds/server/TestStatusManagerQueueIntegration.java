@@ -87,10 +87,10 @@ class TestStatusManagerQueueIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testProcessStatusUpdateMessage(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
@@ -127,8 +127,8 @@ class TestStatusManagerQueueIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private JobCreationResult createOrReuseDraftJob(long user, String session, String jobType) {
-    return jobCreationService.createOrReuseDraftJob(user, session, jobType);
+  private JobCreationResult createOrReuseDraftJob(long userId, String sessionId, String jobType) {
+    return jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType);
   }
 
   private static String newWorkerId() {

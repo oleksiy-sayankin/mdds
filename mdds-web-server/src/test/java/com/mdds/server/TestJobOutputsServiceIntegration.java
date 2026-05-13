@@ -99,10 +99,10 @@ class TestJobOutputsServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testJobOutput(String login) throws IOException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     var result = jobOutputsService.issueDownloadUrl(userId, jobId, "solution");
@@ -135,10 +135,10 @@ class TestJobOutputsServiceIntegration {
   @ParameterizedTest
   @MethodSource("invalidJobStatusValues")
   void testInvalidJobStatus(JobStatus status) throws IOException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, status);
 
@@ -150,10 +150,10 @@ class TestJobOutputsServiceIntegration {
 
   @Test
   void testJobOfOtherUser() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var adminUserId = userLookupService.findUserId(ADMIN);
-    var jobId = jobCreationService.createOrReuseDraftJob(adminUserId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(adminUserId, sessionId, jobType).jobId();
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     var guestUserId = userLookupService.findUserId(GUEST);
     assertThatExceptionOfType(JobDoesNotExistException.class)
@@ -177,10 +177,10 @@ class TestJobOutputsServiceIntegration {
   @ParameterizedTest
   @MethodSource("nullOrBlankOutputSlotValues")
   void testOutputSlotIsNullOrBlank(String outputSlot) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     assertThatExceptionOfType(OutputSlotIsNullOrBlankException.class)
         .isThrownBy(() -> jobOutputsService.issueDownloadUrl(userId, jobId, outputSlot))
@@ -194,10 +194,10 @@ class TestJobOutputsServiceIntegration {
   @ParameterizedTest
   @MethodSource("unsupportedOutputSlotValues")
   void testOutputSlotIsUnsupported(String outputSlot) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     assertThatExceptionOfType(UnknownOrUnsupportedOutputSlotException.class)
         .isThrownBy(() -> jobOutputsService.issueDownloadUrl(userId, jobId, outputSlot))
@@ -211,10 +211,10 @@ class TestJobOutputsServiceIntegration {
 
   @Test
   void testNoOutputArtifacts() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     assertThatExceptionOfType(OutputArtifactDoesNotExistException.class)
         .isThrownBy(() -> jobOutputsService.issueDownloadUrl(userId, jobId, "solution"))
@@ -228,10 +228,10 @@ class TestJobOutputsServiceIntegration {
   @ParameterizedTest
   @MethodSource("normalizedOutputSlotValues")
   void testNormalizedOutputSlotValues(String outputSlot) throws IOException, MinioException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = jobCreationService.createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     var result = jobOutputsService.issueDownloadUrl(userId, jobId, outputSlot);

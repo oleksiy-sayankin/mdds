@@ -70,10 +70,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testApply(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
@@ -101,10 +101,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testApplyFromProgressToDone(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
@@ -149,10 +149,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testApplyFromCancelRequestedToCancelled(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
@@ -199,10 +199,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testApplyFromInProgressToError(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
@@ -246,10 +246,10 @@ class TestJobStatusUpdateServiceIntegration {
 
   @Test
   void testApplyProgressToProgressUpdateDoesNotRewriteStartedAt() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var jobId = createOrReuseDraftJob(userId, session, jobType).jobId();
+    var jobId = createOrReuseDraftJob(userId, sessionId, jobType).jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
 
     var workerId = newWorkerId();
@@ -327,10 +327,10 @@ class TestJobStatusUpdateServiceIntegration {
 
   @Test
   void testApplyNullEventTime() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
     var workerId = newWorkerId();
@@ -351,10 +351,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobInvalidProgressValues")
   void testApplyInvalidProgress(int progress) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
     var workerId = newWorkerId();
@@ -380,10 +380,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobValidProgressValues")
   void testApplyInvalidProgressWhenDone(int progress) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, IN_PROGRESS);
@@ -404,10 +404,10 @@ class TestJobStatusUpdateServiceIntegration {
 
   @Test
   void testApplyUnknownStatus() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
@@ -422,10 +422,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobInvalidStatusValues")
   void testApplyInvalidJobStatus(JobStatus status) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
     var workerId = newWorkerId();
@@ -447,10 +447,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobInvalidWorkerIdValues")
   void testApplyNullOrBlankWorkerId(String workerId) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var eventTime = Instant.now();
@@ -483,10 +483,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobInvalidStateTransitions")
   void testApplyStateTransition(Transition transition) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     var from = transition.from;
     jobFixture.forceStatus(jobId, from);
@@ -513,10 +513,10 @@ class TestJobStatusUpdateServiceIntegration {
 
   @Test
   void testApplyAnotherWorkerOwnership() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var firstWorkerId = newWorkerId();
@@ -553,10 +553,10 @@ class TestJobStatusUpdateServiceIntegration {
   @ParameterizedTest
   @MethodSource("jobInvalidWorkerIdValues")
   void testApplyInvalidWorkerOwnership(String workerId) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, CANCEL_REQUESTED);
     var firstWorkerId = newWorkerId();
@@ -587,7 +587,7 @@ class TestJobStatusUpdateServiceIntegration {
     return "worker-" + UUID.randomUUID();
   }
 
-  private JobCreationResult createOrReuseDraftJob(long user, String session, String jobType) {
-    return jobCreationService.createOrReuseDraftJob(user, session, jobType);
+  private JobCreationResult createOrReuseDraftJob(long userId, String sessionId, String jobType) {
+    return jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType);
   }
 }

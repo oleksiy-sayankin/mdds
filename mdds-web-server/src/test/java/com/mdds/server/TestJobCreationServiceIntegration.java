@@ -8,8 +8,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.server.support.JobTestFixture;
 import java.time.Duration;
 import java.util.HashSet;
@@ -39,8 +37,9 @@ import org.testcontainers.utility.MountableFile;
 @SpringBootTest(properties = {"spring.config.import=classpath:test-job-profiles.yml"})
 @Testcontainers
 @Import(JobTestFixture.class)
-class TestCreateOrReuseDraftJobIntegration {
-  @Autowired private JobController controller;
+class TestJobCreationServiceIntegration {
+  @Autowired private JobCreationService jobCreationService;
+  @Autowired private UserLookupService userLookupService;
   @Autowired private JobTestFixture jobFixture;
 
   private static final Pattern UUID_REGEX_PATTERN =
@@ -50,14 +49,14 @@ class TestCreateOrReuseDraftJobIntegration {
   private static final String ADMIN = "admin";
 
   @Container
-  private static final PostgreSQLContainer<?> postgres =
+  private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>("postgres:17")
           .withDatabaseName("mdds")
           .withUsername("mdds")
           .withPassword("mdds123");
 
   @Container
-  private static final RabbitMQContainer rabbitMq =
+  private static final RabbitMQContainer RABBIT_MQ =
       new RabbitMQContainer("rabbitmq:3.12-management")
           .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
           .withExposedPorts(5672, 15672)
@@ -66,68 +65,61 @@ class TestCreateOrReuseDraftJobIntegration {
 
   @DynamicPropertySource
   static void registerProps(DynamicPropertyRegistry registry) {
-    registry.add("mdds.rabbitmq.host", rabbitMq::getHost);
-    registry.add("mdds.rabbitmq.port", rabbitMq::getAmqpPort);
-    registry.add("mdds.rabbitmq.user", rabbitMq::getAdminUsername);
-    registry.add("mdds.rabbitmq.password", rabbitMq::getAdminPassword);
-    registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    registry.add("spring.datasource.username", postgres::getUsername);
-    registry.add("spring.datasource.password", postgres::getPassword);
+    registry.add("mdds.rabbitmq.host", RABBIT_MQ::getHost);
+    registry.add("mdds.rabbitmq.port", RABBIT_MQ::getAmqpPort);
+    registry.add("mdds.rabbitmq.user", RABBIT_MQ::getAdminUsername);
+    registry.add("mdds.rabbitmq.password", RABBIT_MQ::getAdminPassword);
+    registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+    registry.add("spring.datasource.username", POSTGRES::getUsername);
+    registry.add("spring.datasource.password", POSTGRES::getPassword);
   }
 
   @Test
   void testCreateOrReuseDraftJobCreatesNewJobForNewSession() {
-    var session = newSessionId();
-    var jobId = createOrReuseDraftJob(GUEST, session);
-    assertValidJobId(jobId);
-    assertSingleJobRow(GUEST, session);
-  }
-
-  @Test
-  void testCreateOrReuseDraftJobThrowsExceptionForInvalidUser() {
-    var session = newSessionId();
-    assertThatExceptionOfType(UnknownUserException.class)
-        .isThrownBy(() -> createOrReuseDraftJob("invalid_user", session))
-        .withMessage("Unknown user login: invalid_user.");
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
+    var result = createOrReuseDraftJob(userId, sessionId);
+    assertValidJobId(result.jobId());
+    assertSingleJobRow(userId, sessionId);
   }
 
   @Test
   void testCreateOrReuseDraftJobThrowsExceptionForInvalidJobType() {
-    var session = newSessionId();
-    var createJobRequest = new CreateJobRequestDTO("wrong_job_type");
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
     assertThatExceptionOfType(UnknownOrUnsupportedJobTypeException.class)
-        .isThrownBy(() -> createOrReuseDraftJob(GUEST, session, createJobRequest))
+        .isThrownBy(() -> createOrReuseDraftJob(userId, sessionId, "wrong_job_type"))
         .withMessage("Unknown or unsupported job type: wrong_job_type.");
   }
 
   @Test
   void testCreateOrReuseDraftJobThrowsExceptionForEmptySessionId() {
-    var createJobRequest = new CreateJobRequestDTO("solving_slae");
+    var userId = userLookupService.findUserId(GUEST);
     assertThatExceptionOfType(UploadSessionIdIsNullOrBlankException.class)
-        .isThrownBy(() -> createOrReuseDraftJob(GUEST, "", createJobRequest))
+        .isThrownBy(() -> createOrReuseDraftJob(userId, "", "solving_slae"))
         .withMessage("Upload session id is null or blank.");
   }
 
   @Test
   void testCreateOrReuseDraftJobThrowsExceptionForNullSessionId() {
-    var createJobRequest = new CreateJobRequestDTO("solving_slae");
+    var userId = userLookupService.findUserId(GUEST);
     assertThatExceptionOfType(UploadSessionIdIsNullOrBlankException.class)
-        .isThrownBy(() -> createOrReuseDraftJob(GUEST, null, createJobRequest))
+        .isThrownBy(() -> createOrReuseDraftJob(userId, null, "solving_slae"))
         .withMessage("Upload session id is null or blank.");
   }
 
   @Test
   void testCreateOrReuseDraftJobThrowsExceptionForJobTypeConflict() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
     var jobTypeA = "solving_slae";
     var jobTypeB = "solving_slae_parallel";
-    createOrReuseDraftJob(GUEST, session, new CreateJobRequestDTO(jobTypeA));
-    var createJobRequestB = new CreateJobRequestDTO(jobTypeB);
+    createOrReuseDraftJob(userId, sessionId, jobTypeA);
     assertThatExceptionOfType(JobTypeConflictException.class)
-        .isThrownBy(() -> createOrReuseDraftJob(GUEST, session, createJobRequestB))
+        .isThrownBy(() -> createOrReuseDraftJob(userId, sessionId, jobTypeB))
         .withMessage(
             "A draft job already exists for upload session id '"
-                + session
+                + sessionId
                 + "' with job type '"
                 + jobTypeA
                 + "', which does not match requested job type '"
@@ -137,18 +129,18 @@ class TestCreateOrReuseDraftJobIntegration {
 
   @Test
   void testCreateOrReuseDraftJobThrowsExceptionForJobNotInDraft() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
     var jobType = "solving_slae";
-    var createJobRequest = new CreateJobRequestDTO(jobType);
-    var response = createOrReuseDraftJob(GUEST, session, createJobRequest);
-    var jobId = response.getJobId();
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
+    var jobId = response.jobId();
     var status = JobStatus.SUBMITTED;
     jobFixture.forceStatus(jobId, status);
     assertThatExceptionOfType(JobIsNotDraftException.class)
-        .isThrownBy(() -> createOrReuseDraftJob(GUEST, session, createJobRequest))
+        .isThrownBy(() -> createOrReuseDraftJob(userId, sessionId, jobType))
         .withMessage(
             "Upload session id '"
-                + session
+                + sessionId
                 + "' is already bound to job '"
                 + jobId
                 + "' with status '"
@@ -158,42 +150,46 @@ class TestCreateOrReuseDraftJobIntegration {
 
   @Test
   void testCreateOrReuseDraftJobCreatesIndependentJobsForDifferentUsersOnSameSession() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
+    var guestUserId = userLookupService.findUserId(GUEST);
 
-    var guestJobId = createOrReuseDraftJob(GUEST, session);
+    var guestJobId = createOrReuseDraftJob(guestUserId, sessionId).jobId();
     assertValidJobId(guestJobId);
-    assertSingleJobRow(GUEST, session);
+    assertSingleJobRow(guestUserId, sessionId);
 
-    var adminJobId = createOrReuseDraftJob(ADMIN, session);
+    var adminUserId = userLookupService.findUserId(ADMIN);
+    var adminJobId = createOrReuseDraftJob(adminUserId, sessionId).jobId();
     assertValidJobId(adminJobId);
-    assertSingleJobRow(ADMIN, session);
+    assertSingleJobRow(adminUserId, sessionId);
 
-    assertThat(guestJobId.getJobId()).isNotEqualTo(adminJobId.getJobId());
+    assertThat(guestJobId).isNotEqualTo(adminJobId);
   }
 
   @Test
   void testCreateOrReuseDraftJobReturnsSameJobIdForSameUserAndSession() {
-    var session = newSessionId();
-    var firstJobId = createOrReuseDraftJob(GUEST, session);
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
+    var firstJobId = createOrReuseDraftJob(userId, sessionId).jobId();
     assertValidJobId(firstJobId);
-    var secondJobId = createOrReuseDraftJob(GUEST, session);
+    var secondJobId = createOrReuseDraftJob(userId, sessionId).jobId();
     assertValidJobId(secondJobId);
-    assertThat(firstJobId.getJobId()).isEqualTo(secondJobId.getJobId());
-    assertSingleJobRow(GUEST, session);
+    assertThat(firstJobId).isEqualTo(secondJobId);
+    assertSingleJobRow(userId, sessionId);
   }
 
   @Test
   void testCreateOrReuseDraftJobReturnsDifferentJobIdsForDifferentSessionsOfSameUser() {
     var firstSession = newSessionId();
-    var firstJobId = createOrReuseDraftJob(GUEST, firstSession);
+    var userId = userLookupService.findUserId(GUEST);
+    var firstJobId = createOrReuseDraftJob(userId, firstSession).jobId();
     assertValidJobId(firstJobId);
     var secondSession = newSessionId();
-    var secondJobId = createOrReuseDraftJob(GUEST, secondSession);
+    var secondJobId = createOrReuseDraftJob(userId, secondSession).jobId();
     assertValidJobId(secondJobId);
-    assertThat(firstJobId.getJobId()).isNotEqualTo(secondJobId.getJobId());
+    assertThat(firstJobId).isNotEqualTo(secondJobId);
 
-    assertSingleJobRow(GUEST, firstSession);
-    assertSingleJobRow(GUEST, secondSession);
+    assertSingleJobRow(userId, firstSession);
+    assertSingleJobRow(userId, secondSession);
   }
 
   @Test
@@ -201,22 +197,24 @@ class TestCreateOrReuseDraftJobIntegration {
     final var numRequests = 100;
     var jobIds = new HashSet<String>();
     var prefix = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
     IntStream.range(0, numRequests)
-        .forEach(i -> jobIds.add(createOrReuseDraftJob(GUEST, prefix + "-" + i).getJobId()));
+        .forEach(i -> jobIds.add(createOrReuseDraftJob(userId, prefix + "-" + i).jobId()));
     assertThat(jobIds).hasSize(numRequests);
-    IntStream.range(0, numRequests).forEach(i -> assertSingleJobRow(GUEST, prefix + "-" + i));
+    IntStream.range(0, numRequests).forEach(i -> assertSingleJobRow(userId, prefix + "-" + i));
   }
 
   @Test
   void testCreateOrReuseDraftJobIsRaceSafeWhenCalledConcurrentlyForNewSession()
       throws ExecutionException, InterruptedException, TimeoutException {
     var barrier = new CyclicBarrier(2);
-    var session = newSessionId();
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
 
-    Callable<JobIdResponseDTO> callable =
+    Callable<String> callable =
         () -> {
           barrier.await(5, TimeUnit.SECONDS);
-          return createOrReuseDraftJob(GUEST, session);
+          return createOrReuseDraftJob(userId, sessionId).jobId();
         };
 
     try (var executorService = Executors.newFixedThreadPool(2)) {
@@ -229,24 +227,25 @@ class TestCreateOrReuseDraftJobIntegration {
       assertValidJobId(firstJobId);
       assertValidJobId(secondJobId);
 
-      assertThat(firstJobId.getJobId()).isEqualTo(secondJobId.getJobId());
-      assertSingleJobRow(GUEST, session);
+      assertThat(firstJobId).isEqualTo(secondJobId);
+      assertSingleJobRow(userId, sessionId);
     }
   }
 
   @Test
   void testCreateOrReuseDraftJobReturnsExistingJobIdWhenCalledConcurrentlyForExistingSession()
       throws ExecutionException, InterruptedException, TimeoutException {
-    var session = newSessionId();
-    final var initialJobId = createOrReuseDraftJob(GUEST, session);
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
+    final var initialJobId = createOrReuseDraftJob(userId, sessionId).jobId();
     assertValidJobId(initialJobId);
 
     var barrier = new CyclicBarrier(2);
 
-    Callable<JobIdResponseDTO> callable =
+    Callable<String> callable =
         () -> {
           barrier.await(5, TimeUnit.SECONDS);
-          return createOrReuseDraftJob(GUEST, session);
+          return createOrReuseDraftJob(userId, sessionId).jobId();
         };
 
     try (var executorService = Executors.newFixedThreadPool(2)) {
@@ -256,17 +255,18 @@ class TestCreateOrReuseDraftJobIntegration {
       var firstJobId = firstFuture.get(10, TimeUnit.SECONDS);
       var secondJobId = secondFuture.get(10, TimeUnit.SECONDS);
 
-      assertThat(initialJobId.getJobId()).isEqualTo(firstJobId.getJobId());
-      assertThat(initialJobId.getJobId()).isEqualTo(secondJobId.getJobId());
-      assertSingleJobRow(GUEST, session);
+      assertThat(initialJobId).isEqualTo(firstJobId);
+      assertThat(initialJobId).isEqualTo(secondJobId);
+      assertSingleJobRow(userId, sessionId);
     }
   }
 
   @Test
   void testCreateOrReuseDraftJobRemainsIdempotentUnderConcurrentRepeatedRequests()
       throws InterruptedException, ExecutionException, TimeoutException {
-    var session = newSessionId();
-    final var initialJobId = createOrReuseDraftJob(GUEST, session);
+    var sessionId = newSessionId();
+    var userId = userLookupService.findUserId(GUEST);
+    final var initialJobId = createOrReuseDraftJob(userId, sessionId).jobId();
     assertValidJobId(initialJobId);
 
     var barrier = new CyclicBarrier(2);
@@ -276,7 +276,7 @@ class TestCreateOrReuseDraftJobIntegration {
           barrier.await(5, TimeUnit.SECONDS);
           var jobIds = new HashSet<String>();
           IntStream.range(0, 100)
-              .forEach(i -> jobIds.add(createOrReuseDraftJob(GUEST, session).getJobId()));
+              .forEach(i -> jobIds.add(createOrReuseDraftJob(userId, sessionId).jobId()));
           return jobIds;
         };
 
@@ -287,9 +287,9 @@ class TestCreateOrReuseDraftJobIntegration {
       var secondJobIds = secondFuture.get(10, TimeUnit.SECONDS);
       assertThat(firstJobIds).hasSize(1);
       assertThat(secondJobIds).hasSize(1);
-      assertThat(firstJobIds).containsOnly(initialJobId.getJobId());
-      assertThat(secondJobIds).containsOnly(initialJobId.getJobId());
-      assertSingleJobRow(GUEST, session);
+      assertThat(firstJobIds).containsOnly(initialJobId);
+      assertThat(secondJobIds).containsOnly(initialJobId);
+      assertSingleJobRow(userId, sessionId);
     }
   }
 
@@ -304,24 +304,21 @@ class TestCreateOrReuseDraftJobIntegration {
     return UUID_REGEX_PATTERN.matcher(uuidString).matches();
   }
 
-  private JobIdResponseDTO createOrReuseDraftJob(String user, String session) {
-    return controller
-        .createOrReuseDraftJob(user, session, new CreateJobRequestDTO("solving_slae"))
-        .getBody();
+  private JobCreationResult createOrReuseDraftJob(long userId, String sessionId) {
+    return jobCreationService.createOrReuseDraftJob(userId, sessionId, "solving_slae");
   }
 
-  private JobIdResponseDTO createOrReuseDraftJob(
-      String user, String session, CreateJobRequestDTO createJobRequestDTO) {
-    return controller.createOrReuseDraftJob(user, session, createJobRequestDTO).getBody();
+  private JobCreationResult createOrReuseDraftJob(long userId, String sessionId, String jobType) {
+    return jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType);
   }
 
-  private void assertValidJobId(JobIdResponseDTO response) {
-    assertThat(response).isNotNull();
-    assertThat(response.getJobId()).isNotBlank();
-    assertThat(isValidUUID(response.getJobId())).isTrue();
+  private void assertValidJobId(String jobId) {
+    assertThat(jobId).isNotNull();
+    assertThat(jobId).isNotBlank();
+    assertThat(isValidUUID(jobId)).isTrue();
   }
 
-  private void assertSingleJobRow(String userId, String session) {
-    assertThat(jobFixture.countByUserIdAndUploadSessionId(userId, session)).isEqualTo(1);
+  private void assertSingleJobRow(long userId, String sessionId) {
+    assertThat(jobFixture.countByUserIdAndUploadSessionId(userId, sessionId)).isEqualTo(1);
   }
 }

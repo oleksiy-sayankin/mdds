@@ -71,10 +71,10 @@ class TestJobInputUploadServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testIssueUploadUrl(String login) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
 
     var ttl = objectStorageProperties.presignPutTtl();
@@ -107,10 +107,10 @@ class TestJobInputUploadServiceIntegration {
   @ParameterizedTest
   @MethodSource("inputSlots")
   void testIssueUploadUrlSlotNormalization(String inputSlot, String expectedSlot) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
 
     var ttl = objectStorageProperties.presignPutTtl();
@@ -141,10 +141,10 @@ class TestJobInputUploadServiceIntegration {
 
   @Test
   void testIssueUploadUrlJobBelongsToOtherUser() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var adminId = userLookupService.findUserId(ADMIN);
-    var response = createOrReuseDraftJob(adminId, session, jobType);
+    var response = createOrReuseDraftJob(adminId, sessionId, jobType);
     var jobId = response.jobId();
     final var guestId = userLookupService.findUserId(GUEST);
     var inputSlot = "matrix";
@@ -156,10 +156,10 @@ class TestJobInputUploadServiceIntegration {
 
   @Test
   void testIssueUploadUrlJobTypeNotSupported() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "no_input_slot_job_type";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     var inputSlot = "matrix";
 
@@ -173,10 +173,10 @@ class TestJobInputUploadServiceIntegration {
 
   @Test
   void testIssueUploadUrlBlankInputSlot() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     var inputSlot = "";
 
@@ -187,10 +187,10 @@ class TestJobInputUploadServiceIntegration {
 
   @Test
   void testIssueUploadUrlInvalidInputJobState() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
 
@@ -206,10 +206,10 @@ class TestJobInputUploadServiceIntegration {
 
   @Test
   void testIssueUploadUrlUnknownInputSlot() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var response = createOrReuseDraftJob(userId, session, jobType);
+    var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     var inputSlot = "unknown_input_slot";
 
@@ -225,7 +225,7 @@ class TestJobInputUploadServiceIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private JobCreationResult createOrReuseDraftJob(long user, String session, String jobType) {
-    return jobCreationService.createOrReuseDraftJob(user, session, jobType);
+  private JobCreationResult createOrReuseDraftJob(long userId, String sessionId, String jobType) {
+    return jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType);
   }
 }

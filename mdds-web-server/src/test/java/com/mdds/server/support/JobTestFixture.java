@@ -55,8 +55,7 @@ public class JobTestFixture {
     return result;
   }
 
-  public long countByUserIdAndUploadSessionId(String user, String session) {
-    long userId = userLookupService.findUserId(user);
-    return jobsRepository.countByUserIdAndUploadSessionId(userId, session);
+  public long countByUserIdAndUploadSessionId(long userId, String sessionId) {
+    return jobsRepository.countByUserIdAndUploadSessionId(userId, sessionId);
   }
 }

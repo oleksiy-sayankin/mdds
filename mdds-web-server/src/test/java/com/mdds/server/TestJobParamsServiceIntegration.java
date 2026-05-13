@@ -64,10 +64,10 @@ class TestJobParamsServiceIntegration {
   @ParameterizedTest
   @MethodSource("userLoginValues")
   void testStoreSingleJobParameter(String login) throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramName = "solvingMethod";
@@ -80,10 +80,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testUpdateExistingJobParams() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var solvingMethod = "solvingMethod";
@@ -116,10 +116,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testKeepAsIsOmittedJobParam() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var solvingMethod = "solvingMethod";
@@ -150,10 +150,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testDeleteOneKeepOthers() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var solvingMethod = "solvingMethod";
@@ -183,10 +183,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testNoOperation() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var solvingMethod = "solvingMethod";
@@ -215,10 +215,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testClearExistingJobParams() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var solvingMethod = "solvingMethod";
@@ -262,10 +262,10 @@ class TestJobParamsServiceIntegration {
   @ParameterizedTest
   @MethodSource("mapParametersValues")
   void testJobDoesNotExistForOtherUser(Map<String, JsonNode> params) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var adminId = userLookupService.findUserId(ADMIN);
-    var result = createOrReuseDraftJob(adminId, session, jobType);
+    var result = createOrReuseDraftJob(adminId, sessionId, jobType);
     var jobId = result.jobId();
     var guestId = userLookupService.findUserId(GUEST);
     assertThatExceptionOfType(JobDoesNotExistException.class)
@@ -281,10 +281,10 @@ class TestJobParamsServiceIntegration {
   @ParameterizedTest
   @MethodSource("mapParametersValues")
   void testJobIsNotDraft(Map<String, JsonNode> params) {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
 
@@ -296,10 +296,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testJobParameterIsNullOrBlank() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramName = "";
@@ -317,10 +317,10 @@ class TestJobParamsServiceIntegration {
   @ParameterizedTest
   @MethodSource("parametersValues")
   void testUnknownOrUnsupportedJobParameter(String paramName) throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
@@ -337,10 +337,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testInvalidStringJobParameterType() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramName = "solvingMethod";
@@ -364,10 +364,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testInvalidNumericJobParameterType() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramName = "tolerance";
@@ -391,10 +391,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testInvalidJobParameterValue() throws JsonProcessingException {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramName = "solvingMethod";
@@ -414,10 +414,10 @@ class TestJobParamsServiceIntegration {
 
   @Test
   void testNullJobParameterValue() {
-    var session = newSessionId();
+    var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
-    var result = createOrReuseDraftJob(userId, session, jobType);
+    var result = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = result.jobId();
 
     var paramName = "solvingMethod";
@@ -432,7 +432,7 @@ class TestJobParamsServiceIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private JobCreationResult createOrReuseDraftJob(long user, String session, String jobType) {
-    return jobCreationService.createOrReuseDraftJob(user, session, jobType);
+  private JobCreationResult createOrReuseDraftJob(long userId, String sessionId, String jobType) {
+    return jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType);
   }
 }
