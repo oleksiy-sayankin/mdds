@@ -19,6 +19,19 @@ Refer to the LICENSE file in the root directory for full license details.
     * [Lifecycle rules](#lifecycle-rules)
   * [Client-Server Interaction](#client-server-interaction-)
   * [Object Storage Layout](#object-storage-layout)
+  * [Worker API and configuration](#worker-api-and-configuration)
+    * [Worker runtime lifecycle](#worker-runtime-lifecycle)
+    * [Worker internal services](#worker-internal-services)
+    * [Failure policy](#failure-policy)
+    * [Timeout policy](#timeout-policy)
+    * [Worker environment variables](#worker-environment-variables)
+    * [Job cancellation](#job-cancellation)
+    * [Job handler contract](#job-handler-contract)
+    * [Local execution registry](#local-execution-registry)
+    * [Terminal status publication rule](#terminal-status-publication-rule)
+    * [Submitted job message](#submitted-job-message)
+    * [Status update message](#status-update-message)
+    * [Cancellation message](#cancellation-message)
   * [REST API v1](#rest-api-v1)
     * [1. Create or Reuse a Draft Job](#1-create-or-reuse-a-draft-job)
     * [2. Request a Pre-Signed Upload URL for an Input Artifact](#2-request-a-pre-signed-upload-url-for-an-input-artifact)
@@ -93,8 +106,8 @@ The Web Server is responsible for:
 - consuming asynchronous lifecycle updates from Workers;
 - persisting updates from Workers to Metadata Store;
 - issuing pre-signed download URLs for results;
-- persisting the latest known `workerId` for the job in Metadata Store.
-- optionally reconciling stale jobs that remain in non-terminal states for too long. 
+- persisting the latest known `workerId` for the job in Metadata Store;
+- optionally reconciling stale jobs that remain in non-terminal states for too long.
 
 The Web Server should not contain job-specific execution logic.
 
@@ -172,8 +185,8 @@ graph TD;
 - A job can be submitted only after all required inputs and required parameters have been provided.
 - After a job is submitted, its input artifacts and parameters must be treated as immutable.
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
-- Cancellation is supported only for jobs that are already in `IN_PROGRESS` state and have a known `workerId`;
-- Jobs in `DRAFT` are not cancellable; the client may simply stop using the draft job;
+- Cancellation is supported only for jobs that are already in `IN_PROGRESS` state and have a known `workerId`.
+- Jobs in `DRAFT` are not cancellable; the client may simply stop using the draft job.
 - Jobs in `SUBMITTED` are already accepted into the execution pipeline but are not yet owned by a specific Worker, therefore cancellation of `SUBMITTED` jobs is not supported in v1.
 - Downloading results is allowed only when the job is in `DONE`.
 - An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
@@ -184,6 +197,7 @@ graph TD;
 ## Client-Server Interaction 
 
 The diagram below shows the main sequence of interactions from creating job and obtaining its results.
+The diagram shows the successful happy-path scenario. Validation failure, runtime error and cancellation flows are described separately.
 
 ```mermaid
 sequenceDiagram
@@ -270,6 +284,322 @@ jobs/42/abc-123/out/solution.csv
 Note: in S3-compatible storage these are object keys with prefixes, not real directories.
 
 ---
+
+## Worker API and configuration
+
+MDDS Python Worker Runtime is a reusable worker template.
+It handles RabbitMQ, S3, manifest loading, status publishing,
+cancellation, progress reporting, output upload, ack/nack, and lifecycle errors.
+A concrete worker implementation provides only job-specific validation and execution logic.
+Extension point:
+
+```python
+class JobHandler:
+    def validate(self, context: JobExecutionContext) -> None:
+        ...
+
+    def execute(self, context: JobExecutionContext) -> None:
+        ...
+```
+
+`workerId` is included in all Worker-published status updates for observability.
+Only `IN_PROGRESS` workerId is used by the Web Server for targeted cancellation.
+For `VALIDATION_FAILED` and `ERROR`, `workerId` is used only for observability and is not used for cancellation targeting.
+
+### Worker runtime lifecycle
+
+On startup the runtime:
+
+1. resolves `workerId`;
+2. creates RabbitMQ and S3 clients;
+3. resolves the cancellation queue name;
+4. subscribes to the resolved cancellation queue;
+5. resolves the job queue name;
+6. subscribes to the resolved job queue.
+
+By default, the job queue name is `queue-${MDDS_WORKER_JOB_TYPE}`.
+By default, the cancellation queue name is `cancel.queue-${MDDS_WORKER_ID}`.
+For each job message the runtime:
+
+1. extracts `manifestObjectKey`;
+2. loads `manifest.json` from object storage;
+3. validates manifest schema;
+4. downloads declared input artifacts;
+5. creates `JobExecutionContext`;
+6. calls `handler.validate(context)`;
+7. publishes `VALIDATION_FAILED` and acknowledges the job message if validation fails;
+8. publishes `IN_PROGRESS` with `workerId` if validation succeeds;
+9. registers the running job in the local execution registry;
+10. starts job execution in a supervised execution process;
+11. collects output artifacts produced through runtime-provided output abstractions and uploads them to object storage when the process completes successfully;
+12. publishes `DONE` with progress `100`;
+13. acknowledges the job message.
+
+The runtime also starts a cancellation listener. The listener subscribes to
+`MDDS_WORKER_CANCEL_QUEUE_NAME`. 
+When a cancellation message is received, the cancellation listener marks the local execution as cancelled
+and notifies the execution supervisor. The Worker Runtime then terminates the supervised job process,
+publishes `CANCELLED`, and acknowledges the original submitted job message according to the RabbitMQ client threading model.
+
+The runtime acknowledges the job message only after the job reaches a terminal state
+from the worker point of view: `DONE`, `ERROR`, `CANCELLED`, or `VALIDATION_FAILED`.
+
+For each job, the Worker Runtime must publish at most one terminal status:
+`DONE`, `ERROR`, `CANCELLED`, or `VALIDATION_FAILED`.
+
+The first successfully committed terminal transition wins.
+After a terminal status is published, all later terminal attempts for the same `jobId`
+must be ignored and logged.
+
+If the runtime fails before publishing a terminal status, it may reject/nack the job message according to the configured retry policy.
+
+Retry and dead-letter policy are implementation-specific in v1.
+
+While the supervised job process is running, the Worker Runtime periodically publishes `IN_PROGRESS` 
+status updates according to `MDDS_WORKER_PROGRESS_INTERVAL_SECONDS`.
+The progress value is calculated from elapsed execution time relative to `MDDS_WORKER_JOB_TIMEOUT_SECONDS`.
+
+### Worker internal services
+
+The Worker Runtime consists of the following internal services:
+
+- **Job consumer** — consumes submitted job messages from the job queue.
+- **Execution supervisor** — starts and tracks supervised job processes.
+- **Execution registry** — stores active job execution records by `jobId`.
+- **Cancellation listener** — consumes cancellation messages from the worker-specific cancellation queue.
+- **Execution watcher** — observes child process completion and converts it to `DONE` or `ERROR`.
+- **Cleanup watcher** — removes terminal execution records after status publication and acknowledgement.
+- **Timeout watcher** — terminates jobs that exceed configured runtime timeout and publishes `ERROR`.
+
+These services are internal runtime implementation details. A concrete job handler must not interact with them directly.
+
+The supervised job process communicates its result to the main Worker Runtime through an internal IPC channel.
+The concrete IPC mechanism is implementation-specific.
+In v1 it may be a multiprocessing Pipe.
+
+The child process must not publish lifecycle statuses directly.
+It returns execution outcome to the main runtime, and the main runtime publishes final status updates.
+
+### Failure policy
+
+If `handler.validate(context)` raises `ValidationFailed`, the runtime publishes `VALIDATION_FAILED` and acknowledges 
+the job message.
+
+If supervised execution fails after `IN_PROGRESS` was published, the runtime publishes `ERROR`
+and acknowledges the job message. Failure may be detected through an IPC error result,
+an unexpected child process exit, or an execution watcher error.
+
+If manifest loading or manifest schema validation fails, the runtime publishes `VALIDATION_FAILED` when `jobId` can be determined from the manifest or message.
+If `jobId` cannot be determined, the runtime logs the error and rejects/nacks the message according to retry policy.
+
+If the runtime cannot read or parse the job message or cannot determine `jobId`, it logs the error and rejects/nacks the message according to the configured retry policy.
+
+The exact retry and dead-letter policy is implementation-specific in v1.
+
+In v1, semantic validation is performed in the main worker process before supervised execution starts.
+If validation is expected to be long-running for some future job type, it should be moved into supervised execution in a later version.
+Cancellation is supported only after the job enters `IN_PROGRESS`; therefore validation itself is not cancellable in v1.
+
+
+### Timeout policy
+
+The Worker Runtime may enforce a maximum execution time for a running job.
+
+If a job remains in `IN_PROGRESS` longer than `MDDS_WORKER_JOB_TIMEOUT_SECONDS`,
+the timeout watcher terminates the supervised job process, publishes `ERROR`
+with a timeout message, and acknowledges the original submitted job message.
+
+Timeout is treated as runtime failure, not as cancellation.
+
+### Worker environment variables
+
+The table below lists environment variables used to configure the Worker runtime.
+
+| Variable Name                                   | Required | Default Value                    | Meaning                                                                     | Example                                   |
+|-------------------------------------------------|---------:|----------------------------------|-----------------------------------------------------------------------------|-------------------------------------------|
+| `MDDS_WORKER_ID`                                |       No | `worker-{hostname}-{uuid}`       | Stable worker identifier used for status updates and targeted cancellation. | `worker-slae-1`                           |
+| `MDDS_WORKER_JOB_TYPE`                          |      Yes | —                                | Job type this worker can execute. Used to derive the job queue name.        | `solving_slae`                            |
+| `MDDS_WORKER_JOB_QUEUE_NAME`                    |       No | `queue-${MDDS_WORKER_JOB_TYPE}`  | RabbitMQ queue from which submitted jobs are consumed.                      | `queue-solving_slae`                      |
+| `MDDS_WORKER_CANCEL_QUEUE_NAME`                 |       No | `cancel.queue-${MDDS_WORKER_ID}` | RabbitMQ queue used for targeted cancellation messages.                     | `cancel.queue-worker-slae-1`              |
+| `MDDS_STATUS_QUEUE_NAME`                        |       No | `mdds_status_queue`              | RabbitMQ queue where worker publishes job status updates.                   | `mdds_status_queue`                       |
+| `MDDS_RABBITMQ_HOST`                            |      Yes | —                                | RabbitMQ host.                                                              | `rabbitmq`                                |
+| `MDDS_RABBITMQ_PORT`                            |       No | `5672`                           | RabbitMQ AMQP port.                                                         | `5672`                                    |
+| `MDDS_RABBITMQ_USER`                            |      Yes | —                                | RabbitMQ username.                                                          | `mdds`                                    |
+| `MDDS_RABBITMQ_PASSWORD`                        |      Yes | —                                | RabbitMQ password.                                                          | `secret`                                  |
+| `MDDS_OBJECT_STORAGE_BUCKET`                    |      Yes | —                                | S3/MinIO bucket with manifests, inputs and outputs.                         | `mdds`                                    |
+| `MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT`         |      Yes | —                                | Internal S3/MinIO endpoint used by Worker.                                  | `http://minio:9000`                       |
+| `MDDS_OBJECT_STORAGE_REGION`                    |       No | `us-east-1`                      | S3 region.                                                                  | `us-east-1`                               |
+| `MDDS_OBJECT_STORAGE_ACCESS_KEY`                |      Yes | —                                | S3 access key.                                                              | `minioadmin`                              |
+| `MDDS_OBJECT_STORAGE_SECRET_KEY`                |      Yes | —                                | S3 secret key.                                                              | `minioadmin`                              |
+| `MDDS_OBJECT_STORAGE_PATH_STYLE_ACCESS_ENABLED` |       No | `true`                           | Whether to use path-style S3 addressing. Usually required for MinIO.        | `true`                                    |
+| `MDDS_WORKER_HANDLER`                           |      Yes | —                                | Python import path of concrete job handler.                                 | `mdds_slae_worker.handler:SlaeJobHandler` |
+| `MDDS_WORKER_JOB_TIMEOUT_SECONDS`               |       No | `3600`                           | Maximum execution time for one job.                                         | `3600`                                    |
+| `MDDS_WORKER_CLEANUP_INTERVAL_SECONDS`          |       No | `1`                              | Cleanup watcher polling interval.                                           | `1`                                       |
+| `MDDS_WORKER_PROGRESS_INTERVAL_SECONDS`         |       No | `5`                              | Interval for publishing time-based `IN_PROGRESS` updates.                   | `5`                                       |
+
+If `MDDS_WORKER_JOB_QUEUE_NAME` is not set, the runtime derives it as:
+
+```text
+queue-${MDDS_WORKER_JOB_TYPE}
+```
+
+This must match the queue name used by the Web Server when submitting a job.
+
+`MDDS_WORKER_JOB_TIMEOUT_SECONDS`, `MDDS_WORKER_PROGRESS_INTERVAL_SECONDS` and `MDDS_WORKER_CLEANUP_INTERVAL_SECONDS` must be greater than zero. 
+
+### Job cancellation
+
+The runtime keeps the original submitted job message unacknowledged while the job is running.
+When cancellation succeeds, the Worker Runtime publishes `CANCELLED` and acknowledges the original submitted job message.
+The acknowledgement may be performed by the execution supervisor rather than directly by the cancellation listener.
+
+If `MDDS_WORKER_CANCEL_QUEUE_NAME` is not set, the runtime derives it as:
+
+```text
+cancel.queue-${MDDS_WORKER_ID}
+```
+
+If a job is cancelled, the runtime must not publish `DONE`.
+Partially produced output artifacts are implementation-defined and must not be exposed through
+the public output download endpoint because downloads are allowed only in `DONE` state.
+
+Cancellation is best-effort. If the job has already reached a terminal state before the cancellation listener terminates it,
+the cancellation request is ignored and no additional terminal status is published.
+
+### Job handler contract
+
+A concrete worker implementation must provide a handler class.
+
+The handler is responsible for:
+
+- validating job-specific input artifacts and parameters;
+- executing the job-specific business logic;
+- producing output artifacts expected by the manifest through runtime-provided output abstractions.
+
+The handler must produce output artifacts only through `context.outputs` or another runtime-provided output writer.
+
+The handler is not responsible for cancellation in v1. Cancellation is handled by the Worker Runtime.
+
+The handler must not:
+
+- consume RabbitMQ messages directly;
+- consume cancellation messages directly;
+- publish lifecycle statuses directly;
+- acknowledge or reject job messages;
+- construct S3 object keys manually;
+- update the Metadata Store directly;
+- upload output artifacts directly to S3.
+
+The concrete API is implementation-specific, but conceptually the handler writes:
+
+```python
+context.outputs.write("solution", solution_bytes)
+```
+
+The runtime maps logical output slots to object keys from `manifest.outputs` and uploads the bytes to object storage.
+
+The handler is not responsible for progress reporting in v1.
+The handler must not publish progress or lifecycle status messages directly.
+
+In v1, progress is generated by the Worker Runtime based on elapsed execution time and the configured job timeout.
+
+### Local execution registry
+
+The Worker Runtime maintains an in-memory execution registry.
+
+The registry maps:
+
+```text
+jobId -> JobExecutionRecord
+```
+
+Each record contains at least:
+
+* job identifier;
+* supervised process handle;
+* current local execution status;
+* start time;
+* optional end time;
+* original submitted job message delivery/acknowledgement handle;
+* parent-side IPC connection used to receive process result/status;
+* terminal status publication flag;
+* cleanup eligibility flag.
+
+The registry is internal to the Worker Runtime. A concrete job handler must not access it directly.
+
+### Terminal status publication rule
+
+For each job, the Worker Runtime must publish at most one terminal status.
+
+Terminal statuses are:
+
+- `DONE`;
+- `ERROR`;
+- `CANCELLED`;
+- `VALIDATION_FAILED`.
+
+The first terminal transition wins. After a terminal status has been published,
+all later terminal attempts for the same `jobId` must be ignored and logged.
+
+### Submitted job message
+
+The submitted job message payload contains:
+
+```json
+{
+  "manifestObjectKey": "jobs/123/job-1/manifest.json"
+}
+```
+`manifestObjectKey` is the only required field in v1. The Worker obtains `jobId`, `userId`, and `jobType` from the manifest.
+
+### Status update message
+
+The worker runtime publishes status updates to `MDDS_STATUS_QUEUE_NAME` using this payload:
+
+```json
+{
+  "jobId": "<job-id>",
+  "workerId": "<worker-id>",
+  "status": "IN_PROGRESS",
+  "progress": 0,
+  "message": "Worker started processing",
+  "eventTime": "2026-03-20T14:30:00Z"
+}
+```
+
+| Status              | `workerId` required | progress rule                          | message              |
+|---------------------|---------------------|----------------------------------------|----------------------|
+| `VALIDATION_FAILED` | Yes                 | implementation-defined, usually `0`    | required/recommended |
+| `IN_PROGRESS`       | Yes                 | runtime-generated, time-based, `0..99` | optional             |
+| `DONE`              | Yes                 | must be `100`                          | optional             |
+| `ERROR`             | Yes                 | implementation-defined                 | required/recommended |
+| `CANCELLED`         | Yes                 | implementation-defined                 | optional/recommended |
+
+
+The Worker must not publish `DRAFT`, `SUBMITTED`, or `CANCEL_REQUESTED`.
+These states are controlled by the Web Server.
+
+In v1, `IN_PROGRESS` progress is runtime-generated and time-based:
+
+```text
+progress = min(99, floor(elapsedSeconds / MDDS_WORKER_JOB_TIMEOUT_SECONDS * 100))
+```
+
+### Cancellation message
+
+The runtime listens on `MDDS_WORKER_CANCEL_QUEUE_NAME`.
+By default, this queue is derived as `cancel.queue-${MDDS_WORKER_ID}`.
+
+```json
+{
+  "jobId": "<job-id>"
+}
+```
+
+The cancellation message itself is acknowledged after the Worker Runtime accepts it for local processing.
+
+If no active execution record exists for the given `jobId`, the runtime logs the condition and acknowledges or 
+rejects the cancellation message according to the configured cancellation-message policy.
 
 ## REST API v1
 
