@@ -10,7 +10,10 @@ PROJECT_VERSION := 0.1.0
 MDDS_GRPC_CORE := mdds_grpc_core
 MDDS_WEB_SERVER := mdds-web-server
 MDDS_WEB_CLIENT := mdds-web-client
-PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_GRPC_CORE)
+MDDS_PYTHON_WORKER_RUNTIME := mdds-python-worker-runtime
+PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_PYTHON_WORKER_RUNTIME)
+PYTHON_MAIN := $(PYTHON_ROOT)/src/main/python
+PYTHON_TEST := $(PYTHON_ROOT)/src/test/python
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT :=  $(PROJECT_ROOT)/$(MDDS_CLIENT)/src
 JAVA_ROOT := $(PROJECT_ROOT)
@@ -236,7 +239,7 @@ check_python_code_style:
 	$(call log_info,"Checking python code style...")
 	pycodestyle $(PYTHON_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(PYTHON_ROOT) --fix --force-exclude $(VENV_DIR) ./$(PYTHON_GENERATED_SOURCES)/ --respect-gitignore
-	pylint $(PYTHON_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(PYTHON_MAIN):$(PYTHON_TEST):$$PYTHONPATH pylint $(PYTHON_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking python code style completed.")
 
 #
@@ -276,8 +279,23 @@ reformat_bash:
 #
 test_python:
 	$(call log_info,"Running Python unit tests...")
-	@pytest -v
+	PYTHONPATH=$(PYTHON_MAIN):$(PYTHON_TEST):$$PYTHONPATH pytest -v $(PYTHON_TEST)
 	$(call log_done,"Python tests completed.")
+
+
+#
+# Run Python tests with coverage
+#
+test_python_coverage:
+	$(call log_info,"Running Python unit tests with coverage...")
+	cd $(MDDS_PYTHON_WORKER_RUNTIME) && \
+	  PYTHONPATH=src/main/python:src/test/python:$$PYTHONPATH \
+	  python -m pytest src/test/python \
+	    --cov=src/main/python/mdds_worker_runtime \
+	    --cov-branch \
+	    --cov-report=term-missing \
+	    --cov-report=xml:target/python-coverage.xml
+	$(call log_done,"Python tests with coverage completed.")
 
 #
 # Reformat Java sources
@@ -306,6 +324,7 @@ reformat_xml:
 #
 sonar_scan:
 	$(call log_info,"Running SonarQube analysis...")
+	$(call log_info,"Python coverage report expected at $(MDDS_PYTHON_WORKER_RUNTIME)/target/python-coverage.xml")
 	@mvn clean verify sonar:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
 	  -Dsonar.host.url=$(SONAR_HOST_URL) \
@@ -322,7 +341,7 @@ sonar_scan:
     	    | jq -r '.issues[] | "- " + .severity + " | " + .component + ":" + (.line|tostring) + " → " + .message';
 	$(call log_info,"Fetching additional metrics ...");
 	@curl -s -u $(SONAR_TOKEN): \
-      "$(SONAR_HOST_URL)/api/measures/component?component=$(SONAR_PROJECT_KEY)&metricKeys=coverage,duplicated_lines_density,security_hotspots" \
+      "$(SONAR_HOST_URL)/api/measures/component?component=$(SONAR_PROJECT_KEY)&metricKeys=coverage,new_coverage,duplicated_lines_density,security_hotspots" \
       | jq -r '.component.measures[] | " - " + .metric + ": " + .value + "%"'
 	@STATUS=$$(curl -s -u $(SONAR_TOKEN): \
 	  "$(SONAR_HOST_URL)/api/qualitygates/project_status?projectKey=$(SONAR_PROJECT_KEY)" \

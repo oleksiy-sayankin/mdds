@@ -1,0 +1,17 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+[run]
+branch = True
+relative_files = True
+source =
+    src/main/python/mdds_worker_runtime
+
+[report]
+omit =
+    */src/test/*
+    */tests/*
+    */__init__.py
+
+[xml]
+output = target/python-coverage.xml

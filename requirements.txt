@@ -26,3 +26,6 @@ protobuf
 grpcio
 grpcio-health-checking
 grpcio-reflection
+pytest
+pytest-cov
+coverage

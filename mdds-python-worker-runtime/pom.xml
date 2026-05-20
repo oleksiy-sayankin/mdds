@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.-->
+<!-- Refer to the LICENSE file in the root directory for full license details.-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.mdds</groupId>
+    <artifactId>mdds</artifactId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>mdds-python-worker-runtime</artifactId>
+  <name>MDDS Python Worker Runtime</name>
+  <properties>
+    <skipTests>false</skipTests>
+    <sonar.sources>src/main/python</sonar.sources>
+    <sonar.tests>src/test/python</sonar.tests>
+    <sonar.python.coverage.reportPaths>target/python-coverage.xml</sonar.python.coverage.reportPaths>
+  </properties>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.1</version>
+        <executions>
+          <execution>
+            <id>python-test</id>
+            <phase>test</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <skip>${skipTests}</skip>
+              <executable>python</executable>
+              <workingDirectory>${project.basedir}</workingDirectory>
+              <environmentVariables>
+                <PYTHONPATH>${project.basedir}/src/main/python:${project.basedir}/src/test/python</PYTHONPATH>
+              </environmentVariables>
+              <arguments>
+                <argument>-m</argument>
+                <argument>pytest</argument>
+                <argument>src/test/python</argument>
+                <!-- Console output for local development. -->
+                <argument>--cov=src/main/python/mdds_worker_runtime</argument>
+                <argument>--cov-branch</argument>
+                <argument>--cov-report=term-missing</argument>
+                <!-- XML report imported by SonarQube. -->
+                <argument>--cov-report=xml:${project.build.directory}/python-coverage.xml</argument>
+              </arguments>
+              <successCodes>
+                <successCode>0</successCode>
+              </successCodes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
