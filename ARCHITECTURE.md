@@ -421,7 +421,7 @@ The table below lists environment variables used to configure the Worker runtime
 | `MDDS_WORKER_JOB_TYPE`                          |      Yes | —                                | Job type this worker can execute. Used to derive the job queue name.        | `solving_slae`                            |
 | `MDDS_WORKER_JOB_QUEUE_NAME`                    |       No | `queue-${MDDS_WORKER_JOB_TYPE}`  | RabbitMQ queue from which submitted jobs are consumed.                      | `queue-solving_slae`                      |
 | `MDDS_WORKER_CANCEL_QUEUE_NAME`                 |       No | `cancel.queue-${MDDS_WORKER_ID}` | RabbitMQ queue used for targeted cancellation messages.                     | `cancel.queue-worker-slae-1`              |
-| `MDDS_STATUS_QUEUE_NAME`                        |       No | `mdds_status_queue`              | RabbitMQ queue where worker publishes job status updates.                   | `mdds_status_queue`                       |
+| `MDDS_WORKER_STATUS_QUEUE_NAME`                 |       No | `mdds_status_queue`              | RabbitMQ queue where worker publishes job status updates.                   | `mdds_status_queue`                       |
 | `MDDS_RABBITMQ_HOST`                            |      Yes | —                                | RabbitMQ host.                                                              | `rabbitmq`                                |
 | `MDDS_RABBITMQ_PORT`                            |       No | `5672`                           | RabbitMQ AMQP port.                                                         | `5672`                                    |
 | `MDDS_RABBITMQ_USER`                            |      Yes | —                                | RabbitMQ username.                                                          | `mdds`                                    |
@@ -554,7 +554,7 @@ The submitted job message payload contains:
 
 ### Status update message
 
-The worker runtime publishes status updates to `MDDS_STATUS_QUEUE_NAME` using this payload:
+The worker runtime publishes status updates to `MDDS_WORKER_STATUS_QUEUE_NAME` using this payload:
 
 ```json
 {
