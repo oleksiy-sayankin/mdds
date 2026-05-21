@@ -505,6 +505,7 @@ check_license:
 		-not -name "*.dockerignore" \
 		-not -name "*.json" \
 		-not -name "*.env" \
+		-not -name "*.coverage" \
 		-not -name "*.iml" \
 		-not -name "__init__.py"); \
 	STATUS=0; \
