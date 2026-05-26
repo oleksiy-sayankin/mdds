@@ -4,6 +4,7 @@ import json
 import logging
 
 from mdds_worker_runtime import logging_config
+from mdds_worker_runtime.logging_config import JsonLogFormatter, setup_logging
 
 
 def flush_log_handlers() -> None:
@@ -136,3 +137,47 @@ def test_json_log_preserves_unicode(capsys):
 
     payload = json.loads(captured.out.strip())
     assert payload["message"] == message
+
+
+def test_json_log_formatter_includes_extra_fields():
+    formatter = JsonLogFormatter(service_name="test-service")
+
+    record = logging.LogRecord(
+        name="test.logger",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=10,
+        msg="Test message",
+        args=(),
+        exc_info=None,
+    )
+    record.jobId = "job-1"
+    record.workerId = "worker-1"
+    record.event = "manifest_loaded"
+    record.component = "manifest_loader"
+    record.manifestObjectKey = "jobs/123/job-1/manifest.json"
+
+    actual = json.loads(formatter.format(record))
+
+    assert actual["service"] == "test-service"
+    assert actual["level"] == "INFO"
+    assert actual["message"] == "Test message"
+    assert actual["jobId"] == "job-1"
+    assert actual["workerId"] == "worker-1"
+    assert actual["event"] == "manifest_loaded"
+    assert actual["component"] == "manifest_loader"
+    assert actual["manifestObjectKey"] == "jobs/123/job-1/manifest.json"
+
+
+def test_setup_logging_configures_json_stdout(capsys):
+    setup_logging(service_name="test-service", level=logging.INFO)
+
+    logger = logging.getLogger("test.logger")
+    logger.info("Hello", extra={"event": "test_event"})
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert payload["service"] == "test-service"
+    assert payload["message"] == "Hello"
+    assert payload["event"] == "test_event"

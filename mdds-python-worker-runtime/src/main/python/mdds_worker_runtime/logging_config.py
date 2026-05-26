@@ -45,11 +45,20 @@ class JsonLogFormatter(logging.Formatter):
         for field in (
             "userId",
             "jobId",
+            "jobType",
             "workerId",
             "event",
             "component",
             "status",
             "progress",
+            "manifestObjectKey",
+            "bucket",
+            "objectKey",
+            "queueName",
+            "errorCode",
+            "inputSlots",
+            "outputSlots",
+            "paramNames",
         ):
             value = getattr(record, field, None)
             if value is not None:

@@ -1,11 +1,13 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
-
+import logging
 from dataclasses import dataclass, fields
 from typing import get_type_hints
 import os
 import socket
 import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class WorkerConfigError(RuntimeError):
@@ -42,6 +44,7 @@ class WorkerConfig:
 
 def load_config() -> WorkerConfig:
     """Read Worker configuration from environment variables."""
+    logger.info("Loading Worker configuration from environment variables...")
     worker_id = _env_str("MDDS_WORKER_ID", default_factory=_generate_worker_id)
     worker_job_type = _env_str("MDDS_WORKER_JOB_TYPE")
 
@@ -90,6 +93,7 @@ def load_config() -> WorkerConfig:
         ),
     )
 
+    logger.info("Validating Worker configuration...")
     validate_config(config)
     return config
 
