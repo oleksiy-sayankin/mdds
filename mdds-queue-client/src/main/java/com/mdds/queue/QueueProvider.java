@@ -11,8 +11,8 @@ public interface QueueProvider {
   /**
    * Creates configuration for Queue and connects to Queue with that configuration.
    *
-   * @return Queue instance
+   * @return Queue Client instance
    */
   @Nonnull
-  Queue get();
+  QueueClient get();
 }

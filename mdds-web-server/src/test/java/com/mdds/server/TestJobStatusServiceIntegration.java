@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mdds.domain.JobStatus;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.UploadObjectArgs;
@@ -49,8 +49,8 @@ class TestJobStatusServiceIntegration {
   @Autowired private JobInputUploadService jobInputUploadService;
   @Autowired private JobStatusService jobStatusService;
 
-  @MockitoBean(name = "jobQueue")
-  private Queue jobQueue;
+  @MockitoBean(name = "jobQueueClient")
+  private QueueClient jobQueueClient;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MINIO_BUCKET = "mdds";
@@ -143,7 +143,7 @@ class TestJobStatusServiceIntegration {
     assertThat(statusResponse.finishedAt()).isNull();
 
     var queueName = "queue-" + jobType;
-    verify(jobQueue).publish(eq(queueName), any());
+    verify(jobQueueClient).publish(eq(queueName), any());
   }
 
   private static void initMinioClient() {

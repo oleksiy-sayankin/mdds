@@ -9,7 +9,7 @@ import com.mdds.queue.CancelBus;
 import com.mdds.queue.CancelDestinationResolver;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.queue.Subscription;
 import jakarta.annotation.Nonnull;
 import lombok.extern.slf4j.Slf4j;
@@ -19,22 +19,23 @@ import org.jspecify.annotations.NonNull;
 @Slf4j
 public class RabbitMqCancelBus implements CancelBus {
 
-  private final Queue cancelQueue;
+  private final QueueClient cancelQueueClient;
   private final CancelDestinationResolver resolver;
 
-  public RabbitMqCancelBus(Queue cancelQueue, CancelDestinationResolver resolver) {
-    this.cancelQueue = cancelQueue;
+  public RabbitMqCancelBus(QueueClient cancelQueueClient, CancelDestinationResolver resolver) {
+    this.cancelQueueClient = cancelQueueClient;
     this.resolver = resolver;
   }
 
   @Override
   public void sendCancel(@NonNull String executorId, @NonNull Message<CancelJobDTO> message) {
-    cancelQueue.publish(resolver.destinationFor(executorId), message);
+    cancelQueueClient.publish(resolver.destinationFor(executorId), message);
   }
 
   @Override
   public Subscription subscribe(
       @Nonnull String executorId, @Nonnull MessageHandler<CancelJobDTO> handler) {
-    return cancelQueue.subscribe(resolver.destinationFor(executorId), CancelJobDTO.class, handler);
+    return cancelQueueClient.subscribe(
+        resolver.destinationFor(executorId), CancelJobDTO.class, handler);
   }
 }

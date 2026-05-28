@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 
 import com.mdds.domain.JobStatus;
 import com.mdds.dto.CancelJobDTO;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.support.JobTestFixture;
 import java.time.Duration;
@@ -46,8 +46,8 @@ class TestJobCancellationServiceIntegration {
   @Autowired private JobCancellationService jobCancellationService;
   @Autowired private JobsRepository jobsRepository;
 
-  @MockitoBean(name = "cancelQueue")
-  private Queue cancelQueue;
+  @MockitoBean(name = "cancelQueueClient")
+  private QueueClient cancelQueueClient;
 
   @Container
   private static final PostgreSQLContainer<?> POSTGRES =
@@ -99,7 +99,7 @@ class TestJobCancellationServiceIntegration {
     job = jobsRepository.findById(jobId).orElseThrow();
     var queueName = "cancel.queue-" + workerId;
     assertThat(job.getStatus()).isEqualTo(JobStatus.CANCEL_REQUESTED);
-    verify(cancelQueue)
+    verify(cancelQueueClient)
         .publish(
             eq(queueName),
             argThat(
@@ -141,7 +141,7 @@ class TestJobCancellationServiceIntegration {
                 + "' is in terminal state '"
                 + jobStatus.getCode()
                 + "' and cancellation is not allowed.");
-    verify(cancelQueue, never()).publish(any(), any());
+    verify(cancelQueueClient, never()).publish(any(), any());
   }
 
   private static Stream<JobStatus> jobInvalidStatusValues() {
@@ -176,7 +176,7 @@ class TestJobCancellationServiceIntegration {
                 + "' is in state '"
                 + jobStatus.getCode()
                 + "' and cancellation is supported only for 'IN_PROGRESS' jobs.");
-    verify(cancelQueue, never()).publish(any(), any());
+    verify(cancelQueueClient, never()).publish(any(), any());
   }
 
   @Test
@@ -201,7 +201,7 @@ class TestJobCancellationServiceIntegration {
     assertThatExceptionOfType(JobDoesNotExistException.class)
         .isThrownBy(() -> jobCancellationService.cancel(guestUserId, jobId))
         .withMessage("Job with id '" + jobId + "' does not exist.");
-    verify(cancelQueue, never()).publish(any(), any());
+    verify(cancelQueueClient, never()).publish(any(), any());
   }
 
   @Test
@@ -224,7 +224,7 @@ class TestJobCancellationServiceIntegration {
     assertThatExceptionOfType(JobHasNoWorkerAssignedException.class)
         .isThrownBy(() -> jobCancellationService.cancel(userId, jobId))
         .withMessage("Job '" + jobId + "' is in state 'IN_PROGRESS' but workerId is not assigned.");
-    verify(cancelQueue, never()).publish(any(), any());
+    verify(cancelQueueClient, never()).publish(any(), any());
   }
 
   @Test
@@ -234,7 +234,7 @@ class TestJobCancellationServiceIntegration {
     assertThatExceptionOfType(JobDoesNotExistException.class)
         .isThrownBy(() -> jobCancellationService.cancel(userId, jobId))
         .withMessage("Job with id '" + jobId + "' does not exist.");
-    verify(cancelQueue, never()).publish(any(), any());
+    verify(cancelQueueClient, never()).publish(any(), any());
   }
 
   @Test
@@ -250,7 +250,7 @@ class TestJobCancellationServiceIntegration {
     jobsRepository.save(job);
 
     jobCancellationService.cancel(userId, jobId);
-    verify(cancelQueue, never()).publish(any(), any());
+    verify(cancelQueueClient, never()).publish(any(), any());
   }
 
   private static String newSessionId() {

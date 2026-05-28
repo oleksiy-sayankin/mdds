@@ -4,7 +4,7 @@
  */
 package com.mdds.queue;
 
-/** Here we inform the Queue that is processed (ack) or not processed (nack). */
+/** Here we inform the Queue that message is processed (ack) or not processed (nack). */
 public interface Acknowledger {
   /** Acknowledge that message is processed. */
   void ack();

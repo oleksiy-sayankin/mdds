@@ -10,7 +10,7 @@ import static org.mockito.Mockito.mock;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.SolveRequestDTO;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.storage.DataStorage;
 import java.util.List;
 import java.util.Map;
@@ -18,20 +18,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class TestServerApplicationSolveController {
-  private Queue queue;
+  private QueueClient queueClient;
   private DataStorage dataStorage;
   private CommonProperties commonProperties;
 
   @BeforeEach
   void setUp() {
-    queue = mock(Queue.class);
+    queueClient = mock(QueueClient.class);
     dataStorage = mock(DataStorage.class);
     commonProperties = mock(CommonProperties.class);
   }
 
   @Test
   void testDoPost() {
-    var ssc = new ServerSolveController(dataStorage, queue, commonProperties);
+    var ssc = new ServerSolveController(dataStorage, queueClient, commonProperties);
     var request =
         new SolveRequestDTO(
             "http_request",
@@ -48,7 +48,7 @@ class TestServerApplicationSolveController {
 
   @Test
   void testDoPostNoMatrix() {
-    var ssc = new ServerSolveController(dataStorage, queue, commonProperties);
+    var ssc = new ServerSolveController(dataStorage, queueClient, commonProperties);
     var request =
         new SolveRequestDTO(
             "http_request", "numpy_exact_solver", Map.of("rhs", List.of(1.3, 2.2, 3.7)));
@@ -59,7 +59,7 @@ class TestServerApplicationSolveController {
 
   @Test
   void testDoPostNoRhs() {
-    var ssc = new ServerSolveController(dataStorage, queue, commonProperties);
+    var ssc = new ServerSolveController(dataStorage, queueClient, commonProperties);
     var request =
         new SolveRequestDTO(
             "http_request",
@@ -74,7 +74,7 @@ class TestServerApplicationSolveController {
 
   @Test
   void testDoPostNoSolvingMethod() {
-    var ssc = new ServerSolveController(dataStorage, queue, commonProperties);
+    var ssc = new ServerSolveController(dataStorage, queueClient, commonProperties);
     var request =
         new SolveRequestDTO(
             "http_request",

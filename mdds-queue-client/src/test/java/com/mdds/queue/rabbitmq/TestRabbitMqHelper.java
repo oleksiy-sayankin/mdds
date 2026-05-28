@@ -5,7 +5,7 @@
 package com.mdds.queue.rabbitmq;
 
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
-import static com.mdds.queue.rabbitmq.RabbitMqQueue.convertFrom;
+import static com.mdds.queue.rabbitmq.RabbitMqQueueClient.convertFrom;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

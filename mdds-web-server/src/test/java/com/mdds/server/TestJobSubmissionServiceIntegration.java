@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mdds.domain.JobStatus;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.support.JobTestFixture;
 import io.minio.GetObjectArgs;
@@ -63,8 +63,8 @@ class TestJobSubmissionServiceIntegration {
   @Autowired private JobsRepository jobsRepository;
   @Autowired private JobTestFixture jobFixture;
 
-  @MockitoBean(name = "jobQueue")
-  private Queue jobQueue;
+  @MockitoBean(name = "jobQueueClient")
+  private QueueClient jobQueueClient;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MINIO_BUCKET = "mdds";
@@ -139,7 +139,7 @@ class TestJobSubmissionServiceIntegration {
     var job = jobsRepository.findById(jobId).orElseThrow();
     assertThat(job.getStatus()).isEqualTo(JobStatus.SUBMITTED);
     var queueName = "queue-" + jobType;
-    verify(jobQueue).publish(eq(queueName), any());
+    verify(jobQueueClient).publish(eq(queueName), any());
   }
 
   @ParameterizedTest
@@ -185,7 +185,7 @@ class TestJobSubmissionServiceIntegration {
     assertThat(jsonNode.get("outputs").get("solution").get("format").asText()).isEqualTo("csv");
 
     var queueName = "queue-" + jobType;
-    verify(jobQueue).publish(eq(queueName), any());
+    verify(jobQueueClient).publish(eq(queueName), any());
   }
 
   @Test
@@ -207,7 +207,7 @@ class TestJobSubmissionServiceIntegration {
     assertThatExceptionOfType(RequiredInputArtifactIsAbsentException.class)
         .isThrownBy(() -> jobSubmissionService.submit(userId, jobId))
         .withMessage("Required input artifact 'rhs.csv' is absent in object storage.");
-    verifyNoInteractions(jobQueue);
+    verifyNoInteractions(jobQueueClient);
   }
 
   @Test
@@ -229,7 +229,7 @@ class TestJobSubmissionServiceIntegration {
     assertThatExceptionOfType(RequiredInputArtifactIsAbsentException.class)
         .isThrownBy(() -> jobSubmissionService.submit(userId, jobId))
         .withMessage("Required input artifact 'matrix.csv' is absent in object storage.");
-    verifyNoInteractions(jobQueue);
+    verifyNoInteractions(jobQueueClient);
   }
 
   @Test
@@ -250,7 +250,7 @@ class TestJobSubmissionServiceIntegration {
     assertThatExceptionOfType(RequiredParameterIsAbsentException.class)
         .isThrownBy(() -> jobSubmissionService.submit(userId, jobId))
         .withMessage("Required parameter 'solvingMethod' is absent.");
-    verifyNoInteractions(jobQueue);
+    verifyNoInteractions(jobQueueClient);
   }
 
   @Test
@@ -279,7 +279,7 @@ class TestJobSubmissionServiceIntegration {
     assertThatExceptionOfType(JobIsNotDraftException.class)
         .isThrownBy(() -> jobSubmissionService.submit(userId, jobId))
         .withMessage("Job '" + jobId + "' is not in DRAFT state and submission is not allowed.");
-    verifyNoInteractions(jobQueue);
+    verifyNoInteractions(jobQueueClient);
   }
 
   @Test
@@ -307,7 +307,7 @@ class TestJobSubmissionServiceIntegration {
     assertThatExceptionOfType(JobDoesNotExistException.class)
         .isThrownBy(() -> jobSubmissionService.submit(guestUserId, jobId))
         .withMessage("Job with id '" + jobId + "' does not exist.");
-    verifyNoInteractions(jobQueue);
+    verifyNoInteractions(jobQueueClient);
   }
 
   private static void initMinioClient() {

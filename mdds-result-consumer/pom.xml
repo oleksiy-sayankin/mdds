@@ -23,7 +23,7 @@
     </dependency>
     <dependency>
       <groupId>com.mdds</groupId>
-      <artifactId>mdds-queue</artifactId>
+      <artifactId>mdds-queue-client</artifactId>
       <version>1.0-SNAPSHOT</version>
     </dependency>
     <dependency>

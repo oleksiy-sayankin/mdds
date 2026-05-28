@@ -18,7 +18,7 @@ import com.mdds.dto.JobStatusUpdateDTO;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.queue.Subscription;
 import java.time.Instant;
 import java.util.Map;
@@ -29,7 +29,7 @@ class TestStatusManagerService {
 
   @Test
   void testProcessStatusUpdateMessage() {
-    var statusQueue = mock(Queue.class);
+    var statusQueue = mock(QueueClient.class);
     var commonProperties = mock(CommonProperties.class);
     var jobStatusUpdateService = mock(JobStatusUpdateService.class);
     var subscription = mock(Subscription.class);
@@ -72,7 +72,7 @@ class TestStatusManagerService {
 
   @Test
   void testApplyThrowsException() {
-    var statusQueue = mock(Queue.class);
+    var statusQueue = mock(QueueClient.class);
     var commonProperties = mock(CommonProperties.class);
     var jobStatusUpdateService = mock(JobStatusUpdateService.class);
     var subscription = mock(Subscription.class);
@@ -113,7 +113,7 @@ class TestStatusManagerService {
 
   @Test
   void testNullPayload() {
-    var statusQueue = mock(Queue.class);
+    var statusQueue = mock(QueueClient.class);
     var commonProperties = mock(CommonProperties.class);
     var jobStatusUpdateService = mock(JobStatusUpdateService.class);
     var subscription = mock(Subscription.class);
@@ -153,7 +153,7 @@ class TestStatusManagerService {
 
   @Test
   void testCorrectClosureOfServiceWhenStarted() {
-    var statusQueue = mock(Queue.class);
+    var statusQueue = mock(QueueClient.class);
     var commonProperties = mock(CommonProperties.class);
     var jobStatusUpdateService = mock(JobStatusUpdateService.class);
     var subscription = mock(Subscription.class);
@@ -173,7 +173,7 @@ class TestStatusManagerService {
 
   @Test
   void testCorrectClosureOfServiceWhenNotStarted() {
-    var statusQueue = mock(Queue.class);
+    var statusQueue = mock(QueueClient.class);
     var commonProperties = mock(CommonProperties.class);
     var jobStatusUpdateService = mock(JobStatusUpdateService.class);
     var subscription = mock(Subscription.class);

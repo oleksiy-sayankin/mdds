@@ -17,7 +17,7 @@ import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -55,12 +55,12 @@ import org.testcontainers.utility.MountableFile;
     webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class TestExecutorApplication {
   @Autowired
-  @Qualifier("jobQueue")
-  private Queue jobQueue;
+  @Qualifier("jobQueueClient")
+  private QueueClient jobQueueClient;
 
   @Autowired
-  @Qualifier("resultQueue")
-  private Queue resultQueue;
+  @Qualifier("resultQueueClient")
+  private QueueClient resultQueueClient;
 
   @Autowired private CancelBus cancelBus;
 
@@ -161,13 +161,13 @@ class TestExecutorApplication {
             SlaeSolver.NUMPY_EXACT_SOLVER);
 
     var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
-    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+    jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
     log.info(
         "Published jobMessage = {} to '{}', {}",
         jobMessage,
         commonProperties.getJobQueueName(),
-        jobQueue);
-    var actual = waitForResult(jobId, resultQueue);
+        jobQueueClient);
+    var actual = waitForResult(jobId, resultQueueClient);
     log.info("actualResult = {}", actual);
     var endTime = actual.getDateTimeJobEnded();
     var expected =
@@ -214,8 +214,8 @@ class TestExecutorApplication {
             slaeSolver);
 
     var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
-    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
-    var actual = waitForResult(jobId, resultQueue);
+    jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
+    var actual = waitForResult(jobId, resultQueueClient);
 
     var endTime = actual.getDateTimeJobEnded();
     var expected =
@@ -255,9 +255,9 @@ class TestExecutorApplication {
             SlaeSolver.NUMPY_EXACT_SOLVER);
 
     var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
-    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+    jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
 
-    var actual = waitForResult(jobId, resultQueue);
+    var actual = waitForResult(jobId, resultQueueClient);
     var endTime = actual.getDateTimeJobEnded();
     var expected =
         new ResultDTO(
@@ -295,9 +295,9 @@ class TestExecutorApplication {
       var startTime = Instant.now();
       var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
       var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
-      jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+      jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
       log.info("Submitted job for SLAE size {} x {}. Waiting for solution...", size, size);
-      var actual = waitForResult(jobId, resultQueue);
+      var actual = waitForResult(jobId, resultQueueClient);
       var endTime = actual.getDateTimeJobEnded();
       currentDuration = Duration.between(startTime, endTime);
       log.info("Solved SLAE with size {} x {} for {}", size, size, currentDuration);
@@ -309,17 +309,17 @@ class TestExecutorApplication {
     var startTime = Instant.now();
     var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
     var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
-    jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+    jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
     log.info(
         "Submitted job {} for SLAE size {} x {}. Waiting for cancellation...", jobId, size, size);
-    var result = waitForStatus(jobId, resultQueue, JobStatus.IN_PROGRESS);
+    var result = waitForStatus(jobId, resultQueueClient, JobStatus.IN_PROGRESS);
     log.info("Started processing job {}", jobId);
     var executorId = result.getExecutorId();
     var cancelJob = new CancelJobDTO(jobId);
     var cancelMessage = new Message<>(cancelJob, new HashMap<>(), Instant.now());
     cancelBus.sendCancel(executorId, cancelMessage);
     log.info("Submitting cancel message for job {} to executor {}", jobId, executorId);
-    result = waitForStatus(jobId, resultQueue, JobStatus.CANCELLED);
+    result = waitForStatus(jobId, resultQueueClient, JobStatus.CANCELLED);
     assertThat(result.getJobStatus()).isEqualTo(JobStatus.CANCELLED);
   }
 
@@ -341,11 +341,11 @@ class TestExecutorApplication {
     return rhs;
   }
 
-  private ResultDTO waitForResult(String jobId, Queue resultQueue) {
+  private ResultDTO waitForResult(String jobId, QueueClient resultQueueClient) {
     var results = new CopyOnWriteArrayList<ResultDTO>();
 
     try (var ignored =
-        resultQueue.subscribe(
+        resultQueueClient.subscribe(
             commonProperties.getResultQueueName(),
             ResultDTO.class,
             (message, ack) -> {
@@ -362,10 +362,10 @@ class TestExecutorApplication {
     }
   }
 
-  private ResultDTO waitForStatus(String jobId, Queue resultQueue, JobStatus status) {
+  private ResultDTO waitForStatus(String jobId, QueueClient resultQueueClient, JobStatus status) {
     AtomicReference<ResultDTO> result = new AtomicReference<>();
     try (var ignored =
-        resultQueue.subscribe(
+        resultQueueClient.subscribe(
             commonProperties.getResultQueueName(),
             ResultDTO.class,
             (message, ack) -> {

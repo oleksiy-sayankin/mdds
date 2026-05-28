@@ -6,7 +6,7 @@ package com.mdds.server;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.JobStatusUpdateDTO;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.queue.Subscription;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -26,7 +26,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class StatusManagerService {
   private Subscription subscription;
-  private final @Qualifier("statusQueue") Queue queue;
+  private final @Qualifier("statusQueueClient") QueueClient queueClient;
   private final CommonProperties commonProperties;
   private final JobStatusUpdateService jobStatusUpdateService;
 
@@ -37,7 +37,7 @@ public class StatusManagerService {
   @PostConstruct
   public void start() {
     subscription =
-        queue.subscribe(
+        queueClient.subscribe(
             commonProperties.getStatusQueueName(),
             JobStatusUpdateDTO.class,
             (message, ack) -> {
@@ -63,13 +63,13 @@ public class StatusManagerService {
     log.info(
         "Started Status Manager Service with queue '{}' = {}.",
         commonProperties.getStatusQueueName(),
-        queue);
+        queueClient);
   }
 
   @PreDestroy
   public void close() {
     Optional.ofNullable(subscription).ifPresent(Subscription::close);
-    queue.close();
+    queueClient.close();
     log.info("Status Manager Service shut down cleanly");
   }
 }

@@ -6,7 +6,7 @@ package com.mdds.result;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.queue.Subscription;
 import com.mdds.storage.DataStorage;
 import jakarta.annotation.PostConstruct;
@@ -25,29 +25,29 @@ import org.springframework.stereotype.Service;
 @Service
 public class ResultConsumerService implements AutoCloseable {
   private final DataStorage dataStorage;
-  private final Queue queue;
+  private final QueueClient queueClient;
   private final CommonProperties commonProperties;
   private Subscription subscription;
 
   @Autowired
   public ResultConsumerService(
       DataStorage dataStorage,
-      @Qualifier("resultQueue") Queue queue,
+      @Qualifier("resultQueueClient") QueueClient queueClient,
       CommonProperties commonProperties) {
     this.dataStorage = dataStorage;
-    this.queue = queue;
+    this.queueClient = queueClient;
     this.commonProperties = commonProperties;
     log.info(
         "Created Result Consumer Service {}, '{}' {}",
         dataStorage,
         commonProperties.getResultQueueName(),
-        queue);
+        queueClient);
   }
 
   @PostConstruct
   public void start() {
     subscription =
-        queue.subscribe(
+        queueClient.subscribe(
             commonProperties.getResultQueueName(),
             ResultDTO.class,
             (message, ack) -> {
@@ -62,7 +62,7 @@ public class ResultConsumerService implements AutoCloseable {
     log.info(
         "Started Result Consumer Service with queue '{}' = {} and storage {}.",
         commonProperties.getResultQueueName(),
-        queue,
+        queueClient,
         dataStorage);
   }
 
@@ -70,7 +70,7 @@ public class ResultConsumerService implements AutoCloseable {
   @Override
   public void close() {
     subscription.close();
-    queue.close();
+    queueClient.close();
     dataStorage.close();
     log.info("Result Consumer Service shut down cleanly");
   }

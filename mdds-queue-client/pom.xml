@@ -8,8 +8,8 @@
     <artifactId>mdds</artifactId>
     <version>1.0-SNAPSHOT</version>
   </parent>
-  <name>MDDS Queue Service</name>
-  <artifactId>mdds-queue</artifactId>
+  <name>MDDS Queue Client</name>
+  <artifactId>mdds-queue-client</artifactId>
   <dependencies>
     <dependency>
       <groupId>com.mdds</groupId>

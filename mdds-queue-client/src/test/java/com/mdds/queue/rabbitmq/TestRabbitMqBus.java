@@ -53,7 +53,7 @@ class TestRabbitMqBus {
     var cancelJobDTO = new CancelJobDTO(jobId);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(cancelJobDTO, headers, Instant.now());
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
+    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       var bus = new RabbitMqCancelBus(queue, new CancelDestinationResolver());
       assertThatCode(() -> bus.sendCancel(executorId, message)).doesNotThrowAnyException();
     }
@@ -67,7 +67,7 @@ class TestRabbitMqBus {
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(cancelJobDTO, headers, Instant.now());
 
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
+    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       var bus = new RabbitMqCancelBus(queue, new CancelDestinationResolver());
       bus.sendCancel(executorId, message);
       var actualJob = new AtomicReference<>();

@@ -19,7 +19,7 @@ import com.mdds.grpc.solver.SubmitJobResponse;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import io.grpc.StatusRuntimeException;
 import jakarta.annotation.Nonnull;
 import java.time.Duration;
@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   private final SolverServiceGrpc.SolverServiceBlockingStub solverStub;
-  private final Queue resultQueue;
+  private final QueueClient resultQueueClient;
   private final GrpcChannel grpcChannel;
   private final CommonProperties commonProperties;
   private final ExecutorProperties executorProperties;
@@ -53,32 +53,32 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
 
   @Autowired
   public ExecutorMessageHandler(
-      @Qualifier("resultQueue") Queue resultQueue,
+      @Qualifier("resultQueueClient") QueueClient resultQueueClient,
       GrpcChannel grpcChannel,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
     this.grpcChannel = grpcChannel;
     this.solverStub = SolverServiceGrpc.newBlockingStub(grpcChannel.getChannel());
-    this.resultQueue = resultQueue;
+    this.resultQueueClient = resultQueueClient;
     this.commonProperties = commonProperties;
     this.executorProperties = executorProperties;
     log.info(
         "Created Executor Message Handler '{}', {}, gRPC Server {}:{}",
         commonProperties.getResultQueueName(),
-        resultQueue,
+        resultQueueClient,
         grpcChannel.getHost(),
         grpcChannel.getPort());
   }
 
   @VisibleForTesting
   public ExecutorMessageHandler(
-      Queue resultQueue,
+      QueueClient resultQueueClient,
       SolverServiceGrpc.SolverServiceBlockingStub solverStub,
       GrpcChannel channel,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
     this.grpcChannel = channel;
-    this.resultQueue = resultQueue;
+    this.resultQueueClient = resultQueueClient;
     this.solverStub = solverStub;
     this.commonProperties = commonProperties;
     this.executorProperties = executorProperties;
@@ -216,12 +216,12 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   }
 
   private void publish(Message<ResultDTO> resultMessage) {
-    resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
+    resultQueueClient.publish(commonProperties.getResultQueueName(), resultMessage);
     log.info(
         "Published result for job with status {} to queue '{}', {}",
         resultMessage.payload().getJobStatus(),
         commonProperties.getResultQueueName(),
-        resultQueue);
+        resultQueueClient);
   }
 
   private static GetJobStatusRequest buildGetJobStatusRequest(String jobId) {
@@ -264,7 +264,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
         + ", '"
         + commonProperties.getResultQueueName()
         + "',"
-        + resultQueue
+        + resultQueueClient
         + "]";
   }
 }

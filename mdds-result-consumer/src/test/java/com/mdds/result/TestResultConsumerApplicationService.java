@@ -11,7 +11,7 @@ import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.storage.DataStorage;
 import java.io.IOException;
 import java.time.Duration;
@@ -44,8 +44,8 @@ class TestResultConsumerApplicationService {
   @Autowired private CommonProperties commonProperties;
 
   @Autowired
-  @Qualifier("resultQueue")
-  private Queue queue;
+  @Qualifier("resultQueueClient")
+  private QueueClient queueClient;
 
   static {
     rabbitMq =
@@ -97,7 +97,7 @@ class TestResultConsumerApplicationService {
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
     var message = new Message<>(expectedResult, new HashMap<>(), Instant.now());
-    queue.publish(commonProperties.getResultQueueName(), message);
+    queueClient.publish(commonProperties.getResultQueueName(), message);
     // Read result from Data Storage
     Awaitility.await()
         .atMost(Duration.ofSeconds(10))

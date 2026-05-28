@@ -26,7 +26,7 @@ import com.mdds.queue.Acknowledger;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import jakarta.annotation.Nonnull;
 import java.time.Duration;
 import java.time.Instant;
@@ -52,12 +52,12 @@ import org.testcontainers.utility.MountableFile;
 @Slf4j
 class TestExecutorApplicationService {
   @Autowired
-  @Qualifier("jobQueue")
-  private Queue jobQueue;
+  @Qualifier("jobQueueClient")
+  private QueueClient jobQueueClient;
 
   @Autowired
-  @Qualifier("resultQueue")
-  private Queue resultQueue;
+  @Qualifier("resultQueueClient")
+  private QueueClient resultQueueClient;
 
   @Autowired private CancelBus cancelBus;
 
@@ -118,7 +118,7 @@ class TestExecutorApplicationService {
     doAnswer(
             invocation -> {
               var resultMessage = new Message<>(expected, new HashMap<>(), Instant.now());
-              resultQueue.publish(commonProperties.getResultQueueName(), resultMessage);
+              resultQueueClient.publish(commonProperties.getResultQueueName(), resultMessage);
               return null;
             })
         .when(executorMessageHandler)
@@ -126,18 +126,18 @@ class TestExecutorApplicationService {
 
     try (var executorService =
         new ExecutorService(
-            jobQueue,
-            resultQueue,
+            jobQueueClient,
+            resultQueueClient,
             cancelBus,
             executorMessageHandler,
             cancelMessageHandler,
-            jobQueue.subscribe(
+            jobQueueClient.subscribe(
                 commonProperties.getJobQueueName(), JobDTO.class, executorMessageHandler),
             cancelBus.subscribe(executorProperties.getId(), cancelMessageHandler),
             commonProperties,
             executorProperties)) {
       var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
-      jobQueue.publish(commonProperties.getJobQueueName(), jobMessage);
+      jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
 
       Awaitility.await()
           .atMost(Duration.ofSeconds(2))
@@ -154,7 +154,7 @@ class TestExecutorApplicationService {
                       }
                     };
                 try (var ignored =
-                    resultQueue.subscribe(
+                    resultQueueClient.subscribe(
                         commonProperties.getResultQueueName(),
                         ResultDTO.class,
                         checkResultMessageHandler)) {
@@ -167,7 +167,7 @@ class TestExecutorApplicationService {
   @Test
   void testExecutorMessageHandlerWithMock() {
     // given
-    var mockedResultQueue = mock(Queue.class);
+    var mockedResultQueue = mock(QueueClient.class);
     var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
     var mockedChanel = mock(GrpcChannel.class);
 
@@ -223,7 +223,7 @@ class TestExecutorApplicationService {
   @SuppressWarnings("unchecked")
   void testCancelJob() {
     // given
-    var mockedResultQueue = mock(Queue.class);
+    var mockedResultQueue = mock(QueueClient.class);
     var mockedSolverStub = mock(SolverServiceGrpc.SolverServiceBlockingStub.class);
     var mockedChanel = mock(GrpcChannel.class);
     var jobId = UUID.randomUUID().toString();

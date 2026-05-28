@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.JobStatusUpdateDTO;
 import com.mdds.queue.Message;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.support.JobTestFixture;
 import java.time.Duration;
@@ -63,8 +63,8 @@ class TestStatusManagerQueueIntegration {
   @Autowired private CommonProperties commonProperties;
 
   @Autowired
-  @Qualifier("statusQueue")
-  private Queue statusQueue;
+  @Qualifier("statusQueueClient")
+  private QueueClient statusQueueClient;
 
   @DynamicPropertySource
   static void registerProps(DynamicPropertyRegistry registry) {
@@ -99,7 +99,7 @@ class TestStatusManagerQueueIntegration {
     var queueName = commonProperties.getStatusQueueName();
     var message = "Started processing";
     assertThat(statusManagerService).isNotNull();
-    statusQueue.publish(
+    statusQueueClient.publish(
         queueName,
         new Message<>(
             new JobStatusUpdateDTO(

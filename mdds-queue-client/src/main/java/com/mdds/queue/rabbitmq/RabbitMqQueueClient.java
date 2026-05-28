@@ -11,7 +11,7 @@ import com.mdds.common.util.JsonHelper;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.queue.Subscription;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.CancelCallback;
@@ -30,13 +30,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 
-/** Queue that delivers jobs to Executors. */
+/** QueueClient that delivers jobs to Executors. */
 @Slf4j
-public class RabbitMqQueue implements Queue {
+public class RabbitMqQueueClient implements QueueClient {
   private final @Nonnull Channel channel;
   private final @Nonnull Connection connection;
 
-  public RabbitMqQueue(@Nonnull RabbitMqProperties conf) {
+  public RabbitMqQueueClient(@Nonnull RabbitMqProperties conf) {
     this(
         conf.getHost(),
         conf.getPort(),
@@ -45,7 +45,7 @@ public class RabbitMqQueue implements Queue {
         conf.getMaxInboundMessageBodySize());
   }
 
-  public RabbitMqQueue(@Nonnull RabbitMqProperties conf, Duration timeOut) {
+  public RabbitMqQueueClient(@Nonnull RabbitMqProperties conf, Duration timeOut) {
     this(
         conf.getHost(),
         conf.getPort(),
@@ -55,21 +55,21 @@ public class RabbitMqQueue implements Queue {
         timeOut);
   }
 
-  public RabbitMqQueue(
+  public RabbitMqQueueClient(
       @Nonnull String host, int port, String user, String password, int maxInboundMessageBodySize) {
     this(host, port, user, password, maxInboundMessageBodySize, Duration.ofSeconds(60));
   }
 
-  public RabbitMqQueue(@Nonnull String host, int port, String user, String password) {
+  public RabbitMqQueueClient(@Nonnull String host, int port, String user, String password) {
     this(host, port, user, password, 67_108_864, Duration.ofSeconds(60));
   }
 
-  public RabbitMqQueue(
+  public RabbitMqQueueClient(
       @Nonnull String host, int port, String user, String password, Duration timeOut) {
     this(host, port, user, password, 67_108_864, timeOut);
   }
 
-  public RabbitMqQueue(
+  public RabbitMqQueueClient(
       @Nonnull String host,
       int port,
       String user,
@@ -84,7 +84,7 @@ public class RabbitMqQueue implements Queue {
             timeOut));
   }
 
-  public RabbitMqQueue(@Nonnull Connection connection) {
+  public RabbitMqQueueClient(@Nonnull Connection connection) {
     try {
       this.connection = connection;
       log.info("Connected to RabbitMq {}", connection);
@@ -96,7 +96,7 @@ public class RabbitMqQueue implements Queue {
   }
 
   @VisibleForTesting
-  public RabbitMqQueue(@Nonnull Channel channel, @Nonnull Connection connection) {
+  public RabbitMqQueueClient(@Nonnull Channel channel, @Nonnull Connection connection) {
     this.channel = channel;
     this.connection = connection;
   }

@@ -11,7 +11,7 @@ import com.mdds.dto.JobMessageDTO;
 import com.mdds.persistence.entity.JobEntity;
 import com.mdds.persistence.entity.JobParamEntity;
 import com.mdds.queue.Message;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobParamsRepository;
 import com.mdds.server.jpa.JobsRepository;
 import java.time.Instant;
@@ -35,7 +35,7 @@ public class JobSubmissionService {
   private final JobParamsRepository jobParamsRepository;
   private final JobsRepository jobsRepository;
   private final ObjectStorageService objectStorageService;
-  private final @Qualifier("jobQueue") Queue queue;
+  private final @Qualifier("jobQueueClient") QueueClient queueClient;
   private final JobProfileRegistry jobProfileRegistry;
 
   /**
@@ -120,10 +120,10 @@ public class JobSubmissionService {
     var now = Instant.now();
     var queueName = "queue-" + existingJobType;
 
-    queue.publish(
+    queueClient.publish(
         queueName,
         new Message<>(new JobMessageDTO(manifestObjectKey), Collections.emptyMap(), now));
-    log.info("Published job to queue '{}' = {}", queueName, queue);
+    log.info("Published job to queue '{}' = {}", queueName, queueClient);
 
     existingJob.setSubmittedAt(now);
     existingJob.setStatus(JobStatus.SUBMITTED);

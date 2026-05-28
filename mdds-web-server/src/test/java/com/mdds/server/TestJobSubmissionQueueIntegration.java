@@ -11,7 +11,7 @@ import com.mdds.dto.JobMessageDTO;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.UploadObjectArgs;
@@ -55,8 +55,8 @@ class TestJobSubmissionQueueIntegration {
   @Autowired private JobInputUploadService jobInputUploadService;
 
   @Autowired
-  @Qualifier("jobQueue")
-  private Queue jobQueue;
+  @Qualifier("jobQueueClient")
+  private QueueClient jobQueueClient;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MINIO_BUCKET = "mdds";
@@ -153,7 +153,8 @@ class TestJobSubmissionQueueIntegration {
           }
         };
 
-    try (var ignored = jobQueue.subscribe(queueName, JobMessageDTO.class, checkJobMessageHandler)) {
+    try (var ignored =
+        jobQueueClient.subscribe(queueName, JobMessageDTO.class, checkJobMessageHandler)) {
       jobSubmissionService.submit(userId, jobId);
       Awaitility.await().atMost(Duration.ofSeconds(2)).until(() -> actualMessage.get() != null);
     }

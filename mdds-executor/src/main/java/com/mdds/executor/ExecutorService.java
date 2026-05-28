@@ -10,7 +10,7 @@ import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.JobDTO;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.MessageHandler;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.queue.Subscription;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -26,8 +26,8 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 public class ExecutorService implements AutoCloseable {
-  private final Queue jobQueue;
-  private final Queue resultQueue;
+  private final QueueClient jobQueueClient;
+  private final QueueClient resultQueueClient;
   private final MessageHandler<JobDTO> messageHandler;
   private final CancelBus cancelBus;
   private final MessageHandler<CancelJobDTO> cancelMessageHandler;
@@ -38,15 +38,15 @@ public class ExecutorService implements AutoCloseable {
 
   @Autowired
   public ExecutorService(
-      @Qualifier("jobQueue") Queue jobQueue,
-      @Qualifier("resultQueue") Queue resultQueue,
+      @Qualifier("jobQueueClient") QueueClient jobQueueClient,
+      @Qualifier("resultQueueClient") QueueClient resultQueueClient,
       MessageHandler<JobDTO> messageHandler,
       CancelBus cancelBus,
       MessageHandler<CancelJobDTO> cancelMessageHandler,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
-    this.jobQueue = jobQueue;
-    this.resultQueue = resultQueue;
+    this.jobQueueClient = jobQueueClient;
+    this.resultQueueClient = resultQueueClient;
     this.messageHandler = messageHandler;
     this.cancelBus = cancelBus;
     this.cancelMessageHandler = cancelMessageHandler;
@@ -55,9 +55,9 @@ public class ExecutorService implements AutoCloseable {
     log.info(
         "Created Executor Service with '{}', {}, '{}' {}, {}, {}, {}",
         commonProperties.getJobQueueName(),
-        jobQueue,
+        jobQueueClient,
         commonProperties.getResultQueueName(),
-        resultQueue,
+        resultQueueClient,
         messageHandler,
         executorProperties.getId(),
         cancelMessageHandler);
@@ -65,8 +65,8 @@ public class ExecutorService implements AutoCloseable {
 
   @VisibleForTesting
   public ExecutorService(
-      Queue jobQueue,
-      Queue resultQueue,
+      QueueClient jobQueueClient,
+      QueueClient resultQueueClient,
       CancelBus cancelBus,
       MessageHandler<JobDTO> messageHandler,
       MessageHandler<CancelJobDTO> cancelMessageHandler,
@@ -74,8 +74,8 @@ public class ExecutorService implements AutoCloseable {
       Subscription cancelQueueSubscription,
       CommonProperties commonProperties,
       ExecutorProperties executorProperties) {
-    this.jobQueue = jobQueue;
-    this.resultQueue = resultQueue;
+    this.jobQueueClient = jobQueueClient;
+    this.resultQueueClient = resultQueueClient;
     this.cancelBus = cancelBus;
     this.messageHandler = messageHandler;
     this.cancelMessageHandler = cancelMessageHandler;
@@ -88,16 +88,16 @@ public class ExecutorService implements AutoCloseable {
   @PostConstruct
   public void start() {
     this.jobQueueSubscription =
-        jobQueue.subscribe(commonProperties.getJobQueueName(), JobDTO.class, messageHandler);
+        jobQueueClient.subscribe(commonProperties.getJobQueueName(), JobDTO.class, messageHandler);
     this.cancelQueueSubscription =
         cancelBus.subscribe(executorProperties.getId(), cancelMessageHandler);
     log.info(
         "Executor Service started with job queue '{}', {}, result queue '{}', {}, executorId"
             + " '{}', {}",
         commonProperties.getJobQueueName(),
-        jobQueue,
+        jobQueueClient,
         commonProperties.getResultQueueName(),
-        resultQueue,
+        resultQueueClient,
         executorProperties.getId(),
         cancelBus);
   }
@@ -107,8 +107,8 @@ public class ExecutorService implements AutoCloseable {
   public void close() {
     jobQueueSubscription.close();
     cancelQueueSubscription.close();
-    jobQueue.close();
-    resultQueue.close();
+    jobQueueClient.close();
+    resultQueueClient.close();
     log.info("ExecutorService shut down cleanly");
   }
 }

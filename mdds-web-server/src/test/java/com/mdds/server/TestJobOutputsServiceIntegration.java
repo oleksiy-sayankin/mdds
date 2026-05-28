@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.server.support.JobTestFixture;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -47,8 +47,8 @@ class TestJobOutputsServiceIntegration {
   @Autowired private JobTestFixture jobFixture;
   @Autowired private JobOutputsService jobOutputsService;
 
-  @MockitoBean(name = "jobQueue")
-  private Queue jobQueue;
+  @MockitoBean(name = "jobQueueClient")
+  private QueueClient jobQueueClient;
 
   private static final String MINIO_BUCKET = "mdds";
   private static final Duration PRESIGNED_GET_TTL = Duration.ofMinutes(15);

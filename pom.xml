@@ -12,7 +12,7 @@
   <modules>
     <module>mdds-core</module>
     <module>mdds-executor</module>
-    <module>mdds-queue</module>
+    <module>mdds-queue-client</module>
     <module>mdds-result-consumer</module>
     <module>mdds-web-server</module>
     <module>mdds-storage</module>

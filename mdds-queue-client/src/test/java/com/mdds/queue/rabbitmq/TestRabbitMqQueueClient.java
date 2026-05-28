@@ -39,7 +39,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 @Testcontainers
-class TestRabbitMqQueue {
+class TestRabbitMqQueueClient {
   private static final String JOB_QUEUE_NAME = "job_queue";
 
   @Container
@@ -72,7 +72,8 @@ class TestRabbitMqQueue {
     assertThatThrownBy(
             () -> {
               try (var queue =
-                  new RabbitMqQueue(randomHost, randomPort, randomUser, randomPassword, timeOut)) {
+                  new RabbitMqQueueClient(
+                      randomHost, randomPort, randomUser, randomPassword, timeOut)) {
                 // Do nothing.
               }
             })
@@ -86,7 +87,7 @@ class TestRabbitMqQueue {
       when(connection.createChannel()).thenThrow(new IOException());
       assertThatThrownBy(
               () -> {
-                try (var ignore = new RabbitMqQueue(connection)) {
+                try (var ignore = new RabbitMqQueueClient(connection)) {
                   // Do nothing.
                 }
               })
@@ -110,7 +111,7 @@ class TestRabbitMqQueue {
     try (var connection = mock(Connection.class)) {
       var channel = mock(Channel.class);
       doThrow(new IOException()).when(channel).basicPublish(anyString(), anyString(), any(), any());
-      try (var queue = new RabbitMqQueue(channel, connection)) {
+      try (var queue = new RabbitMqQueueClient(channel, connection)) {
         assertThatThrownBy(() -> queue.publish(JOB_QUEUE_NAME, message))
             .isInstanceOf(RabbitMqConnectionException.class)
             .hasMessageContaining("Failed to publish to queue");
@@ -130,7 +131,7 @@ class TestRabbitMqQueue {
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedJob, headers, Instant.now());
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
+    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       assertThatCode(() -> queue.publish(JOB_QUEUE_NAME, message)).doesNotThrowAnyException();
     }
@@ -142,7 +143,7 @@ class TestRabbitMqQueue {
     assertThatThrownBy(
             () -> {
               try (var ignore =
-                  new RabbitMqQueue(host, port, "wrong user", "wrong password", timeOut)) {
+                  new RabbitMqQueueClient(host, port, "wrong user", "wrong password", timeOut)) {
                 // Do nothing.
               }
             })
@@ -156,7 +157,7 @@ class TestRabbitMqQueue {
     var properties = readFromResources("no.connection.rabbitmq.properties");
     assertThatThrownBy(
             () -> {
-              try (var ignore = new RabbitMqQueue(properties, timeOut)) {
+              try (var ignore = new RabbitMqQueueClient(properties, timeOut)) {
                 // Do nothing.
               }
             })
@@ -176,7 +177,7 @@ class TestRabbitMqQueue {
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedJob, headers, Instant.now());
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
+    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       assertThatCode(() -> queue.deleteQueue(JOB_QUEUE_NAME)).doesNotThrowAnyException();
     }
@@ -197,7 +198,7 @@ class TestRabbitMqQueue {
     var channel = mock(Channel.class);
     doThrow(new IOException()).when(channel).queueDelete(anyString());
     var connection = mock(Connection.class);
-    try (var queue = new RabbitMqQueue(channel, connection)) {
+    try (var queue = new RabbitMqQueueClient(channel, connection)) {
       queue.publish(JOB_QUEUE_NAME, message);
       assertThatThrownBy(() -> queue.deleteQueue(JOB_QUEUE_NAME))
           .isInstanceOf(RabbitMqConnectionException.class)
@@ -217,7 +218,7 @@ class TestRabbitMqQueue {
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedJob, headers, Instant.now());
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
+    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       var actualJob = new AtomicReference<>();
 
@@ -255,7 +256,7 @@ class TestRabbitMqQueue {
         .basicConsume(
             anyString(), anyBoolean(), any(DeliverCallback.class), any(CancelCallback.class));
 
-    try (var queue = new RabbitMqQueue(channel, connection)) {
+    try (var queue = new RabbitMqQueueClient(channel, connection)) {
       queue.publish(JOB_QUEUE_NAME, message);
 
       MessageHandler<JobDTO> messageHandler =
@@ -287,7 +288,7 @@ class TestRabbitMqQueue {
         .queueDeclare(
             nullable(String.class), anyBoolean(), anyBoolean(), anyBoolean(), nullable(Map.class));
 
-    try (var queue = new RabbitMqQueue(channel, connection)) {
+    try (var queue = new RabbitMqQueueClient(channel, connection)) {
       MessageHandler<JobDTO> messageHandler =
           (receivedMessage, ack) -> {
             ack.ack(); // Mark message as processed for the queue
@@ -316,7 +317,7 @@ class TestRabbitMqQueue {
     var channel = mock(Channel.class);
     doThrow(new IOException()).when(channel).basicCancel(nullable(String.class));
 
-    try (var queue = new RabbitMqQueue(channel, connection)) {
+    try (var queue = new RabbitMqQueueClient(channel, connection)) {
       queue.publish(JOB_QUEUE_NAME, message);
 
       MessageHandler<JobDTO> messageHandler =
@@ -344,7 +345,7 @@ class TestRabbitMqQueue {
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedJob, headers, Instant.now());
     var properties = new RabbitMqProperties(host, port, user, password, maxInboundMessageBodySize);
-    try (var queue = new RabbitMqQueue(properties)) {
+    try (var queue = new RabbitMqQueueClient(properties)) {
       queue.publish(JOB_QUEUE_NAME, message);
       var actualJob = new AtomicReference<>();
 
@@ -374,7 +375,7 @@ class TestRabbitMqQueue {
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(expectedJob, headers, Instant.now());
-    try (var queue = new RabbitMqQueue(host, port, user, password)) {
+    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       var actualJob = new AtomicReference<>();
 

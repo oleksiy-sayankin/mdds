@@ -11,7 +11,7 @@ import com.mdds.common.CommonProperties;
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
-import com.mdds.queue.rabbitmq.RabbitMqQueue;
+import com.mdds.queue.rabbitmq.RabbitMqQueueClient;
 import com.mdds.storage.redis.RedisDataStorage;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -113,7 +113,7 @@ class TestResultConsumerApplication {
     expected.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
     var message = new Message<>(expected, new HashMap<>(), Instant.now());
     try (var queue =
-        new RabbitMqQueue(
+        new RabbitMqQueueClient(
             rabbitMq.getHost(),
             rabbitMq.getAmqpPort(),
             rabbitMq.getAdminUsername(),
@@ -177,7 +177,7 @@ class TestResultConsumerApplication {
     var message3 = new Message<>(expectedResult3, new HashMap<>(), Instant.now());
 
     try (var queue =
-        new RabbitMqQueue(
+        new RabbitMqQueueClient(
             rabbitMq.getHost(),
             rabbitMq.getAmqpPort(),
             rabbitMq.getAdminUsername(),

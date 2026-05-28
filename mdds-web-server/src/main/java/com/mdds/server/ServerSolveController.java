@@ -16,7 +16,7 @@ import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SolveRequestDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
-import com.mdds.queue.Queue;
+import com.mdds.queue.QueueClient;
 import com.mdds.storage.DataStorage;
 import java.time.Instant;
 import java.util.Collections;
@@ -35,20 +35,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ServerSolveController {
   private final DataStorage storage;
-  private final Queue queue;
+  private final QueueClient queueClient;
   private final CommonProperties commonProperties;
 
   @Autowired
   public ServerSolveController(
-      DataStorage storage, @Qualifier("jobQueue") Queue queue, CommonProperties commonProperties) {
+      DataStorage storage,
+      @Qualifier("jobQueueClient") QueueClient queueClient,
+      CommonProperties commonProperties) {
     this.storage = storage;
-    this.queue = queue;
+    this.queueClient = queueClient;
     this.commonProperties = commonProperties;
     log.info(
-        "Created Server Solve controller with storage {}, queue '{}' = {}",
+        "Created Server Solve controller with storage {}, queue client '{}' = {}",
         storage,
         commonProperties.getJobQueueName(),
-        queue);
+        queueClient);
   }
 
   @PostMapping(
@@ -81,10 +83,10 @@ public class ServerSolveController {
       storage.put(jobId, new ResultDTO(jobId, now, null, JobStatus.NEW, null, 10, null, null));
 
       // create JobDTO and publish to queue
-      queue.publish(
+      queueClient.publish(
           commonProperties.getJobQueueName(),
           new Message<>(new JobDTO(jobId, now, matrix, rhs, method), Collections.emptyMap(), now));
-      log.info("Published job to queue '{}' = {}", commonProperties.getJobQueueName(), queue);
+      log.info("Published job to queue '{}' = {}", commonProperties.getJobQueueName(), queueClient);
       return new JobIdResponseDTO(jobId);
     }
   }

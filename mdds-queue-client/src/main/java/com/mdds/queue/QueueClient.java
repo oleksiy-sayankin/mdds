@@ -7,8 +7,8 @@ package com.mdds.queue;
 
 import jakarta.annotation.Nonnull;
 
-/** Common interface for Job Queue and Result Queue. */
-public interface Queue extends AutoCloseable {
+/** Common interface for publishing to and consuming from named queues. */
+public interface QueueClient extends AutoCloseable {
   /**
    * Publishes message to queue.
    *
@@ -39,7 +39,7 @@ public interface Queue extends AutoCloseable {
    */
   void deleteQueue(@Nonnull String queueName);
 
-  /** Closes Queue and releases connection if any. */
+  /** Closes Queue Client and releases connection if any. */
   @Override
   void close();
 }

@@ -6,7 +6,7 @@ package com.mdds.queue;
 
 import com.mdds.queue.rabbitmq.RabbitMqCancelBus;
 import com.mdds.queue.rabbitmq.RabbitMqProperties;
-import com.mdds.queue.rabbitmq.RabbitMqQueue;
+import com.mdds.queue.rabbitmq.RabbitMqQueueClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,9 +14,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class QueueConfig {
 
-  @Bean(name = "jobQueue")
-  public Queue jobQueue(RabbitMqProperties properties) {
-    return new RabbitMqQueue(
+  @Bean(name = "jobQueueClient")
+  public QueueClient jobQueue(RabbitMqProperties properties) {
+    return new RabbitMqQueueClient(
         properties.getHost(),
         properties.getPort(),
         properties.getUser(),
@@ -24,9 +24,9 @@ public class QueueConfig {
         properties.getMaxInboundMessageBodySize());
   }
 
-  @Bean(name = "resultQueue")
-  public Queue resultQueue(RabbitMqProperties properties) {
-    return new RabbitMqQueue(
+  @Bean(name = "resultQueueClient")
+  public QueueClient resultQueue(RabbitMqProperties properties) {
+    return new RabbitMqQueueClient(
         properties.getHost(),
         properties.getPort(),
         properties.getUser(),
@@ -34,9 +34,9 @@ public class QueueConfig {
         properties.getMaxInboundMessageBodySize());
   }
 
-  @Bean(name = "statusQueue")
-  public Queue statusQueue(RabbitMqProperties properties) {
-    return new RabbitMqQueue(
+  @Bean(name = "statusQueueClient")
+  public QueueClient statusQueue(RabbitMqProperties properties) {
+    return new RabbitMqQueueClient(
         properties.getHost(),
         properties.getPort(),
         properties.getUser(),
@@ -44,9 +44,9 @@ public class QueueConfig {
         properties.getMaxInboundMessageBodySize());
   }
 
-  @Bean(name = "cancelQueue")
-  public Queue cancelQueue(RabbitMqProperties properties) {
-    return new RabbitMqQueue(
+  @Bean(name = "cancelQueueClient")
+  public QueueClient cancelQueue(RabbitMqProperties properties) {
+    return new RabbitMqQueueClient(
         properties.getHost(),
         properties.getPort(),
         properties.getUser(),
@@ -56,7 +56,8 @@ public class QueueConfig {
 
   @Bean
   public CancelBus cancelBus(
-      @Qualifier("cancelQueue") Queue cancelQueue, CancelDestinationResolver resolver) {
-    return new RabbitMqCancelBus(cancelQueue, resolver);
+      @Qualifier("cancelQueueClient") QueueClient cancelQueueClient,
+      CancelDestinationResolver resolver) {
+    return new RabbitMqCancelBus(cancelQueueClient, resolver);
   }
 }
