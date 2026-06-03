@@ -2,6 +2,8 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 PYTHON_ENV_HOME := ~/.venvs
+PYTHON_BIN ?= python3.12
+PYTHON_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
 NODE_MODULES := node_modules
 PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
@@ -15,7 +17,8 @@ PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_PYTHON_WORKER_RUNTIME)
 PYTHON_MAIN := $(PYTHON_ROOT)/src/main/python
 PYTHON_TEST := $(PYTHON_ROOT)/src/test/python
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
-TS_ROOT :=  $(PROJECT_ROOT)/$(MDDS_CLIENT)/src
+TS_ROOT := src
+JS_ROOT := src
 JAVA_ROOT := $(PROJECT_ROOT)
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := mddsproject
@@ -68,7 +71,7 @@ run_all: reformat_and_check_all test_and_run
 #
 # Reformat and check all code
 #
-reformat_and_check_all: check_license build_jars reformat_ts build_and_copy_web_client build_and_push_main_images reformat_python check_python_code_style check_js_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
+reformat_and_check_all: check_license build_and_push_main_images reformat_python check_python_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
 
 #
 # Run tests and start server
@@ -213,12 +216,12 @@ push_result_consumer_docker_image:
 #
 # Build and push main images. Here we do not build base Java and Python docker images since they are rarely changed.
 #
-build_and_push_main_images: build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
+build_and_push_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
 
 #
 # Build web-client and copy binaries to web-app folder of web-server
 #
-build_and_copy_web_client:
+build_and_copy_web_client: reformat_ts check_js_code_style
 	$(call log_info,"Building web-client and copying to web-app folder of web-server...")
 	cd $(MDDS_WEB_CLIENT) && npm run build
 	$(call log_done,"Building web-client and copying to web-app folder of web-server completed.")
@@ -247,7 +250,7 @@ check_python_code_style:
 #
 check_js_code_style:
 	$(call log_info,"Checking JavaScript code style...")
-	eslint $(JS_ROOT) --debug --fix
+	cd $(MDDS_WEB_CLIENT) && eslint $(JS_ROOT) --debug --fix --no-error-on-unmatched-pattern
 	$(call log_done,"Checking JavaScript code style completed.")
 
 #
@@ -367,7 +370,7 @@ test_java:
 #
 # Build Jars
 #
-build_jars:
+build_jars: build_and_copy_web_client
 	$(call log_info,"Building jars...")
 	@if ! mvn clean install -DskipTests=true; then \
         $(call log_error_sh, "Building jars failed"); \
@@ -466,7 +469,7 @@ clear_python_env:
 create_python_env:
 	$(call log_info,"Creating python environment $(VENV_DIR)...")
 	mkdir -p $(VENV_DIR)
-	python3 -m venv $(VENV_DIR)
+	$(PYTHON_BIN) -m venv $(VENV_DIR)
 	$(call log_done,"Creating python environment $(VENV_DIR) completed.")
 
 #
@@ -474,7 +477,9 @@ create_python_env:
 #
 install_python_libs:
 	$(call log_info,"Installing python libraries...")
-	. $(VENV_DIR)/bin/activate; pip install -r requirements.txt
+	. $(VENV_DIR)/bin/activate; \
+    python -m pip install --upgrade "pip>=25.3"; \
+    python -m pip install -r requirements.txt --build-constraint $(PYTHON_BUILD_CONSTRAINTS)
 	$(call log_done,"Installing python libraries competed.")
 
 
