@@ -193,7 +193,7 @@ export default function App() {
       const resultJson = await response.json();
       console.log("Solve response:", resultJson);
 
-      const returnedJobId = resultJson.id;
+      const returnedJobId = resultJson.jobId;
       setJobId(returnedJobId);
       pollForResult(returnedJobId);
     } catch (error) {
