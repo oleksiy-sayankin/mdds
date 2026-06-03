@@ -213,7 +213,7 @@ services:
       MINIO_REGION_NAME: us-east-1
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "9002:9001"
     volumes:
       - minio-data:/data
     healthcheck:
