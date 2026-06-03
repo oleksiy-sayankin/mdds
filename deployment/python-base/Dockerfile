@@ -28,18 +28,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.41/grpc_health_probe-linux-amd64 /usr/local/bin/grpc_health_probe
 RUN chmod +x /usr/local/bin/grpc_health_probe
 
-# Upgarde pip to latest
+# Upgrade pip to latest
 RUN pip install --upgrade "pip>=25.3"
 
 # Copy list of Python packages
 COPY deployment/python-base/requirements.txt /tmp/requirements.txt
 
-# Copy package version constarints
+# Copy package version constraints
 COPY deployment/python-base/build-constraints.txt /tmp/build-constraints.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
-    --build-constraint /tmp/build-constraints.txt  \
+    --build-constraint /tmp/build-constraints.txt \
     -r /tmp/requirements.txt && \
     pip check
 
