@@ -29,24 +29,19 @@ ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.4
 RUN chmod +x /usr/local/bin/grpc_health_probe
 
 # Upgarde pip to latest
-RUN pip install --upgrade pip
+RUN pip install --upgrade "pip>=25.3"
+
+# Copy list of Python packages
+COPY deployment/python-base/requirements.txt /tmp/requirements.txt
+
+# Copy package version constarints
+COPY deployment/python-base/build-constraints.txt /tmp/build-constraints.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn \
-    numpy \
-    pytest \
-    mpi4py \
-    petsc \
-    scipy \
-    petsc4py \
-    aioredis \
-    grpcio-tools \
-    protobuf \
-    grpcio \
-    grpcio-health-checking \
-    grpcio-reflection
+    --build-constraint /tmp/build-constraints.txt  \
+    -r /tmp/requirements.txt && \
+    pip check
 
 USER $MDDS_USER
 WORKDIR $MDDS_HOME

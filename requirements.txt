@@ -1,31 +1,22 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
+# Install production dependencies
+-r deployment/python-base/requirements.txt
+
+# Install development dependencies
 pylint
 pycodestyle
 ruff
 wheel
-fastapi
-uvicorn
-numpy
 pandas
 python-multipart
 pytest
-scipy
-mpi4py
-petsc
-petsc4py
 black
 pyyaml
 requests
 pika
 redis
-aioredis
-grpcio-tools
-protobuf
-grpcio
-grpcio-health-checking
-grpcio-reflection
-pytest
 pytest-cov
 coverage
+testcontainers-minio
