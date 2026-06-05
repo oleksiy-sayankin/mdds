@@ -288,6 +288,7 @@ export default function App() {
 
           <Box textAlign="center" mt={4}>
             <Button
+              data-testid="upload-matrix-button"
               variant="contained"
               startIcon={<CloudUpload />}
               size="large"
@@ -297,6 +298,7 @@ export default function App() {
               Upload matrix coefficients
             </Button>
             <input
+              data-testid="matrix-file-input"
               type="file"
               accept=".csv"
               ref={matrixFileInputRef}
@@ -313,6 +315,7 @@ export default function App() {
             <br />
             <br />
             <Button
+              data-testid="upload-rhs-button"
               variant="contained"
               startIcon={<CloudUpload />}
               size="large"
@@ -322,6 +325,7 @@ export default function App() {
               Upload right hand side vector
             </Button>
             <input
+              data-testid="rhs-file-input"
               type="file"
               accept=".csv"
               ref={rhsFileInputRef}
@@ -344,6 +348,7 @@ export default function App() {
               {" "}
               <InputLabel id="solver-label">Solving method</InputLabel>{" "}
               <Select
+                data-testid="solver-select"
                 labelId="solver-label"
                 value={solver}
                 label="Solving method"
@@ -351,7 +356,11 @@ export default function App() {
               >
                 {" "}
                 {solvers.map((s) => (
-                  <MenuItem key={s.value} value={s.value}>
+                  <MenuItem
+                    data-testid={`solver-option-${s.value}`}
+                    key={s.value}
+                    value={s.value}
+                  >
                     {" "}
                     {s.label}{" "}
                   </MenuItem>
@@ -360,6 +369,7 @@ export default function App() {
             </FormControl>
             <Box textAlign="center" mt={4}>
               <Button
+                data-testid="solve-button"
                 variant="contained"
                 color="primary"
                 size="large"
@@ -379,6 +389,7 @@ export default function App() {
             )}
             <Box textAlign="center" mt={4}>
               <Button
+                data-testid="download-solution-button"
                 variant="contained"
                 color="success"
                 size="large"
