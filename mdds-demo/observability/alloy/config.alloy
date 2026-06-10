@@ -1,0 +1,51 @@
+// Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+// Refer to the LICENSE file in the root directory for full license details.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "mdds_demo" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "mdds-demo"
+    action        = "keep"
+  }
+}
+
+loki.source.docker "docker" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.mdds_demo.output
+  labels     = {
+    job = "docker",
+  }
+  forward_to = [loki.process.docker.receiver]
+}
+
+loki.process "docker" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.json {
+    expressions = {
+      service = "service",
+      level   = "level",
+      class   = "class",
+      job_id  = "job_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service = "service",
+      level   = "level",
+    }
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
