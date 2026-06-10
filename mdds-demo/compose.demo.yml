@@ -136,7 +136,7 @@ services:
 
   loki:
     build:
-      context: ./observability/loki
+      context: ../deployment/observability/loki
       dockerfile: Dockerfile
     image: mddsproject/loki:0.1.0
     command: ["-config.file=/etc/loki/loki.yaml"]
@@ -153,9 +153,11 @@ services:
 
   alloy:
     build:
-      context: ./observability/alloy
+      context: ../deployment/observability/alloy
       dockerfile: Dockerfile
     image: mddsproject/alloy:0.1.0
+    environment:
+      MDDS_COMPOSE_PROJECT_NAME: mdds-demo
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
@@ -177,7 +179,7 @@ services:
 
   grafana:
     build:
-      context: ./observability/grafana
+      context: ../deployment/observability/grafana
       dockerfile: Dockerfile
     image: mddsproject/grafana:0.1.0
     environment:

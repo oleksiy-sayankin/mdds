@@ -5,19 +5,19 @@ discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
 }
 
-discovery.relabel "mdds_demo" {
+discovery.relabel "mdds" {
   targets = discovery.docker.containers.targets
 
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
-    regex         = "mdds-demo"
+    regex         = sys.env("MDDS_COMPOSE_PROJECT_NAME")
     action        = "keep"
   }
 }
 
 loki.source.docker "docker" {
   host       = "unix:///var/run/docker.sock"
-  targets    = discovery.relabel.mdds_demo.output
+  targets    = discovery.relabel.mdds.output
   labels     = {
     job = "docker",
   }
