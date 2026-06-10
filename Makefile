@@ -24,12 +24,22 @@ VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := mddsproject
 DEPLOYMENT_DIR := deployment
 DEPLOYMENT_TEST_ROOT := $(PROJECT_ROOT)/$(DEPLOYMENT_DIR)/test
-MDDS_SERVER_PORT ?= 8000
-MDDS_SERVER_HOST ?= localhost
+MDDS_E2E_SERVER_HOST ?= web-server
+MDDS_E2E_SERVER_PORT ?= 8000
 E2E_HOME := mdds-tests/e2e
+E2E_PROJECT_NAME := mdds-e2e
+E2E_COMPOSE := docker compose --project-name $(E2E_PROJECT_NAME) --progress=plain -f $(E2E_HOME)/docker-compose.yml
+DEMO_HOME := mdds-demo
+GOOGLE_JAVA_FORMAT_HOME := /opt/google-java-format
+DOCKER_GID ?= $(shell stat -c '%g' /var/run/docker.sock)
 SONAR_HOST_URL ?= http://localhost:9021
 SONAR_PROJECT_KEY ?= mdds
-SONAR_TOKEN ?= $(shell cat .sonar_token)
+SONAR_TOKEN_FILE ?= .sonar_token
+SONAR_TOKEN ?= $(shell test -s $(SONAR_TOKEN_FILE) && tr -d '\n' < $(SONAR_TOKEN_FILE) || true)
+SONAR_ADMIN_LOGIN ?= admin
+SONAR_DEFAULT_ADMIN_PASSWORD ?= admin
+SONAR_ADMIN_PASSWORD ?= MddsLocalSonarAdmin2026_A9xQ7mZ2
+SONAR_TOKEN_NAME ?= mdds-local-sonar-token
 CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved."
 
 # Colors for output text.
@@ -145,6 +155,46 @@ push_python_base_docker_image:
 	docker push $(USER_NAME)/python-base:$(PROJECT_VERSION)
 	$(call log_done,"Pushing Python base Docker image completed.")
 
+
+#
+# Build Developer container Docker image
+#
+build_dev_container_docker_image:
+	$(call log_info,"Building Developer container Docker image...")
+	docker buildx build -f .devcontainer/Dockerfile --progress=plain --tag $(USER_NAME)/dev-container:$(PROJECT_VERSION) .
+	$(call log_done,"Building Developer container Docker image completed.")
+
+#
+# Push Developer container Docker image
+#
+push_dev_container_docker_image:
+	$(call log_info,"Pushing Developer container Docker image...")
+	docker push $(USER_NAME)/dev-container:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Developer container Docker image completed.")
+
+
+#
+# Start development shell container
+#
+start_dev_shell:
+	$(call log_info,"Starting MDDS development shell container...")
+	@DOCKER_GID=$(DOCKER_GID) docker compose -f mdds-dev/compose.dev.yml up -d
+	$(call log_done,"MDDS development shell container is up.")
+
+#
+# Stop development shell container
+#
+stop_dev_shell:
+	$(call log_info,"Stopping MDDS development shell container...")
+	@DOCKER_GID=$(DOCKER_GID) docker compose -f mdds-dev/compose.dev.yml down
+	$(call log_done,"MDDS development shell container stopped.")
+
+#
+# Open interactive shell inside development container
+#
+dev_shell: start_dev_shell
+	@docker exec -it mdds-dev-shell bash
+
 #
 # Build gRPC server Docker image for others
 #
@@ -214,9 +264,35 @@ push_result_consumer_docker_image:
 
 
 #
-# Build and push main images. Here we do not build base Java and Python docker images since they are rarely changed.
+# Build all Docker images including base Java and Python based images
 #
-build_and_push_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
+build_all_images: build_java_base_docker_image build_python_base_docker_image build_main_images
+
+#
+# Push all Docker images including base Java and Python based images
+#
+push_all_images: push_java_base_docker_image push_python_base_docker_image push_main_images
+
+#
+# Build and push all Docker images including base Java and Python based images
+#
+build_and_push_all_images: build_all_images push_all_images
+
+#
+# Build push main images. Here we do not build base Java and Python docker images since they are rarely changed.
+#
+build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image
+
+
+#
+# Push main images.
+#
+push_main_images: push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
+
+#
+# Build and push main images.
+#
+build_and_push_main_images: build_main_images push_main_images
 
 #
 # Build web-client and copy binaries to web-app folder of web-server
@@ -241,7 +317,7 @@ reformat_ts:
 check_python_code_style:
 	$(call log_info,"Checking python code style...")
 	pycodestyle $(PYTHON_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
-	ruff check $(PYTHON_ROOT) --fix --force-exclude $(VENV_DIR) ./$(PYTHON_GENERATED_SOURCES)/ --respect-gitignore
+	ruff check $(PYTHON_ROOT) --fix --force-exclude --respect-gitignore
 	PYTHONPATH=$(PYTHON_MAIN):$(PYTHON_TEST):$$PYTHONPATH pylint $(PYTHON_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking python code style completed.")
 
@@ -305,7 +381,7 @@ test_python_coverage:
 #
 reformat_java:
 	$(call log_info,"Reformatting Java sources...")
-	@find $(JAVA_ROOT) -name "*.java" | xargs java -jar ~/google/google-java-format/google-java-format.jar --replace
+	@find $(JAVA_ROOT) -name "*.java" | xargs java -jar $(GOOGLE_JAVA_FORMAT_HOME)/google-java-format.jar --replace
 	$(call log_done,"Reformatting Java sources completed.")
 
 #
@@ -322,31 +398,96 @@ reformat_xml:
 	done
 	$(call log_done,"Reformatting XML sources completed.")
 
+
+#
+# Wait until SonarQube is ready
+#
+wait_for_sonarqube:
+	@retry_count=60; \
+	current_retry=1; \
+	$(call log_info_sh,"Waiting for SonarQube on $(SONAR_HOST_URL)..."); \
+	while [ $$current_retry -le $$retry_count ]; do \
+		STATUS=$$(curl -s "$(SONAR_HOST_URL)/api/system/status" | jq -r '.status // empty'); \
+		if [ "$$STATUS" = "UP" ] || [ "$$STATUS" = "DEGRADED" ]; then \
+			$(call log_done_sh,"SonarQube is ready: $$STATUS"); \
+			exit 0; \
+		else \
+			$(call log_info_sh,"Attempt $$current_retry/$$retry_count: SonarQube status is '$$STATUS'. Retrying..."); \
+			current_retry=$$((current_retry+1)); \
+			sleep 5; \
+		fi; \
+	done; \
+	$(call log_error_sh,"SonarQube did not become ready after $$retry_count attempts"); \
+	exit 1
+
+
+#
+# Bootstrap SonarQube token for local development
+#
+bootstrap_sonar_token: wait_for_sonarqube
+	$(call log_info,"Bootstrapping SonarQube token...")
+	@SONAR_HOST_URL="$(SONAR_HOST_URL)" \
+	  SONAR_ADMIN_LOGIN="$(SONAR_ADMIN_LOGIN)" \
+	  SONAR_DEFAULT_ADMIN_PASSWORD="$(SONAR_DEFAULT_ADMIN_PASSWORD)" \
+	  SONAR_ADMIN_PASSWORD="$(SONAR_ADMIN_PASSWORD)" \
+	  SONAR_TOKEN_FILE="$(SONAR_TOKEN_FILE)" \
+	  SONAR_TOKEN_NAME="$(SONAR_TOKEN_NAME)" \
+	  bash mdds-dev/bootstrap-sonar-token.sh
+	$(call log_done,"Bootstrapping SonarQube token completed.")
+
+
+#
+# Ensure SonarQube token exists and is valid
+#
+ensure_sonar_token: wait_for_sonarqube
+	@TOKEN=""; \
+	if [ -s "$(SONAR_TOKEN_FILE)" ]; then \
+		TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	fi; \
+	if [ -n "$$TOKEN" ] && curl -fsS -u "$$TOKEN:" "$(SONAR_HOST_URL)/api/authentication/validate" | jq -e '.valid == true' >/dev/null; then \
+		$(call log_done_sh,"SonarQube token is valid."); \
+	else \
+		$(call log_info_sh,"SonarQube token is missing or invalid. Bootstrapping a new token..."); \
+		SONAR_HOST_URL="$(SONAR_HOST_URL)" \
+		SONAR_ADMIN_LOGIN="$(SONAR_ADMIN_LOGIN)" \
+		SONAR_DEFAULT_ADMIN_PASSWORD="$(SONAR_DEFAULT_ADMIN_PASSWORD)" \
+		SONAR_ADMIN_PASSWORD="$(SONAR_ADMIN_PASSWORD)" \
+		SONAR_TOKEN_FILE="$(SONAR_TOKEN_FILE)" \
+		SONAR_TOKEN_NAME="$(SONAR_TOKEN_NAME)" \
+		bash mdds-dev/bootstrap-sonar-token.sh; \
+	fi
+
+
 #
 # Perform Sonar Qube scan and put the results to console
 #
-sonar_scan:
+sonar_scan: ensure_sonar_token
 	$(call log_info,"Running SonarQube analysis...")
 	$(call log_info,"Python coverage report expected at $(MDDS_PYTHON_WORKER_RUNTIME)/target/python-coverage.xml")
-	@mvn clean verify sonar:sonar \
+	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	mvn clean verify sonar:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
 	  -Dsonar.host.url=$(SONAR_HOST_URL) \
-	  -Dsonar.token=$(SONAR_TOKEN)
+	  -Dsonar.token=$$TOKEN
 	$(call log_info,"Checking SonarQube Quality Gate status...")
-	@sleep 5 # Wait for report is done by Sonar Qube Server
+	@sleep 5
 	$(call log_info,"Fetching total number of issues...");
-	@curl -s -u $(SONAR_TOKEN): \
+	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	curl -s -u $$TOKEN: \
 	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=INFO,MINOR,MAJOR,CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
 	    | jq -r '" - Total issues: " + (.total|tostring)'
 	$(call log_info,"Fetching list of issues...");
-	@curl -s -u $(SONAR_TOKEN): \
+	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	curl -s -u $$TOKEN: \
     	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=INFO,MINOR,MAJOR,CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
     	    | jq -r '.issues[] | "- " + .severity + " | " + .component + ":" + (.line|tostring) + " → " + .message';
 	$(call log_info,"Fetching additional metrics ...");
-	@curl -s -u $(SONAR_TOKEN): \
+	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	curl -s -u $$TOKEN: \
       "$(SONAR_HOST_URL)/api/measures/component?component=$(SONAR_PROJECT_KEY)&metricKeys=coverage,new_coverage,duplicated_lines_density,security_hotspots" \
       | jq -r '.component.measures[] | " - " + .metric + ": " + .value + "%"'
-	@STATUS=$$(curl -s -u $(SONAR_TOKEN): \
+	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	STATUS=$$(curl -s -u $$TOKEN: \
 	  "$(SONAR_HOST_URL)/api/qualitygates/project_status?projectKey=$(SONAR_PROJECT_KEY)" \
 	  | jq -r '.projectStatus.status'); \
 	if [ "$$STATUS" = "ERROR" ]; then \
@@ -380,13 +521,29 @@ build_jars: build_and_copy_web_client
 
 
 #
+# Start MDDS demo environment with all Docker containers
+#
+start_mdds_demo:
+	$(call log_info,"Starting MDDS demo environment...")
+	@docker compose --progress=plain -f $(DEMO_HOME)/compose.demo.yml up -d --build --wait --wait-timeout 120
+	$(call log_done,"Starting MDDS demo environment completed. MDDS environment is up!")
+
+#
+# Stop MDDS demo environment with all Docker containers
+#
+stop_mdds_demo:
+	$(call log_info,"Stopping MDDS demo environment...")
+	@docker compose --progress=plain -f $(DEMO_HOME)/compose.demo.yml down
+	$(call log_done,"Stopping MDDS demo environment completed.")
+
+
+#
 # Start MDDS environment with all Docker containers
 #
 start_mdds_env:
 	$(call log_info,"Starting MDDS environment...")
 	@$(MAKE) create_config_file
-	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml up -d
-	@$(MAKE) wait_for_server
+	@$(E2E_COMPOSE) up -d --wait --wait-timeout 120
 	$(call log_done,"Starting MDDS environment completed. MDDS environment is up!")
 
 #
@@ -394,29 +551,8 @@ start_mdds_env:
 #
 stop_mdds_env:
 	$(call log_info,"Stopping MDDS environment...")
-	@docker compose --progress=plain -f $(E2E_HOME)/docker-compose.yml down
+	@$(E2E_COMPOSE) down --volumes --remove-orphans
 	$(call log_done,"Stopping MDDS environment completed.")
-
-
-#
-# Wait until server is ready by checking its health state
-#
-wait_for_server:
-	@retry_count=10; \
-	current_retry=1; \
-	$(call log_info_sh,"Waiting for mdds web-server on $(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)..."); \
-	while [ $$current_retry -le $$retry_count ]; do \
-		if curl -s http://$(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)/health > /dev/null; then \
-			$(call log_done_sh,"Server is up!"); \
-			exit 0; \
-		else \
-			$(call log_info_sh,"Attempt $$current_retry/$$retry_count: Server is not ready yet. Retrying..."); \
-			current_retry=$$((current_retry+1)); \
-			sleep 2; \
-		fi; \
-	done; \
-	$(call log_error_sh, "Server did not become ready after $$retry_count attempts"); \
-	exit 1
 
 #
 # Generate Postman environment-file with baseUrl
@@ -427,7 +563,7 @@ define FILE_CONTENT
   "values": [
     {
       "key": "baseUrl",
-      "value": "http://$(MDDS_SERVER_HOST):$(MDDS_SERVER_PORT)",
+      "value": "http://$(MDDS_E2E_SERVER_HOST):$(MDDS_E2E_SERVER_PORT)",
       "enabled": true
     }
   ]
@@ -441,14 +577,16 @@ create_config_file:
 
 
 #
-# Start Docker container and run end to end tests
+# Start Docker containers and run end to end tests
 #
 test_e2e:
-	@$(MAKE) start_mdds_env
-	$(call log_info,"Running end to end tests...")
-	@newman run "$(E2E_HOME)/collection.json" -e "$(E2E_HOME)/env.json" --reporters cli
-	@$(MAKE) stop_mdds_env
-	$(call log_done,"End to end tests completed.")
+	@set -e; \
+	trap '$(MAKE) stop_mdds_env' EXIT; \
+	$(MAKE) start_mdds_env; \
+	$(call log_info_sh,"Running end to end tests..."); \
+	tar -C "$(E2E_HOME)" -cf - collection.json env.json | \
+	  $(E2E_COMPOSE) --profile e2e run --rm -T --no-deps newman; \
+	$(call log_done_sh,"End to end tests completed.")
 
 #
 # Setup python environment

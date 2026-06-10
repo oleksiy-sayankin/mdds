@@ -1,0 +1,23 @@
+{
+  "name": "MDDS Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/mdds",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/mdds,type=bind",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "containerEnv": {
+    "PYTHON_BIN": "python3.12",
+    "MDDS_SERVER_HOST": "localhost",
+    "MDDS_SERVER_PORT": "8000"
+  },
+  "postCreateCommand": "cd mdds-web-client && npm install",
+  "customizations": {
+    "jetbrains": {
+      "backend": "IntelliJ"
+    }
+  }
+}
