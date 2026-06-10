@@ -68,7 +68,7 @@ class TestServerApplication {
   private static final String USER_NAME = "testuser";
   private static final String PASSWORD = "testpass";
 
-  private static int s3Port;
+  private static String s3Endpoint;
   private static final String BUCKET = "test-bucket";
   private static final Region REGION = Region.US_EAST_1;
   private static final String ACCESS = "dummy_access_key_id";
@@ -137,7 +137,7 @@ class TestServerApplication {
   @BeforeAll
   static void startServer() throws SQLException {
     createMySqlTestData();
-    s3Port = s3mock.getMappedPort(9090);
+    s3Endpoint = s3mock.getHttpEndpoint();
     createS3TestData();
   }
 
@@ -260,10 +260,9 @@ class TestServerApplication {
   void testSolveS3DataSource() throws IOException, InterruptedException {
     var http = new HttpTestClient(HOST, port);
     Map<String, Object> params = new HashMap<>();
-    var endpoint = "http://localhost:" + s3Port;
     params.put("aws.bucket.name", BUCKET);
     params.put("aws.use.endpoint.url", "true");
-    params.put("aws.endpoint.url", endpoint);
+    params.put("aws.endpoint.url", s3Endpoint);
     params.put("aws.region", REGION.id());
     params.put("aws.access.key.id", ACCESS);
     params.put("aws.secret.access.key", SECRET);

@@ -52,8 +52,7 @@ class TestServerHelper {
   @Container
   private static final S3MockContainer S_3_MOCK_CONTAINER = new S3MockContainer("latest");
 
-  private static final String S_3_HOST = "localhost";
-  private static int s3Port;
+  private static String s3Endpoint;
   private static final String S_3_BUCKET = "test-bucket";
   private static final Region S_3_REGION = Region.US_EAST_1;
   private static final String S_3_ACCESS_KEY_ID = "dummy_access_key_id";
@@ -65,7 +64,7 @@ class TestServerHelper {
   @BeforeAll
   static void init() throws SQLException {
     createMySqlTestData();
-    s3Port = S_3_MOCK_CONTAINER.getMappedPort(9090);
+    s3Endpoint = S_3_MOCK_CONTAINER.getHttpEndpoint();
     createS3TestData();
   }
 
@@ -139,7 +138,7 @@ class TestServerHelper {
             Map.of(
                 "aws.bucket.name", S_3_BUCKET,
                 "aws.use.endpoint.url", "true",
-                "aws.endpoint.url", "http://" + S_3_HOST + ":" + s3Port,
+                "aws.endpoint.url", s3Endpoint,
                 "aws.region", S_3_REGION.id(),
                 "aws.access.key.id", S_3_ACCESS_KEY_ID,
                 "aws.secret.access.key", S_3_SECRET_ACCESS_KEY,

@@ -34,8 +34,7 @@ import software.amazon.awssdk.utils.AttributeMap;
 class TestS3Helper {
   @Container private static final S3MockContainer s3MockContainer = new S3MockContainer("latest");
   private static S3Client s3Client;
-  private static final String S_3_HOST = "localhost";
-  private static int s3Port;
+  private static String s3Endpoint;
   private static final String S_3_BUCKET = "test-bucket";
   private static final Region S_3_REGION = Region.US_EAST_1;
   private static final String S_3_ACCESS_KEY_ID = "dummy_access_key_id";
@@ -46,8 +45,8 @@ class TestS3Helper {
 
   @BeforeAll
   static void init() {
-    s3Port = s3MockContainer.getMappedPort(9090);
-    var endpoint = s3MockContainer.getHttpEndpoint();
+    s3Endpoint = s3MockContainer.getHttpEndpoint();
+
     var serviceConfig =
         S3Configuration.builder().pathStyleAccessEnabled(PATH_STYLE_ACCESS_ENABLED).build();
     var httpClient =
@@ -57,7 +56,7 @@ class TestS3Helper {
 
     s3Client =
         S3Client.builder()
-            .endpointOverride(URI.create(endpoint))
+            .endpointOverride(URI.create(s3Endpoint))
             .serviceConfiguration(serviceConfig)
             .httpClient(httpClient)
             .region(S_3_REGION)
@@ -89,17 +88,7 @@ class TestS3Helper {
 
   @Test
   void testExtractMatrix() {
-    var params = new HashMap<String, Object>();
-    params.put("aws.bucket.name", S_3_BUCKET);
-    params.put("aws.use.endpoint.url", "true");
-    params.put("aws.endpoint.url", "http://" + S_3_HOST + ":" + s3Port);
-    params.put("aws.region", S_3_REGION.id());
-    params.put("aws.access.key.id", S_3_ACCESS_KEY_ID);
-    params.put("aws.secret.access.key", S_3_SECRET_ACCESS_KEY);
-    params.put("aws.matrix.key", MATRIX_KEY);
-    params.put("aws.rhs.key", RHS_KEY);
-    params.put("aws.path.style.access.enabled", String.valueOf(PATH_STYLE_ACCESS_ENABLED));
-    var s3Config = S3Config.of(params);
+    var s3Config = createS3Config();
     var actualMatrix = extractMatrix(s3Config);
     var expectedMatrix =
         new double[][] {{1.2, 3.343, 543}, {4.32, 243.3, 2.232}, {7.32, 32.32, 432.1}};
@@ -108,19 +97,23 @@ class TestS3Helper {
 
   @Test
   void testExtractRhs() {
+    var s3Config = createS3Config();
+    var actualRhs = extractRhs(s3Config);
+    var expectedRhs = new double[] {4.3, 6.2, 3.3};
+    assertThat(actualRhs.get()).isEqualTo(expectedRhs);
+  }
+
+  private static S3Config createS3Config() {
     var params = new HashMap<String, Object>();
     params.put("aws.bucket.name", S_3_BUCKET);
     params.put("aws.use.endpoint.url", "true");
-    params.put("aws.endpoint.url", "http://" + S_3_HOST + ":" + s3Port);
+    params.put("aws.endpoint.url", s3Endpoint);
     params.put("aws.region", S_3_REGION.id());
     params.put("aws.access.key.id", S_3_ACCESS_KEY_ID);
     params.put("aws.secret.access.key", S_3_SECRET_ACCESS_KEY);
     params.put("aws.matrix.key", MATRIX_KEY);
     params.put("aws.rhs.key", RHS_KEY);
     params.put("aws.path.style.access.enabled", String.valueOf(PATH_STYLE_ACCESS_ENABLED));
-    var s3Config = S3Config.of(params);
-    var actualRhs = extractRhs(s3Config);
-    var expectedRhs = new double[] {4.3, 6.2, 3.3};
-    assertThat(actualRhs.get()).isEqualTo(expectedRhs);
+    return S3Config.of(params);
   }
 }
