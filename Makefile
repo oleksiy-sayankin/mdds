@@ -398,6 +398,15 @@ test_python_coverage:
 	    --cov-report=xml:target/python-coverage.xml
 	$(call log_done,"Python tests with coverage completed.")
 
+
+test_java_coverage:
+	$(call log_info,"Running Java tests with coverage...")
+	mvn clean verify
+	mkdir -p target
+	find . -path "*/target/site/jacoco/jacoco.xml" -type f | sort | tee target/java-coverage-files.txt
+	@test -s target/java-coverage-files.txt
+	$(call log_done,"Java tests with coverage completed.")
+
 #
 # Reformat Java sources
 #

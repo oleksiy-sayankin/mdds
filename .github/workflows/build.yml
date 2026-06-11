@@ -80,13 +80,44 @@ jobs:
       - name: Build Docker images
         run: make build_all_images_ci
 
-      - name: Run tests
-        run: make test_all
+      - name: Run Java tests with coverage
+        run: make test_java_coverage
 
       - name: Run Python tests with coverage
         run: make test_python_coverage
 
-      - name: Upload coverage to Codecov
+      - name: Run end-to-end tests
+        run: make test_e2e
+
+      - name: Prepare Java coverage file list
+        run: |
+          test -s target/java-coverage-files.txt
+
+          JAVA_COVERAGE_FILES="$(paste -sd, target/java-coverage-files.txt)"
+
+          if [ -z "${JAVA_COVERAGE_FILES}" ]; then
+            echo "No Java coverage files found"
+            exit 1
+          fi
+
+          echo "JAVA_COVERAGE_FILES=${JAVA_COVERAGE_FILES}" >> "$GITHUB_ENV"
+          echo "Java coverage files: ${JAVA_COVERAGE_FILES}"
+
+      - name: Upload Java coverage to Codecov
+        if: ${{ !env.ACT }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: ${{ env.JAVA_COVERAGE_FILES }}
+          flags: java
+          name: java-coverage
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload Python coverage to Codecov
         if: ${{ !env.ACT }}
         uses: codecov/codecov-action@v5
         with:
@@ -94,6 +125,8 @@ jobs:
           flags: python
           name: python-coverage
           fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
           verbose: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
