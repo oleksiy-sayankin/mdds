@@ -24,24 +24,40 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.testcontainers.containers.BrowserWebDriverContainer;
 import org.testcontainers.containers.ComposeContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
+@Slf4j
 @Testcontainers
 class TestSolverUiE2EIT {
   private static final double SOLUTION_TOLERANCE = 1.0E-7;
-  private static final String CHROME_VERSION =
-      System.getProperty("mdds.e2e.ui.chrome.version", "135");
+
   private static final String WEB_SERVER_SERVICE = "web-server-1";
   private static final int WEB_SERVER_PORT = 8000;
+
+  private static final String REMOTE_DOWNLOAD_DIR = "/home/seluser/Downloads";
+  private static final String SOLUTION_FILE_NAME = "solution.json";
+  private static final String REMOTE_SOLUTION_FILE = REMOTE_DOWNLOAD_DIR + "/" + SOLUTION_FILE_NAME;
+
+  private static BrowserWebDriverContainer<?> browser;
+
+  private static final String SELENIUM_CHROME_IMAGE =
+      System.getProperty(
+          "mdds.e2e.ui.selenium.image", "selenium/standalone-chrome:4.31.0-20250404");
+
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Path DOWNLOAD_DIR = Path.of("target", "selenide-downloads").toAbsolutePath();
 
@@ -55,52 +71,75 @@ class TestSolverUiE2EIT {
 
   @BeforeAll
   static void setup() throws Exception {
-    var host = ENVIRONMENT.getServiceHost(WEB_SERVER_SERVICE, WEB_SERVER_PORT);
     var port = ENVIRONMENT.getServicePort(WEB_SERVER_SERVICE, WEB_SERVER_PORT);
 
     Files.createDirectories(DOWNLOAD_DIR);
+    Files.deleteIfExists(DOWNLOAD_DIR.resolve(SOLUTION_FILE_NAME));
 
-    try (var files = Files.list(DOWNLOAD_DIR)) {
-      files.forEach(
-          path -> {
-            try {
-              Files.deleteIfExists(path);
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-          });
-    }
+    org.testcontainers.Testcontainers.exposeHostPorts(port);
 
-    Configuration.baseUrl = "http://" + host + ":" + port;
+    browser =
+        new BrowserWebDriverContainer<>(DockerImageName.parse(SELENIUM_CHROME_IMAGE))
+            .withCapabilities(createChromeOptions())
+            .withAccessToHost(true);
+
+    browser.start();
+
+    Configuration.remote = browser.getSeleniumAddress().toString();
+    Configuration.baseUrl = "http://host.testcontainers.internal:" + port;
     Configuration.browser = "chrome";
-    Configuration.headless = true;
+    Configuration.browserCapabilities = createChromeOptions();
     Configuration.timeout = 60_000;
     Configuration.downloadsFolder = DOWNLOAD_DIR.toString();
 
+    log.info("Selenium remote: {}", Configuration.remote);
+    log.info("Browser baseUrl: {}", Configuration.baseUrl);
+    log.info("Local download dir: {}", DOWNLOAD_DIR);
+    log.info("Remote download dir: {}", REMOTE_DOWNLOAD_DIR);
+  }
+
+  @BeforeEach
+  void setupBrowser() throws Exception {
+    closeWebDriver();
+
+    Files.deleteIfExists(DOWNLOAD_DIR.resolve(SOLUTION_FILE_NAME));
+
+    var result = browser.execInContainer("rm", "-f", REMOTE_SOLUTION_FILE);
+    if (result.getExitCode() != 0) {
+      throw new AssertionError("Failed to clean remote downloaded file: " + result.getStderr());
+    }
+  }
+
+  @AfterEach
+  void tearDownBrowser() {
+    closeWebDriver();
+  }
+
+  @AfterAll
+  static void tearDownAll() {
+    closeWebDriver();
+
+    if (browser != null) {
+      browser.stop();
+    }
+  }
+
+  private static ChromeOptions createChromeOptions() {
     var chromeOptions = new ChromeOptions();
 
-    // Use Chrome for Testing instead of the locally installed Chrome.
-    // Version 135 matches selenium-devtools-v135 from Selenium 4.31.0 by default.
-    chromeOptions.setBrowserVersion(CHROME_VERSION);
-
-    chromeOptions.addArguments("--no-sandbox");
-    chromeOptions.addArguments("--disable-dev-shm-usage");
     chromeOptions.addArguments("--headless=new");
+    chromeOptions.addArguments("--disable-dev-shm-usage");
+    chromeOptions.addArguments("--no-sandbox");
 
     chromeOptions.setExperimentalOption(
         "prefs",
         java.util.Map.of(
-            "download.default_directory", DOWNLOAD_DIR.toString(),
+            "download.default_directory", REMOTE_DOWNLOAD_DIR,
             "download.prompt_for_download", false,
             "download.directory_upgrade", true,
             "safebrowsing.enabled", true));
 
-    Configuration.browserCapabilities = chromeOptions;
-  }
-
-  @AfterAll
-  static void tearDownBrowser() {
-    closeWebDriver();
+    return chromeOptions;
   }
 
   private record SolverCase(String value, String label) {
@@ -125,8 +164,6 @@ class TestSolverUiE2EIT {
     var matrixFile = getFileFromResources("e2e/ui/matrix.csv");
     var rhsFile = getFileFromResources("e2e/ui/rhs.csv");
     var expectedFile = getPathFromResources("e2e/ui/expected-solution.json");
-
-    Files.deleteIfExists(DOWNLOAD_DIR.resolve("solution.json"));
 
     open("/");
 
@@ -153,14 +190,30 @@ class TestSolverUiE2EIT {
   }
 
   private static Path waitForDownloadedFile(Duration timeout) {
-    var target = DOWNLOAD_DIR.resolve("solution.json");
+    var target = DOWNLOAD_DIR.resolve(SOLUTION_FILE_NAME);
 
     await("Downloaded file " + target + " should exist and be non-empty")
         .atMost(timeout)
         .pollInterval(Duration.ofMillis(200))
-        .until(() -> isExistingNonEmptyFile(target));
+        .until(() -> copyDownloadedFileFromBrowserContainer(target));
 
     return target;
+  }
+
+  private static boolean copyDownloadedFileFromBrowserContainer(Path target) {
+    try {
+      var checkResult = browser.execInContainer("test", "-s", REMOTE_SOLUTION_FILE);
+      if (checkResult.getExitCode() != 0) {
+        return false;
+      }
+
+      Files.createDirectories(target.getParent());
+      browser.copyFileFromContainer(REMOTE_SOLUTION_FILE, target.toString());
+
+      return isExistingNonEmptyFile(target);
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   private static boolean isExistingNonEmptyFile(Path path) {
