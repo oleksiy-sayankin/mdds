@@ -4,7 +4,6 @@ mdds_env
 logs
 *.log
 node_modules
-package-lock.json
 mdds-tests/e2e/env.json
 mdds-tests/e2e/output/
 .sonar_token
