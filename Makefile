@@ -269,6 +269,11 @@ push_result_consumer_docker_image:
 build_all_images: build_java_base_docker_image build_python_base_docker_image build_main_images
 
 #
+# Build all Docker images for CI.
+#
+build_all_images_ci: build_java_base_docker_image build_python_base_docker_image build_main_images_ci
+
+#
 # Push all Docker images including base Java and Python based images
 #
 push_all_images: push_java_base_docker_image push_python_base_docker_image push_main_images
@@ -279,9 +284,16 @@ push_all_images: push_java_base_docker_image push_python_base_docker_image push_
 build_and_push_all_images: build_all_images push_all_images
 
 #
-# Build push main images. Here we do not build base Java and Python docker images since they are rarely changed.
+# Build main images. Here we do not build base Java and Python docker images since they are rarely changed.
 #
 build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image
+
+
+#
+# Build main Docker images without formatting or auto-fixing sources.
+# Intended for CI and reproducible builds.
+#
+build_main_images_ci: build_jars_ci build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image
 
 
 #
@@ -301,6 +313,16 @@ build_and_copy_web_client: reformat_ts check_js_code_style
 	$(call log_info,"Building web-client and copying to web-app folder of web-server...")
 	cd $(MDDS_WEB_CLIENT) && npm run build
 	$(call log_done,"Building web-client and copying to web-app folder of web-server completed.")
+
+
+#
+# Build web-client without formatting or auto-fixing sources.
+# Intended for CI and reproducible builds.
+#
+build_and_copy_web_client_ci:
+	$(call log_info,"Building web-client for CI...")
+	cd $(MDDS_WEB_CLIENT) && npm run build
+	$(call log_done,"Building web-client for CI completed.")
 
 
 #
@@ -519,6 +541,18 @@ build_jars: build_and_copy_web_client
     fi
 	$(call log_done,"Building jars completed")
 
+
+#
+# Build jars without formatting or auto-fixing sources.
+# Intended for CI and reproducible builds.
+#
+build_jars_ci: build_and_copy_web_client_ci
+	$(call log_info,"Building jars for CI...")
+	@if ! mvn clean install -DskipTests=true; then \
+        $(call log_error_sh, "Building jars for CI failed"); \
+        exit 1; \
+    fi
+	$(call log_done,"Building jars for CI completed.")
 
 #
 # Start MDDS demo environment with all Docker containers
