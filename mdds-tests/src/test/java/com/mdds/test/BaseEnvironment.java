@@ -13,10 +13,6 @@ import com.mdds.domain.SlaeSolver;
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.rabbitmq.client.ConnectionFactory;
-import io.grpc.ManagedChannelBuilder;
-import io.grpc.health.v1.HealthCheckRequest;
-import io.grpc.health.v1.HealthCheckResponse;
-import io.grpc.health.v1.HealthGrpc;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -199,7 +195,11 @@ public class BaseEnvironment {
   }
 
   protected static void awaitReady(Callable<Boolean> condition, String name) {
-    Awaitility.await().atMost(Duration.ofSeconds(30)).ignoreExceptions().until(condition);
+    Awaitility.await(name + " should be ready")
+        .atMost(Duration.ofSeconds(90))
+        .pollInterval(Duration.ofMillis(500))
+        .ignoreExceptions()
+        .until(condition);
     log.info("{} container is ready", name);
   }
 
@@ -231,17 +231,19 @@ public class BaseEnvironment {
     }
   }
 
-  private static boolean grpcServerIsReady() {
-    var channel =
-        ManagedChannelBuilder.forAddress(
-                GRPC_SERVER.getHost(), GRPC_SERVER.getMappedPort(GRPC_SERVER_PORT))
-            .usePlaintext()
-            .build();
-    var stub = HealthGrpc.newBlockingStub(channel);
-    var response = stub.check(HealthCheckRequest.newBuilder().build());
-    var result = HealthCheckResponse.ServingStatus.SERVING.equals(response.getStatus());
-    channel.shutdownNow();
-    return result;
+  private static boolean grpcServerIsReady() throws IOException, InterruptedException {
+    var result =
+        GRPC_SERVER.execInContainer(
+            "grpc_health_probe", "-addr=" + GRPC_SERVER_HOST + ":" + GRPC_SERVER_PORT);
+
+    if (result.getExitCode() != 0) {
+      log.warn(
+          "gRPC health probe failed: stdout='{}', stderr='{}'",
+          result.getStdout().trim(),
+          result.getStderr().trim());
+    }
+
+    return result.getExitCode() == 0;
   }
 
   protected static ResultDTO awaitForResult(String jobId) {
