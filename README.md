@@ -6,6 +6,7 @@ Refer to the LICENSE file in the root directory for full license details.
 # MDDS — Modeling the Dynamics of Distributed Systems
 
 [![Build](https://github.com/oleksiy-sayankin/mdds/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/oleksiy-sayankin/mdds/actions/workflows/build.yml)
+[![Coverage](https://codecov.io/gh/oleksiy-sayankin/mdds/branch/master/graph/badge.svg)](https://codecov.io/gh/oleksiy-sayankin/mdds)
 ![Java](https://img.shields.io/badge/Java-21-blue)
 ![Maven](https://img.shields.io/badge/Maven-3.9-blue)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)

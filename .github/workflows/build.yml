@@ -82,3 +82,17 @@ jobs:
 
       - name: Run tests
         run: make test_all
+
+      - name: Run Python tests with coverage
+        run: make test_python_coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: mdds-python-worker-runtime/target/python-coverage.xml
+          flags: python
+          name: python-coverage
+          fail_ci_if_error: true
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
