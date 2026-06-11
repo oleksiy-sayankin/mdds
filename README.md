@@ -5,6 +5,15 @@ Refer to the LICENSE file in the root directory for full license details.
 
 # MDDS — Modeling the Dynamics of Distributed Systems
 
+[![Build](https://github.com/oleksiy-sayankin/mdds/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/oleksiy-sayankin/mdds/actions/workflows/build.yml)
+![Java](https://img.shields.io/badge/Java-21-blue)
+![Maven](https://img.shields.io/badge/Maven-3.9-blue)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Docker](https://img.shields.io/badge/Docker-29-blue)
+![Docker%20Compose](https://img.shields.io/badge/Docker%20Compose-v5.1-blue)
+![Status](https://img.shields.io/badge/status-experimental-orange)
+![License](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-lightgrey)
+
 MDDS is an experimental distributed job orchestration platform.
 
 The project was created as part of dissertation work at the Glushkov Institute of Cybernetics of the National Academy of Sciences of Ukraine.
