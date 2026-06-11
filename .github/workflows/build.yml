@@ -87,6 +87,7 @@ jobs:
         run: make test_python_coverage
 
       - name: Upload coverage to Codecov
+        if: ${{ !env.ACT }}
         uses: codecov/codecov-action@v5
         with:
           files: mdds-python-worker-runtime/target/python-coverage.xml
