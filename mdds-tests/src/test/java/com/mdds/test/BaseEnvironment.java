@@ -23,16 +23,19 @@ import java.net.HttpURLConnection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -42,6 +45,8 @@ import org.testcontainers.utility.MountableFile;
 @Slf4j
 @Testcontainers
 public class BaseEnvironment {
+  private static final String CONTAINER_BIND_HOST = "0.0.0.0";
+
   private static final String GRPC_SERVER_HOST = "grpcserver";
   private static final int GRPC_SERVER_PORT = 50051;
 
@@ -100,6 +105,7 @@ public class BaseEnvironment {
           .withEnv("MDDS_EXECUTOR_GRPC_SERVER_HOST", GRPC_SERVER_HOST)
           .withEnv("MDDS_EXECUTOR_GRPC_SERVER_PORT", String.valueOf(GRPC_SERVER_PORT))
           .withWorkingDirectory(GRPC_CORE_WORK_DIR)
+          .withLogConsumer(logConsumer("grpc-server"))
           .waitingFor(
               Wait.forSuccessfulCommand(
                   "grpc_health_probe -addr=" + GRPC_SERVER_HOST + ":" + GRPC_SERVER_PORT))
@@ -112,7 +118,7 @@ public class BaseEnvironment {
           .withNetwork(SHARED_NETWORK)
           .withNetworkAliases(MDDS_EXECUTOR_HOST)
           .dependsOn(RABBIT_MQ, GRPC_SERVER)
-          .withEnv("MDDS_EXECUTOR_HOST", MDDS_EXECUTOR_HOST)
+          .withEnv("MDDS_EXECUTOR_HOST", CONTAINER_BIND_HOST)
           .withEnv("MDDS_EXECUTOR_PORT", String.valueOf(MDDS_EXECUTOR_PORT))
           .withEnv("MDDS_EXECUTOR_GRPC_SERVER_HOST", GRPC_SERVER_HOST)
           .withEnv("MDDS_EXECUTOR_GRPC_SERVER_PORT", String.valueOf(GRPC_SERVER_PORT))
@@ -120,6 +126,7 @@ public class BaseEnvironment {
           .withEnv("MDDS_RABBITMQ_PORT", String.valueOf(RABBITMQ_PORT))
           .withEnv("MDDS_RABBITMQ_USER", RABBIT_MQ.getAdminUsername())
           .withEnv("MDDS_RABBITMQ_PASSWORD", RABBIT_MQ.getAdminPassword())
+          .withLogConsumer(logConsumer("executor"))
           .waitingFor(Wait.forListeningPort())
           .withExposedPorts(MDDS_EXECUTOR_PORT);
 
@@ -136,14 +143,15 @@ public class BaseEnvironment {
           .withEnv("MDDS_RABBITMQ_PASSWORD", RABBIT_MQ.getAdminPassword())
           .withEnv("MDDS_REDIS_HOST", REDIS_HOST)
           .withEnv("MDDS_REDIS_PORT", String.valueOf(REDIS_PORT))
-          .withEnv("MDDS_RESULT_CONSUMER_HOST", MDDS_RESULT_CONSUMER_HOST)
+          .withEnv("MDDS_RESULT_CONSUMER_HOST", CONTAINER_BIND_HOST)
           .withEnv("MDDS_RESULT_CONSUMER_PORT", String.valueOf(MDDS_RESULT_CONSUMER_PORT))
+          .withLogConsumer(logConsumer("result-consumer"))
           .waitingFor(Wait.forListeningPort())
           .withExposedPorts(MDDS_RESULT_CONSUMER_PORT);
 
   @SuppressWarnings("resource")
   @Container
-  static final PostgreSQLContainer<?> POSTGRES =
+  private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>("postgres:17")
           .withNetwork(SHARED_NETWORK)
           .withNetworkAliases(POSTGRES_HOST)
@@ -160,7 +168,7 @@ public class BaseEnvironment {
           .withNetwork(SHARED_NETWORK)
           .withNetworkAliases(MDDS_WEB_SERVER_HOST)
           .dependsOn(RABBIT_MQ, REDIS, EXECUTOR, RESULT_CONSUMER, POSTGRES)
-          .withEnv("MDDS_SERVER_HOST", MDDS_WEB_SERVER_HOST)
+          .withEnv("MDDS_SERVER_HOST", CONTAINER_BIND_HOST)
           .withEnv("MDDS_SERVER_PORT", String.valueOf(MDDS_WEB_SERVER_PORT))
           .withEnv("MDDS_RABBITMQ_HOST", RABBITMQ_HOST)
           .withEnv("MDDS_RABBITMQ_PORT", String.valueOf(RABBITMQ_PORT))
@@ -173,17 +181,12 @@ public class BaseEnvironment {
               "jdbc:postgresql://" + POSTGRES_HOST + ":" + POSTGRES_PORT + "/mdds")
           .withEnv("MDDS_METADATA_STORAGE_USER", POSTGRES_USER)
           .withEnv("MDDS_METADATA_STORAGE_PASSWORD", POSTGRES_PASSWORD)
+          .withLogConsumer(logConsumer("web-server"))
           .waitingFor(Wait.forListeningPort())
           .withExposedPorts(MDDS_WEB_SERVER_PORT);
 
   @BeforeAll
   static void init() {
-    EXECUTOR.followOutput(
-        outputFrame -> log.info("[EXECUTOR] {}", outputFrame.getUtf8String().trim()));
-    WEB_SERVER.followOutput(
-        outputFrame -> log.info("[WEB-SERVER] {}", outputFrame.getUtf8String().trim()));
-    RESULT_CONSUMER.followOutput(
-        outputFrame -> log.info("[RESULT-CONSUMER] {}", outputFrame.getUtf8String().trim()));
     awaitReady(BaseEnvironment::grpcServerIsReady, "gRPC Server");
     awaitReady(BaseEnvironment::queueIsReady, "RabbitMq");
     awaitReady(BaseEnvironment::redisIsReady, "Redis");
@@ -273,6 +276,11 @@ public class BaseEnvironment {
     factory.setUsername(user);
     factory.setPassword(password);
     return factory;
+  }
+
+  private static Slf4jLogConsumer logConsumer(String serviceName) {
+    return new Slf4jLogConsumer(LoggerFactory.getLogger("tc." + serviceName))
+        .withPrefix(serviceName.toUpperCase(Locale.ROOT));
   }
 
   protected static Stream<SlaeSolver> solvers() {
