@@ -33,18 +33,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.testcontainers.containers.BrowserWebDriverContainer;
 import org.testcontainers.containers.ComposeContainer;
+import org.testcontainers.containers.ContainerState;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 @Slf4j
 @Testcontainers
 class TestSolverUiE2EIT {
   private static final double SOLUTION_TOLERANCE = 1.0E-7;
-
+  private static final int SELENIUM_PORT = 4444;
   private static final String WEB_SERVER_SERVICE = "web-server-1";
   private static final int WEB_SERVER_PORT = 8000;
 
@@ -52,11 +51,8 @@ class TestSolverUiE2EIT {
   private static final String SOLUTION_FILE_NAME = "solution.json";
   private static final String REMOTE_SOLUTION_FILE = REMOTE_DOWNLOAD_DIR + "/" + SOLUTION_FILE_NAME;
 
-  private static BrowserWebDriverContainer<?> browser;
-
-  private static final String SELENIUM_CHROME_IMAGE =
-      System.getProperty(
-          "mdds.e2e.ui.selenium.image", "selenium/standalone-chrome:4.31.0-20250404");
+  private static ContainerState selenium;
+  private static final String SELENIUM_SERVICE = "selenium-1";
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Path DOWNLOAD_DIR = Path.of("target", "selenide-downloads").toAbsolutePath();
@@ -67,26 +63,30 @@ class TestSolverUiE2EIT {
           .withExposedService(
               WEB_SERVER_SERVICE,
               WEB_SERVER_PORT,
-              Wait.forHttp("/health").forStatusCode(200).withStartupTimeout(Duration.ofMinutes(3)));
+              Wait.forHttp("/health").forStatusCode(200).withStartupTimeout(Duration.ofMinutes(3)))
+          .withExposedService(
+              SELENIUM_SERVICE,
+              SELENIUM_PORT,
+              Wait.forHttp("/status").forStatusCode(200).withStartupTimeout(Duration.ofMinutes(2)));
 
   @BeforeAll
   static void setup() throws Exception {
-    var port = ENVIRONMENT.getServicePort(WEB_SERVER_SERVICE, WEB_SERVER_PORT);
-
     Files.createDirectories(DOWNLOAD_DIR);
     Files.deleteIfExists(DOWNLOAD_DIR.resolve(SOLUTION_FILE_NAME));
 
-    org.testcontainers.Testcontainers.exposeHostPorts(port);
+    var seleniumHost = ENVIRONMENT.getServiceHost(SELENIUM_SERVICE, SELENIUM_PORT);
+    var seleniumPort = ENVIRONMENT.getServicePort(SELENIUM_SERVICE, SELENIUM_PORT);
 
-    browser =
-        new BrowserWebDriverContainer<>(DockerImageName.parse(SELENIUM_CHROME_IMAGE))
-            .withCapabilities(createChromeOptions())
-            .withAccessToHost(true);
+    selenium =
+        ENVIRONMENT
+            .getContainerByServiceName(SELENIUM_SERVICE)
+            .orElseThrow(() -> new IllegalStateException("Selenium container not found"));
 
-    browser.start();
+    Configuration.remote = "http://" + seleniumHost + ":" + seleniumPort + "/wd/hub";
 
-    Configuration.remote = browser.getSeleniumAddress().toString();
-    Configuration.baseUrl = "http://host.testcontainers.internal:" + port;
+    // Important: this URL is opened by Chrome inside the compose network.
+    Configuration.baseUrl = "http://web-server:" + WEB_SERVER_PORT;
+
     Configuration.browser = "chrome";
     Configuration.browserCapabilities = createChromeOptions();
     Configuration.timeout = 60_000;
@@ -104,7 +104,7 @@ class TestSolverUiE2EIT {
 
     Files.deleteIfExists(DOWNLOAD_DIR.resolve(SOLUTION_FILE_NAME));
 
-    var result = browser.execInContainer("rm", "-f", REMOTE_SOLUTION_FILE);
+    var result = selenium.execInContainer("rm", "-f", REMOTE_SOLUTION_FILE);
     if (result.getExitCode() != 0) {
       throw new AssertionError("Failed to clean remote downloaded file: " + result.getStderr());
     }
@@ -118,10 +118,6 @@ class TestSolverUiE2EIT {
   @AfterAll
   static void tearDownAll() {
     closeWebDriver();
-
-    if (browser != null) {
-      browser.stop();
-    }
   }
 
   private static ChromeOptions createChromeOptions() {
@@ -130,6 +126,9 @@ class TestSolverUiE2EIT {
     chromeOptions.addArguments("--headless=new");
     chromeOptions.addArguments("--disable-dev-shm-usage");
     chromeOptions.addArguments("--no-sandbox");
+    chromeOptions.addArguments("--disable-gpu");
+    chromeOptions.addArguments("--window-size=1920,1080");
+    chromeOptions.addArguments("--remote-allow-origins=*");
 
     chromeOptions.setExperimentalOption(
         "prefs",
@@ -202,13 +201,13 @@ class TestSolverUiE2EIT {
 
   private static boolean copyDownloadedFileFromBrowserContainer(Path target) {
     try {
-      var checkResult = browser.execInContainer("test", "-s", REMOTE_SOLUTION_FILE);
+      var checkResult = selenium.execInContainer("test", "-s", REMOTE_SOLUTION_FILE);
       if (checkResult.getExitCode() != 0) {
         return false;
       }
 
       Files.createDirectories(target.getParent());
-      browser.copyFileFromContainer(REMOTE_SOLUTION_FILE, target.toString());
+      selenium.copyFileFromContainer(REMOTE_SOLUTION_FILE, target.toString());
 
       return isExistingNonEmptyFile(target);
     } catch (Exception e) {
