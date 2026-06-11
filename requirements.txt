@@ -2,18 +2,22 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 # Install development dependencies
-pylint
-pycodestyle
-ruff
-wheel
-pandas
-python-multipart
-pytest
-black
-pyyaml
-requests
-pika
-redis
-pytest-cov
-coverage
-testcontainers-minio
+pylint==4.0.5
+pycodestyle==2.14.0
+ruff==0.15.16
+wheel==0.47.0
+pandas==3.0.3
+python-multipart==0.0.32
+pytest==9.0.3
+black==26.5.1
+pyyaml==6.0.3
+requests==2.34.2
+pika==1.4.1
+redis==8.0.0
+pytest-cov==7.1.0
+coverage==7.14.1
+testcontainers-minio==0.0.1rc1
+grpcio-tools==1.75.1
+boto3==1.43.21
+pydantic==2.13.4
+
