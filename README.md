@@ -320,7 +320,24 @@ The current MDDS development container has been tested with the following tool v
 | Docker Compose plugin | `v5.1.4`                         |
 | Make                  | `4.4.1`                          |
 
+### Test Coverage
 
+[![Codecov coverage sunburst](https://codecov.io/github/oleksiy-sayankin/mdds/graphs/sunburst.svg)](https://app.codecov.io/gh/oleksiy-sayankin/mdds)
+
+The diagram above is a Codecov **coverage sunburst**. It provides a visual overview of how automated tests cover different parts of the MDDS source tree.
+
+Each sector represents a directory or source file:
+
+- sectors closer to the center represent higher-level directories;
+- outer sectors represent nested directories and individual files;
+- the size of a sector reflects the amount of tracked source code in that part of the project, not its coverage percentage;
+- green sectors indicate higher test coverage;
+- yellow sectors indicate partial or moderate coverage;
+- red sectors indicate areas with low test coverage.
+
+Large red or yellow sectors therefore identify substantial parts of the codebase where additional tests may be most valuable. Small sectors represent relatively small files or directories, regardless of their color.
+
+The image is updated from the coverage reports produced by the CI pipeline. Click the diagram to open the interactive Codecov view, where directories and files can be explored in greater detail.
 
 ### 1. Clone repository on the host
 
