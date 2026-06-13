@@ -115,12 +115,12 @@ MDDS is intended to run on a Linux host with Docker Engine and the Docker Compos
 
 The primary tested host platform is Ubuntu Linux on `x86_64`/`amd64`.
 
-| Requirement                | Command          | Version policy                                                 |
-|----------------------------|------------------|----------------------------------------------------------------|
-| Git                        | `git`            | Any modern Git 2.x version should be sufficient                |
-| Docker Engine              | `docker`         | Must support building and running Docker images and containers |
-| Docker Compose plugin      | `docker compose` | Must support `docker compose up --wait` and `--wait-timeout`   |
-| POSIX-like shell utilities | `sh`, `stat`     | Required for helper commands used by the development workflow  |
+| Requirement                | Command          | Version policy                                                    |
+|----------------------------|------------------|-------------------------------------------------------------------|
+| Git                        | `git`            | Any modern Git 2.x version should be sufficient                   |
+| Docker Engine              | `docker`         | Must be running and accessible to the current user without `sudo` |
+| Docker Compose plugin      | `docker compose` | Must support `docker compose up --wait` and `--wait-timeout`      |
+| POSIX-like shell utilities | `sh`, `stat`     | Required for helper commands used by the development workflow     |
 
 The host system does not need Java, Maven, Python, Node.js, npm, or Newman to start the demo stack. These tools are provided by the MDDS development container for the recommended development workflow.
 
@@ -133,6 +133,84 @@ docker compose version
 docker compose up --help | grep -- --wait
 ```
 
+For Docker installation instructions, use the [official Docker documentation for Ubuntu](https://docs.docker.com/engine/install/ubuntu/).
+
+### Configure Docker access on Ubuntu Linux
+
+The Docker CLI must be able to communicate with Docker Engine. First, verify that the Docker daemon is running and accessible to the current user:
+
+```bash
+docker info
+```
+
+If the command completes successfully and displays both the `Client` and `Server` sections, no additional Docker access configuration is required.
+
+If it reports that it cannot connect to the Docker daemon:
+
+```text
+Cannot connect to the Docker daemon
+```
+
+start Docker Engine:
+
+```bash
+sudo systemctl enable --now docker
+docker info
+```
+
+If it reports a permission error for `/var/run/docker.sock`:
+
+```text
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+```
+
+configure access for the current user once:
+
+```bash
+getent group docker >/dev/null || sudo groupadd docker
+sudo usermod -aG docker "$USER"
+```
+
+Apply the updated group membership by logging out of the Ubuntu user session completely and logging in again.
+
+Closing and reopening only the terminal window may not be sufficient because a new terminal can inherit the group membership of the existing graphical login session.
+
+After logging in again, verify that the `docker` group is active:
+
+```bash
+id -nG
+```
+
+The output must include the `docker` group.
+
+Alternatively, activate the group immediately without logging out:
+
+```bash
+if ! command -v newgrp >/dev/null; then
+  sudo apt update
+  sudo apt install -y util-linux-extra
+fi
+
+newgrp docker
+```
+
+The `newgrp docker` command starts a new shell with the `docker` group active.
+
+Verify Docker access:
+
+```bash
+docker info
+docker run --rm hello-world
+```
+
+Both commands must complete successfully without `sudo`.
+
+Run `exit` to leave this shell when it is no longer needed.
+
+> **Security note:** membership in the `docker` group grants privileges comparable to root access. Add only trusted users to this group.
+
+### Required free ports
+
 The demo stack publishes several local ports, including:
 
 ```text
@@ -143,8 +221,6 @@ The demo stack publishes several local ports, including:
 ```
 
 If the stack fails to start, check that the ports defined in `mdds-demo/compose.demo.yml` are free.
-
-For Docker installation instructions, use the [official Docker documentation](https://docs.docker.com/engine/install/) for your operating system.
 
 ### Recommended system resources
 
@@ -160,12 +236,12 @@ For Docker installation instructions, use the [official Docker documentation](ht
 
 The current local workflow has been tested on the following host environment:
 
-| Component             | Tested version   |
-|-----------------------|------------------|
-| Host OS               | Ubuntu 26.04 LTS |
-| Docker Engine         | `29.5.2`         |
-| Docker Compose plugin | `v5.1.4`         |
-| Git                   | `2.53.0`         |
+| Component             | Tested version        |
+|-----------------------|-----------------------|
+| Host OS               | Ubuntu 26.04 LTS      |
+| Docker Engine         | `29.5.2` and `29.5.3` |
+| Docker Compose plugin | `v5.1.4`              |
+| Git                   | `2.53.0`              |
 
 ### 1. Clone repository
 
