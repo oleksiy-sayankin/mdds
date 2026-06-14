@@ -33,7 +33,7 @@
     <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
     <software.amazon.awssdk.version>2.35.7</software.amazon.awssdk.version>
-    <springframework.version>3.5.8</springframework.version>
+    <springframework.version>3.5.10</springframework.version>
   </properties>
   <dependencyManagement>
     <dependencies>
