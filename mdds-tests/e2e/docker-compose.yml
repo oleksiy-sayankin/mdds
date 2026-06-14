@@ -6,9 +6,6 @@ name: mdds-e2e
 services:
   rabbitmq:
     image: rabbitmq:3.13-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -21,8 +18,6 @@ services:
 
   redis:
     image: redis:7.4
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -35,8 +30,6 @@ services:
     environment:
       MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc-server
       MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
-    ports:
-      - "50051:50051"
     healthcheck:
       test: [ "CMD", "grpc_health_probe", "-addr=grpc-server:50051" ]
       interval: 3s
@@ -62,8 +55,6 @@ services:
       MDDS_RABBITMQ_PORT: 5672
       MDDS_RABBITMQ_USER: guest
       MDDS_RABBITMQ_PASSWORD: guest
-    ports:
-      - "35232:35232"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://executor:35232/health"]
       interval: 3s
@@ -98,8 +89,6 @@ services:
       MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres:5432/mdds
       MDDS_METADATA_STORAGE_USER: mdds
       MDDS_METADATA_STORAGE_PASSWORD: mdds123
-    ports:
-      - "8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://web-server:8000/health"]
       interval: 3s
@@ -125,8 +114,6 @@ services:
       MDDS_RABBITMQ_PASSWORD: guest
       MDDS_REDIS_HOST: redis
       MDDS_REDIS_PORT: 6379
-    ports:
-      - "8863:8863"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://result-consumer:8863/health"]
       interval: 3s
@@ -143,8 +130,6 @@ services:
     user: root
     volumes:
       - loki-data:/var/lib/loki
-    ports:
-      - "3100:3100"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
       interval: 5s
@@ -169,8 +154,6 @@ services:
     depends_on:
       loki:
         condition: service_healthy
-    ports:
-      - "12345:12345"
     healthcheck:
       test: ["CMD", "/bin/busybox", "wget", "-qO-", "http://localhost:12345/-/ready"]
       interval: 5s
@@ -194,8 +177,6 @@ services:
     depends_on:
       loki:
         condition: service_healthy
-    ports:
-      - "3000:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 5s
@@ -210,9 +191,6 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
       MINIO_REGION_NAME: us-east-1
-    ports:
-      - "9000:9000"
-      - "9002:9001"
     volumes:
       - minio-data:/data
     healthcheck:
@@ -247,8 +225,6 @@ services:
       POSTGRES_USER: mdds
       POSTGRES_PASSWORD: mdds123
       TZ: UTC
-    ports:
-      - "5432:5432"
     volumes:
       # PostgreSQL 18+ Docker image uses PGDATA=/var/lib/postgresql/18/docker
       # and declares VOLUME /var/lib/postgresql.
@@ -282,4 +258,3 @@ volumes:
   alloy-data:
   minio-data:
   postgres-data:
-

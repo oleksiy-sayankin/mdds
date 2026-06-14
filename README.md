@@ -449,7 +449,17 @@ make build_release_images
 
 This target builds all MDDS release images from the current source tree, including base, application, and observability images.
 
-### 5. Start the demo stack
+### 5. Run tests
+
+```bash
+make test_all
+```
+
+This target runs the Python tests, Java tests, and end-to-end tests.
+
+The end-to-end tests start their own isolated Docker Compose stack and remove it automatically after the tests complete.
+
+### 6. Start the demo stack
 
 ```bash
 make start_mdds_demo
@@ -457,7 +467,7 @@ make start_mdds_demo
 
 This target starts the demo stack from `mdds-demo/compose.demo.yml` and waits until services with health checks become healthy.
 
-### 6. Open the demo UI from the host browser
+### 7. Open the demo UI from the host browser
 
 ```text
 http://localhost:8000
@@ -467,12 +477,6 @@ Grafana is available at:
 
 ```text
 http://localhost:3000
-```
-
-### 7. Run tests
-
-```bash
-make test_all
 ```
 
 ### 8. Stop the demo stack
