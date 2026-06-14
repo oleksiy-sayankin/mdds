@@ -37,6 +37,10 @@ E2E_COMPOSE := docker compose --project-name $(E2E_PROJECT_NAME) --progress=plai
 DEMO_HOME := mdds-demo
 GOOGLE_JAVA_FORMAT_HOME := /opt/google-java-format
 DOCKER_GID ?= $(shell stat -c '%g' /var/run/docker.sock)
+OBSERVABILITY_DEPLOYMENT_DIR := $(DEPLOYMENT_DIR)/observability
+ALLOY_DEPLOYMENT_DIR := $(OBSERVABILITY_DEPLOYMENT_DIR)/alloy
+LOKI_DEPLOYMENT_DIR := $(OBSERVABILITY_DEPLOYMENT_DIR)/loki
+GRAFANA_DEPLOYMENT_DIR := $(OBSERVABILITY_DEPLOYMENT_DIR)/grafana
 SONAR_HOST_URL ?= http://localhost:9021
 SONAR_PROJECT_KEY ?= mdds
 SONAR_TOKEN_FILE ?= .sonar_token
@@ -268,25 +272,143 @@ push_result_consumer_docker_image:
 	$(call log_done,"Pushing result-consumer Docker image completed.")
 
 
-#
-# Build all Docker images including base Java and Python based images
-#
-build_all_images: build_java_base_docker_image build_python_base_docker_image build_main_images
+.PHONY: \
+	build_alloy_docker_image \
+	push_alloy_docker_image \
+	build_loki_docker_image \
+	push_loki_docker_image \
+	build_grafana_docker_image \
+	push_grafana_docker_image \
+	build_observability_images \
+	push_observability_images \
+	build_and_push_observability_images \
+	build_release_images \
+	build_release_images_ci \
+	push_release_images \
+	build_and_push_release_images
+
 
 #
-# Build all Docker images for CI.
+# Build Alloy Docker image
 #
-build_all_images_ci: build_java_base_docker_image build_python_base_docker_image build_main_images_ci
+build_alloy_docker_image:
+	$(call log_info,"Building Alloy Docker image...")
+	docker buildx build \
+		-f $(ALLOY_DEPLOYMENT_DIR)/Dockerfile \
+		--progress=plain \
+		--tag $(USER_NAME)/alloy:$(PROJECT_VERSION) \
+		$(ALLOY_DEPLOYMENT_DIR)
+	$(call log_done,"Building Alloy Docker image completed.")
+
 
 #
-# Push all Docker images including base Java and Python based images
+# Push Alloy Docker image
 #
-push_all_images: push_java_base_docker_image push_python_base_docker_image push_main_images
+push_alloy_docker_image:
+	$(call log_info,"Pushing Alloy Docker image...")
+	docker push $(USER_NAME)/alloy:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Alloy Docker image completed.")
+
 
 #
-# Build and push all Docker images including base Java and Python based images
+# Build Loki Docker image
 #
-build_and_push_all_images: build_all_images push_all_images
+build_loki_docker_image:
+	$(call log_info,"Building Loki Docker image...")
+	docker buildx build \
+		-f $(LOKI_DEPLOYMENT_DIR)/Dockerfile \
+		--progress=plain \
+		--tag $(USER_NAME)/loki:$(PROJECT_VERSION) \
+		$(LOKI_DEPLOYMENT_DIR)
+	$(call log_done,"Building Loki Docker image completed.")
+
+
+#
+# Push Loki Docker image
+#
+push_loki_docker_image:
+	$(call log_info,"Pushing Loki Docker image...")
+	docker push $(USER_NAME)/loki:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Loki Docker image completed.")
+
+
+#
+# Build Grafana Docker image
+#
+build_grafana_docker_image:
+	$(call log_info,"Building Grafana Docker image...")
+	docker buildx build \
+		-f $(GRAFANA_DEPLOYMENT_DIR)/Dockerfile \
+		--progress=plain \
+		--tag $(USER_NAME)/grafana:$(PROJECT_VERSION) \
+		$(GRAFANA_DEPLOYMENT_DIR)
+	$(call log_done,"Building Grafana Docker image completed.")
+
+
+#
+# Push Grafana Docker image
+#
+push_grafana_docker_image:
+	$(call log_info,"Pushing Grafana Docker image...")
+	docker push $(USER_NAME)/grafana:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Grafana Docker image completed.")
+
+
+#
+# Build all observability Docker images
+#
+build_observability_images: \
+		build_alloy_docker_image \
+		build_loki_docker_image \
+		build_grafana_docker_image
+
+
+#
+# Push all observability Docker images
+#
+push_observability_images: \
+		push_alloy_docker_image \
+		push_loki_docker_image \
+		push_grafana_docker_image
+
+#
+# Build all release Docker images
+#
+build_release_images: \
+		build_java_base_docker_image \
+		build_python_base_docker_image \
+		build_main_images \
+		build_observability_images
+
+#
+# Build all release Docker images for CI
+#
+build_release_images_ci: \
+		build_java_base_docker_image \
+		build_python_base_docker_image \
+		build_main_images_ci \
+		build_observability_images
+
+#
+# Push all release Docker images
+#
+push_release_images: \
+		push_java_base_docker_image \
+		push_python_base_docker_image \
+		push_main_images \
+		push_observability_images
+
+#
+# Build and push all release Docker images
+#
+build_and_push_release_images: build_release_images push_release_images
+
+#
+# Build and push all observability Docker images
+#
+build_and_push_observability_images: \
+		build_observability_images \
+		push_observability_images
 
 #
 # Build main images. Here we do not build base Java and Python docker images since they are rarely changed.

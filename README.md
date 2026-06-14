@@ -444,10 +444,10 @@ After this step, build and test commands are executed inside the development con
 ### 4. Build MDDS images
 
 ```bash
-make build_all_images
+make build_release_images
 ```
 
-This target builds the base and application Docker images required by MDDS from the current source tree.
+This target builds all MDDS release images from the current source tree, including base, application, and observability images.
 
 ### 5. Start the demo stack
 

@@ -81,7 +81,7 @@ jobs:
         run: npm ci
 
       - name: Build Docker images
-        run: make build_all_images_ci
+        run: make build_release_images_ci
 
       - name: Run Java tests with coverage
         run: make test_java_coverage
