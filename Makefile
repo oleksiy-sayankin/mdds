@@ -5,13 +5,18 @@ PYTHON_ENV_HOME := ~/.venvs
 PYTHON_BIN ?= python3.12
 PYTHON_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
 NODE_MODULES := node_modules
+ROOT_PACKAGE_JSON := package.json
+ROOT_PACKAGE_LOCK := package-lock.json
+ROOT_NODE_MODULES_LOCK := $(NODE_MODULES)/.package-lock.json
+MDDS_WEB_SERVER := mdds-web-server
+MDDS_WEB_CLIENT := mdds-web-client
+WEB_CLIENT_PACKAGE_JSON := $(MDDS_WEB_CLIENT)/package.json
+WEB_CLIENT_PACKAGE_LOCK := $(MDDS_WEB_CLIENT)/package-lock.json
+WEB_CLIENT_NODE_MODULES_LOCK := $(MDDS_WEB_CLIENT)/$(NODE_MODULES)/.package-lock.json
 PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
 PROJECT_VERSION := 0.1.0
-MDDS_GRPC_CORE := mdds_grpc_core
-MDDS_WEB_SERVER := mdds-web-server
-MDDS_WEB_CLIENT := mdds-web-client
 MDDS_PYTHON_WORKER_RUNTIME := mdds-python-worker-runtime
 PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_PYTHON_WORKER_RUNTIME)
 PYTHON_MAIN := $(PYTHON_ROOT)/src/main/python
@@ -319,7 +324,7 @@ build_and_copy_web_client: reformat_ts check_js_code_style
 # Build web-client without formatting or auto-fixing sources.
 # Intended for CI and reproducible builds.
 #
-build_and_copy_web_client_ci:
+build_and_copy_web_client_ci: install_js_dependencies
 	$(call log_info,"Building web-client for CI...")
 	cd $(MDDS_WEB_CLIENT) && npm run build
 	$(call log_done,"Building web-client for CI completed.")
@@ -328,10 +333,11 @@ build_and_copy_web_client_ci:
 #
 # Reformat web client files
 #
-reformat_ts:
-	$(call log_info,"Reformating web client sources...")
-	cd $(MDDS_WEB_CLIENT) && prettier --write $(TS_ROOT)/*
-	$(call log_done,"Reformating web client sources completed.")
+reformat_ts: install_js_dependencies
+	$(call log_info,"Reformatting web client sources...")
+	cd $(MDDS_WEB_CLIENT) && \
+		./$(NODE_MODULES)/.bin/prettier --write $(TS_ROOT)/*
+	$(call log_done,"Reformatting web client sources completed.")
 
 #
 # Check python code style
@@ -346,9 +352,14 @@ check_python_code_style:
 #
 # Check JavaScript code style
 #
-check_js_code_style:
+check_js_code_style: install_js_dependencies
 	$(call log_info,"Checking JavaScript code style...")
-	cd $(MDDS_WEB_CLIENT) && eslint $(JS_ROOT) --debug --fix --no-error-on-unmatched-pattern
+	cd $(MDDS_WEB_CLIENT) && \
+		../$(NODE_MODULES)/.bin/eslint \
+			$(JS_ROOT) \
+			--debug \
+			--fix \
+			--no-error-on-unmatched-pattern
 	$(call log_done,"Checking JavaScript code style completed.")
 
 #
@@ -549,6 +560,37 @@ build_jars: build_and_copy_web_client
         exit 1; \
     fi
 	$(call log_done,"Building jars completed")
+
+
+#
+# Install root JavaScript dependencies
+#
+$(ROOT_NODE_MODULES_LOCK): $(ROOT_PACKAGE_JSON) $(ROOT_PACKAGE_LOCK)
+	$(call log_info,"Installing root JavaScript dependencies...")
+	npm ci --include=dev --no-audit --no-fund
+	$(call log_done,"Root JavaScript dependencies installed.")
+
+#
+# Install web-client JavaScript dependencies
+#
+$(WEB_CLIENT_NODE_MODULES_LOCK): \
+		$(WEB_CLIENT_PACKAGE_JSON) \
+		$(WEB_CLIENT_PACKAGE_LOCK)
+	$(call log_info,"Installing web-client JavaScript dependencies...")
+	npm ci \
+		--prefix $(MDDS_WEB_CLIENT) \
+		--include=dev \
+		--no-audit \
+		--no-fund
+	$(call log_done,"Web-client JavaScript dependencies installed.")
+
+#
+# Install all JavaScript dependencies
+#
+.PHONY: install_js_dependencies
+install_js_dependencies: \
+		$(ROOT_NODE_MODULES_LOCK) \
+		$(WEB_CLIENT_NODE_MODULES_LOCK)
 
 
 #

@@ -79,10 +79,7 @@ RUN python -m pip install --no-cache-dir \
     && python -m pip check
 
 # Install globally available JavaScript CLI tools.
-RUN npm install -g \
-    newman \
-    prettier \
-    eslint
+RUN npm install -g newman
 
 # Install google-java-format in the path expected by the current Makefile.
 RUN mkdir -p /opt/google-java-format/ \
