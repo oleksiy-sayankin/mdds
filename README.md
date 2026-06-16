@@ -7,6 +7,7 @@ Refer to the LICENSE file in the root directory for full license details.
 
 [![Build](https://github.com/oleksiy-sayankin/mdds/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/oleksiy-sayankin/mdds/actions/workflows/build.yml)
 [![Coverage](https://codecov.io/gh/oleksiy-sayankin/mdds/branch/master/graph/badge.svg)](https://codecov.io/gh/oleksiy-sayankin/mdds)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=oleksiy-sayankin_mdds&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=oleksiy-sayankin_mdds)
 ![Java](https://img.shields.io/badge/Java-21-blue)
 ![Maven](https://img.shields.io/badge/Maven-3.9-blue)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)

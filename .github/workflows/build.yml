@@ -15,6 +15,10 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   build:
     name: Build images and run tests
@@ -25,6 +29,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -80,6 +86,13 @@ jobs:
         working-directory: mdds-web-client
         run: npm ci
 
+      - name: Cache SonarQube Cloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
       - name: Build Docker images
         run: make build_release_images_ci
 
@@ -133,3 +146,17 @@ jobs:
           verbose: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Analyze with SonarQube Cloud
+        if: ${{ !env.ACT }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.projectKey=oleksiy-sayankin_mdds \
+            -Dsonar.organization=oleksiy-sayankin \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.coverage.jacoco.xmlReportPaths="${JAVA_COVERAGE_FILES}" \
+            -Dsonar.python.coverage.reportPaths=mdds-python-worker-runtime/target/python-coverage.xml \
+            -Dsonar.qualitygate.wait=true
