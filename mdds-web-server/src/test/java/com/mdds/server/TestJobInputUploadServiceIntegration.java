@@ -4,12 +4,14 @@
  */
 package com.mdds.server;
 
+import static com.mdds.server.PresignedUrlAssertions.assertExpiresAtMatchesSignature;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.mdds.domain.JobStatus;
 import com.mdds.server.support.JobTestFixture;
-import java.time.Instant;
+import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -31,8 +33,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Import(JobTestFixture.class)
 class TestJobInputUploadServiceIntegration {
 
+  private static final Duration PRE_SIGNED_PUT_TTL = Duration.ofMinutes(15);
   @Autowired private JobInputUploadService jobInputUploadService;
-  @Autowired private ObjectStorageProperties objectStorageProperties;
   @Autowired private JobCreationService jobCreationService;
   @Autowired private UserLookupService userLookupService;
   @Autowired private JobTestFixture jobFixture;
@@ -70,28 +72,21 @@ class TestJobInputUploadServiceIntegration {
 
   @ParameterizedTest
   @MethodSource("userLoginValues")
-  void testIssueUploadUrl(String login) {
+  void testIssueUploadUrl(String login) throws URISyntaxException {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
 
-    var ttl = objectStorageProperties.presignPutTtl();
-
     var inputSlot = "matrix";
-    var before = Instant.now();
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, inputSlot);
-    var after = Instant.now();
-
-    assertThat(result.expiresAt()).isAfterOrEqualTo(before.plus(ttl).minusSeconds(1));
-    assertThat(result.expiresAt()).isBeforeOrEqualTo(after.plus(ttl).plusSeconds(1));
-
-    var url = result.uploadUrl();
-    assertThat(url).isNotNull();
+    var uploadUrl = result.uploadUrl();
+    assertThat(uploadUrl).isNotNull();
+    assertExpiresAtMatchesSignature(result.expiresAt(), uploadUrl, PRE_SIGNED_PUT_TTL);
     var fileName =
         jobProfileRegistry.forType("solving_slae").inputArtifacts().get(inputSlot).fileName();
-    assertThat(url.getPath()).contains(fileName);
+    assertThat(uploadUrl.getPath()).contains(fileName);
   }
 
   private static Stream<Arguments> inputSlots() {
@@ -106,27 +101,21 @@ class TestJobInputUploadServiceIntegration {
 
   @ParameterizedTest
   @MethodSource("inputSlots")
-  void testIssueUploadUrlSlotNormalization(String inputSlot, String expectedSlot) {
+  void testIssueUploadUrlSlotNormalization(String inputSlot, String expectedSlot)
+      throws URISyntaxException {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
 
-    var ttl = objectStorageProperties.presignPutTtl();
-
-    var before = Instant.now();
     var result = jobInputUploadService.issueUploadUrl(userId, jobId, inputSlot);
-    var after = Instant.now();
-
-    assertThat(result.expiresAt()).isAfterOrEqualTo(before.plus(ttl).minusSeconds(1));
-    assertThat(result.expiresAt()).isBeforeOrEqualTo(after.plus(ttl).plusSeconds(1));
-
-    var url = result.uploadUrl();
-    assertThat(url).isNotNull();
+    var uploadUrl = result.uploadUrl();
+    assertThat(uploadUrl).isNotNull();
+    assertExpiresAtMatchesSignature(result.expiresAt(), uploadUrl, PRE_SIGNED_PUT_TTL);
     var fileName =
         jobProfileRegistry.forType("solving_slae").inputArtifacts().get(expectedSlot).fileName();
-    assertThat(url.getPath()).contains(fileName);
+    assertThat(uploadUrl.getPath()).contains(fileName);
   }
 
   @Test

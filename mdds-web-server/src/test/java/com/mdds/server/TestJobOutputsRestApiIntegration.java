@@ -4,6 +4,7 @@
  */
 package com.mdds.server;
 
+import static com.mdds.server.PresignedUrlAssertions.assertExpiresAtMatchesSignature;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.util.HttpTestClient;
@@ -22,7 +23,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -137,8 +137,7 @@ class TestJobOutputsRestApiIntegration {
     var expiresAt = result.expiresAt();
     assertThat(downloadUrl).isNotNull();
     assertThat(expiresAt).isNotNull();
-    var now = Instant.now();
-    assertThat(expiresAt).isAfter(now).isBefore(now.plus(PRESIGNED_GET_TTL));
+    assertExpiresAtMatchesSignature(result.expiresAt(), result.downloadUrl(), PRESIGNED_GET_TTL);
     var objectKey = extractObjectKeyFromPresignedUrl(downloadUrl);
     assertThat(objectKey).isEqualTo(solutionObjectKey(userId, jobId));
 
@@ -325,8 +324,7 @@ class TestJobOutputsRestApiIntegration {
     var expiresAt = result.expiresAt();
     assertThat(downloadUrl).isNotNull();
     assertThat(expiresAt).isNotNull();
-    var now = Instant.now();
-    assertThat(expiresAt).isAfter(now).isBefore(now.plus(PRESIGNED_GET_TTL));
+    assertExpiresAtMatchesSignature(result.expiresAt(), result.downloadUrl(), PRESIGNED_GET_TTL);
     var objectKey = extractObjectKeyFromPresignedUrl(downloadUrl);
     assertThat(objectKey).isEqualTo(solutionObjectKey(userId, jobId));
 

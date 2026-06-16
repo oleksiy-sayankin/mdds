@@ -8,7 +8,7 @@ import com.mdds.domain.JobStatus;
 import com.mdds.persistence.entity.JobEntity;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.jpa.UsersRepository;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +24,7 @@ public class JobCreationService {
   private final JobsRepository jobsRepository;
   private final UsersRepository usersRepository;
   private final JobProfileRegistry jobProfileRegistry;
+  private final Clock clock;
 
   /**
    * Looks up for pair (<i>userId</i>, <i>uploadSessionId</i>). If exists, it returns record
@@ -89,7 +90,7 @@ public class JobCreationService {
       job.setJobType(jobType);
       job.setStatus(JobStatus.DRAFT);
       job.setProgress(0);
-      job.setCreatedAt(Instant.now());
+      job.setCreatedAt(clock.instant());
       jobsRepository.save(job);
       return new JobCreationResult(jobId, true);
     }

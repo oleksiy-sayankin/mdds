@@ -30,6 +30,7 @@ import org.testcontainers.utility.MountableFile;
 @Testcontainers
 class TestQueueClientFactory {
   private static final String JOB_QUEUE_NAME = "job_queue";
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
 
   @Container
   private static final RabbitMQContainer rabbitMq =
@@ -87,15 +88,14 @@ class TestQueueClientFactory {
   @Test
   void testPublish() {
     var jobId = "test_id";
-    var timeCreated = Instant.now();
     var expectedJob = new JobDTO();
     expectedJob.setRhs(new double[] {3.4, 4.6});
     expectedJob.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedJob.setId(jobId);
-    expectedJob.setDateTime(timeCreated);
+    expectedJob.setDateTime(BASE_EVENT_TIME);
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       assertThatCode(() -> queue.publish(JOB_QUEUE_NAME, message)).doesNotThrowAnyException();
@@ -105,15 +105,14 @@ class TestQueueClientFactory {
   @Test
   void testDeleteQueue() {
     var jobId = "test_id";
-    var timeCreated = Instant.now();
     var expectedJob = new JobDTO();
     expectedJob.setRhs(new double[] {3.4, 4.6});
     expectedJob.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
     expectedJob.setId(jobId);
-    expectedJob.setDateTime(timeCreated);
+    expectedJob.setDateTime(BASE_EVENT_TIME);
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       assertThatCode(() -> queue.deleteQueue(JOB_QUEUE_NAME)).doesNotThrowAnyException();
@@ -123,15 +122,14 @@ class TestQueueClientFactory {
   @Test
   void testRegisterConsumer() {
     var jobId = "test_id";
-    var timeCreated = Instant.now();
     var expectedJob = new JobDTO();
     expectedJob.setRhs(new double[] {1.1, 2.2});
     expectedJob.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
     expectedJob.setId(jobId);
-    expectedJob.setDateTime(timeCreated);
+    expectedJob.setDateTime(BASE_EVENT_TIME);
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       var actualJob = new AtomicReference<>();
@@ -153,15 +151,14 @@ class TestQueueClientFactory {
   @Test
   void testRegisterConsumerWithoutReadingFromFile() {
     var jobId = "test_id";
-    var timeCreated = Instant.now();
     var expectedJob = new JobDTO();
     expectedJob.setRhs(new double[] {3.5, 2.21});
     expectedJob.setMatrix(new double[][] {{55.3, 8.4}, {5.5, 7.6}});
     expectedJob.setId(jobId);
-    expectedJob.setDateTime(timeCreated);
+    expectedJob.setDateTime(BASE_EVENT_TIME);
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
     var properties = new RabbitMqProperties(host, port, user, password, maxInboundMessageBodySize);
     try (var queue = new RabbitMqQueueClient(properties)) {
       queue.publish(JOB_QUEUE_NAME, message);
@@ -184,15 +181,14 @@ class TestQueueClientFactory {
   @Test
   void testRegisterConsumerConstructorWithParams() {
     var jobId = "test_id";
-    var timeCreated = Instant.now();
     var expectedJob = new JobDTO();
     expectedJob.setRhs(new double[] {561.1, 52.287});
     expectedJob.setMatrix(new double[][] {{23.3, 147.44}, {5.5, 7.7}});
     expectedJob.setId(jobId);
-    expectedJob.setDateTime(timeCreated);
+    expectedJob.setDateTime(BASE_EVENT_TIME);
     expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, Instant.now());
+    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       queue.publish(JOB_QUEUE_NAME, message);
       var actualJob = new AtomicReference<>();

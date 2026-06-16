@@ -22,6 +22,7 @@ import com.mdds.queue.MessageHandler;
 import com.mdds.queue.QueueClient;
 import io.grpc.StatusRuntimeException;
 import jakarta.annotation.Nonnull;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -44,6 +45,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   private final GrpcChannel grpcChannel;
   private final CommonProperties commonProperties;
   private final ExecutorProperties executorProperties;
+  private final Clock clock;
   private static final Duration JOB_TIMEOUT = Duration.ofSeconds(600);
   private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
   private static final Duration POLL_DELAY = Duration.ZERO;
@@ -56,12 +58,14 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
       @Qualifier("resultQueueClient") QueueClient resultQueueClient,
       GrpcChannel grpcChannel,
       CommonProperties commonProperties,
-      ExecutorProperties executorProperties) {
+      ExecutorProperties executorProperties,
+      Clock clock) {
     this.grpcChannel = grpcChannel;
     this.solverStub = SolverServiceGrpc.newBlockingStub(grpcChannel.getChannel());
     this.resultQueueClient = resultQueueClient;
     this.commonProperties = commonProperties;
     this.executorProperties = executorProperties;
+    this.clock = clock;
     log.info(
         "Created Executor Message Handler '{}', {}, gRPC Server {}:{}",
         commonProperties.getResultQueueName(),
@@ -76,12 +80,14 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
       SolverServiceGrpc.SolverServiceBlockingStub solverStub,
       GrpcChannel channel,
       CommonProperties commonProperties,
-      ExecutorProperties executorProperties) {
+      ExecutorProperties executorProperties,
+      Clock clock) {
     this.grpcChannel = channel;
     this.resultQueueClient = resultQueueClient;
     this.solverStub = solverStub;
     this.commonProperties = commonProperties;
     this.executorProperties = executorProperties;
+    this.clock = clock;
   }
 
   @Override
@@ -121,34 +127,36 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
   private void publishInProgressFor(JobDTO payload) {
     // create message with 'in progress' status
     var jobCreationDateTime = payload.getDateTime();
+    var now = clock.instant();
     var inProgress =
         new ResultDTO(
             payload.getId(),
             jobCreationDateTime,
-            Instant.now(),
+            now,
             JobStatus.IN_PROGRESS,
             executorProperties.getId(),
             30,
             new double[] {},
             "");
     log.info("Publishing in-progress status for job");
-    publish(new Message<>(inProgress, Map.of(), Instant.now()));
+    publish(new Message<>(inProgress, Map.of(), now));
   }
 
   private void publishErrorFor(JobDTO payload, String message) {
     // create error message
+    var now = clock.instant();
     var errorResult =
         new ResultDTO(
             payload.getId(),
             payload.getDateTime(),
-            Instant.now(),
+            now,
             JobStatus.ERROR,
             executorProperties.getId(),
             70,
             new double[] {},
             message);
     log.error("Error for job with message '{}'", message);
-    publish(new Message<>(errorResult, Map.of(), Instant.now()));
+    publish(new Message<>(errorResult, Map.of(), now));
   }
 
   private static Instant toInstant(com.google.protobuf.Timestamp timestamp) {
@@ -169,7 +177,7 @@ public class ExecutorMessageHandler implements MessageHandler<JobDTO> {
             solution,
             response.getJobMessage());
     log.info("Published response for job with message '{}'", response.getJobMessage());
-    publish(new Message<>(resultArray, Map.of(), Instant.now()));
+    publish(new Message<>(resultArray, Map.of(), clock.instant()));
   }
 
   private GetJobStatusResponse awaitForResultFrom(JobDTO job) {

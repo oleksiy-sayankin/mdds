@@ -61,6 +61,7 @@ import software.amazon.awssdk.utils.AttributeMap;
 class TestServerApplication {
   @LocalServerPort private int port;
 
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
   private static final String HOST = "localhost";
   private static final int REDIS_PORT = findFreePort();
   private static final RedisServer redisServer;
@@ -182,8 +183,8 @@ class TestServerApplication {
     // Create Result and put it to storage manually
     var expected = new ResultDTO();
     expected.setJobId(jobId);
-    expected.setDateTimeJobStarted(Instant.now());
-    expected.setDateTimeJobEnded(Instant.now());
+    expected.setDateTimeJobStarted(BASE_EVENT_TIME);
+    expected.setDateTimeJobEnded(BASE_EVENT_TIME);
     expected.setJobStatus(JobStatus.DONE);
     expected.setProgress(100);
     expected.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});

@@ -54,6 +54,8 @@ import org.testcontainers.utility.MountableFile;
     classes = ExecutorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class TestExecutorApplication {
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
   @Autowired
   @Qualifier("jobQueueClient")
   private QueueClient jobQueueClient;
@@ -146,7 +148,7 @@ class TestExecutorApplication {
   void testExecutor() {
     // Prepare and put data to job queue
     var jobId = UUID.randomUUID().toString();
-    var startTime = Instant.now();
+    var startTime = BASE_EVENT_TIME;
     var job =
         new JobDTO(
             jobId,
@@ -160,7 +162,7 @@ class TestExecutorApplication {
             new double[] {4.3, 3.23, 5.324, 4.553},
             SlaeSolver.NUMPY_EXACT_SOLVER);
 
-    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
     jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
     log.info(
         "Published jobMessage = {} to '{}', {}",
@@ -199,7 +201,7 @@ class TestExecutorApplication {
   void testExecutorAllSolvers(SlaeSolver slaeSolver) {
     // Prepare and put data to job queue
     var jobId = UUID.randomUUID().toString();
-    var startTime = Instant.now();
+    var startTime = BASE_EVENT_TIME;
     var job =
         new JobDTO(
             jobId,
@@ -213,7 +215,7 @@ class TestExecutorApplication {
             new double[] {4.3, 3.23, 5.324, 4.553},
             slaeSolver);
 
-    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
     jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
     var actual = waitForResult(jobId, resultQueueClient);
 
@@ -238,7 +240,7 @@ class TestExecutorApplication {
   void testExecutorWithErrorInInputData() {
     // Prepare and put data to job queue
     var jobId = UUID.randomUUID().toString();
-    var startTime = Instant.now();
+    var startTime = BASE_EVENT_TIME;
     var job =
         new JobDTO(
             jobId,
@@ -254,7 +256,7 @@ class TestExecutorApplication {
             new double[] {4.3, 3.23, 5.324, 4.553},
             SlaeSolver.NUMPY_EXACT_SOLVER);
 
-    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
     jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
 
     var actual = waitForResult(jobId, resultQueueClient);
@@ -292,9 +294,9 @@ class TestExecutorApplication {
       matrix = matrix(size);
       rhs = rhs(size);
       jobId = UUID.randomUUID().toString();
-      var startTime = Instant.now();
+      var startTime = BASE_EVENT_TIME;
       var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
-      var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+      var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
       jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
       log.info("Submitted job for SLAE size {} x {}. Waiting for solution...", size, size);
       var actual = waitForResult(jobId, resultQueueClient);
@@ -306,9 +308,8 @@ class TestExecutorApplication {
     matrix = matrix(size);
     rhs = rhs(size);
     jobId = UUID.randomUUID().toString();
-    var startTime = Instant.now();
-    var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
-    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    var job = new JobDTO(jobId, BASE_EVENT_TIME, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
+    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
     jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
     log.info(
         "Submitted job {} for SLAE size {} x {}. Waiting for cancellation...", jobId, size, size);
@@ -316,7 +317,7 @@ class TestExecutorApplication {
     log.info("Started processing job {}", jobId);
     var executorId = result.getExecutorId();
     var cancelJob = new CancelJobDTO(jobId);
-    var cancelMessage = new Message<>(cancelJob, new HashMap<>(), Instant.now());
+    var cancelMessage = new Message<>(cancelJob, new HashMap<>(), BASE_EVENT_TIME);
     cancelBus.sendCancel(executorId, cancelMessage);
     log.info("Submitting cancel message for job {} to executor {}", jobId, executorId);
     result = waitForStatus(jobId, resultQueueClient, JobStatus.CANCELLED);

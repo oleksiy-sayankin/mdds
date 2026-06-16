@@ -4,9 +4,10 @@
  */
 package com.mdds.server;
 
+import static com.mdds.server.PresignedUrlAssertions.assertExpiresAtMatchesSignature;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Instant;
+import java.net.URISyntaxException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,21 +50,16 @@ class TestObjectStorageService {
   }
 
   @Test
-  void testIssueUploadUrl() {
+  void testIssueUploadUrl() throws URISyntaxException {
     var bucket = objectStorageProperties.bucket();
-    var ttl = objectStorageProperties.presignPutTtl();
     var userId = 42L;
     var jobId = UUID.randomUUID().toString();
     var fileName = "matrix.csv";
-    var before = Instant.now();
     var result = objectStorageService.issueUploadUrl(userId, jobId, fileName);
-    var after = Instant.now();
-
-    assertThat(result.expiresAt()).isAfterOrEqualTo(before.plus(ttl).minusSeconds(1));
-    assertThat(result.expiresAt()).isBeforeOrEqualTo(after.plus(ttl).plusSeconds(1));
-
     var url = result.uploadUrl();
     assertThat(url).isNotNull();
+    assertExpiresAtMatchesSignature(
+        result.expiresAt(), result.uploadUrl(), objectStorageProperties.presignPutTtl());
     assertThat(url.getPath())
         .isEqualTo("/" + bucket + "/jobs/" + userId + "/" + jobId + "/in/" + fileName);
   }

@@ -35,6 +35,7 @@ import redis.embedded.RedisServer;
 @Slf4j
 @SpringBootTest
 class TestResultConsumerApplicationService {
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
   private static final String HOST = "localhost";
   private static final int REDIS_PORT = findFreePort();
   private static final RedisServer redisServer;
@@ -89,14 +90,14 @@ class TestResultConsumerApplicationService {
     var expectedResult =
         new ResultDTO(
             jobId,
-            Instant.now(),
-            Instant.now(),
+            BASE_EVENT_TIME,
+            BASE_EVENT_TIME,
             JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
-    var message = new Message<>(expectedResult, new HashMap<>(), Instant.now());
+    var message = new Message<>(expectedResult, new HashMap<>(), BASE_EVENT_TIME);
     queueClient.publish(commonProperties.getResultQueueName(), message);
     // Read result from Data Storage
     Awaitility.await()

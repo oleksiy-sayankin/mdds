@@ -24,8 +24,10 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -36,7 +38,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -54,7 +60,20 @@ import org.testcontainers.utility.MountableFile;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "mdds.job-profile.mode=yaml")
 @Testcontainers
+@Import(TestJobStatusRestApiIntegration.FixedClockConfiguration.class)
 class TestJobStatusRestApiIntegration {
+
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class FixedClockConfiguration {
+
+    @Bean
+    @Primary
+    Clock fixedClock() {
+      return Clock.fixed(BASE_EVENT_TIME, ZoneOffset.UTC);
+    }
+  }
 
   @LocalServerPort private int port;
 
@@ -124,9 +143,7 @@ class TestJobStatusRestApiIntegration {
     var http = new HttpTestClient(HOST, port);
     var sessionId = newSessionId();
     var jobType = "solving_slae";
-    var beforeCreation = Instant.now();
     var createJobResponse = createOrReuseJob(http, login, sessionId, jobType);
-    var afterCreation = Instant.now();
     var jobId = createJobResponse.getJobId();
 
     var response = status(http, login, jobId);
@@ -150,9 +167,7 @@ class TestJobStatusRestApiIntegration {
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
     patchParams(http, login, jobId, paramsAsJson);
 
-    var beforeSubmission = Instant.now();
     var result = submit(http, login, jobId);
-    var afterSubmission = Instant.now();
     assertThat(result.jobId()).isEqualTo(jobId);
     assertThat(result.status()).isEqualTo(JobStatus.SUBMITTED.toString());
 
@@ -162,8 +177,8 @@ class TestJobStatusRestApiIntegration {
     assertThat(response.status()).isEqualTo(JobStatus.SUBMITTED.toString());
     assertThat(response.progress()).isZero();
     assertThat(response.message()).isNull();
-    assertThat(response.submittedAt()).isStrictlyBetween(beforeSubmission, afterSubmission);
-    assertThat(response.createdAt()).isStrictlyBetween(beforeCreation, afterCreation);
+    assertThat(response.submittedAt()).isEqualTo(BASE_EVENT_TIME);
+    assertThat(response.createdAt()).isEqualTo(BASE_EVENT_TIME);
     assertThat(response.startedAt()).isNull();
     assertThat(response.finishedAt()).isNull();
   }

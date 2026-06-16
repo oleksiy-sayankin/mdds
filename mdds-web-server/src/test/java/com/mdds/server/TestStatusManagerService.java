@@ -27,6 +27,8 @@ import org.mockito.ArgumentCaptor;
 
 class TestStatusManagerService {
 
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
   @Test
   void testProcessStatusUpdateMessage() {
     var statusQueue = mock(QueueClient.class);
@@ -53,7 +55,7 @@ class TestStatusManagerService {
     var handler = handlerCaptor.getValue();
     var ack = mock(Acknowledger.class);
 
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var payload =
         new JobStatusUpdateDTO(
             "job-1", "worker-1", IN_PROGRESS.getCode(), 10, "Started processing", eventTime);
@@ -96,7 +98,7 @@ class TestStatusManagerService {
     var handler = handlerCaptor.getValue();
     var ack = mock(Acknowledger.class);
 
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var jobId = "invalid-job-id";
     var payload =
         new JobStatusUpdateDTO(

@@ -28,8 +28,10 @@ import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
 import com.mdds.queue.QueueClient;
 import jakarta.annotation.Nonnull;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +53,10 @@ import org.testcontainers.utility.MountableFile;
 @SpringBootTest
 @Slf4j
 class TestExecutorApplicationService {
+
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+  private static final Clock FIXED_CLOCK = Clock.fixed(BASE_EVENT_TIME, ZoneOffset.UTC);
+
   @Autowired
   @Qualifier("jobQueueClient")
   private QueueClient jobQueueClient;
@@ -92,7 +98,7 @@ class TestExecutorApplicationService {
   void testExecutorService() {
     // Prepare and put data to job queue
     var jobId = UUID.randomUUID().toString();
-    var startTime = Instant.now();
+    var startTime = BASE_EVENT_TIME;
     var job =
         new JobDTO(
             jobId,
@@ -102,12 +108,11 @@ class TestExecutorApplicationService {
             },
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
-    var endTime = Instant.now();
     var expected =
         new ResultDTO(
             jobId,
             startTime,
-            endTime,
+            BASE_EVENT_TIME,
             JobStatus.DONE,
             executorProperties.getId(),
             100,
@@ -117,7 +122,7 @@ class TestExecutorApplicationService {
     // Simulate that ExecutorMessageHandler solves the job
     doAnswer(
             invocation -> {
-              var resultMessage = new Message<>(expected, new HashMap<>(), Instant.now());
+              var resultMessage = new Message<>(expected, new HashMap<>(), BASE_EVENT_TIME);
               resultQueueClient.publish(commonProperties.getResultQueueName(), resultMessage);
               return null;
             })
@@ -136,7 +141,7 @@ class TestExecutorApplicationService {
             cancelBus.subscribe(executorProperties.getId(), cancelMessageHandler),
             commonProperties,
             executorProperties)) {
-      var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+      var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
       jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
 
       Awaitility.await()
@@ -196,21 +201,21 @@ class TestExecutorApplicationService {
             mockedSolverStub,
             mockedChanel,
             commonProperties,
-            executorProperties);
+            executorProperties,
+            FIXED_CLOCK);
 
     // Prepare and put data to job queue
-    var startTime = Instant.now();
     var job =
         new JobDTO(
             jobId,
-            startTime,
+            BASE_EVENT_TIME,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
             },
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
     var ack = mock(Acknowledger.class);
-    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
     // when
     handler.handle(jobMessage, ack);
 
@@ -249,21 +254,21 @@ class TestExecutorApplicationService {
             mockedSolverStub,
             mockedChanel,
             commonProperties,
-            executorProperties);
+            executorProperties,
+            FIXED_CLOCK);
 
     // Prepare and put data to job queue
-    var startTime = Instant.now();
     var job =
         new JobDTO(
             jobId,
-            startTime,
+            BASE_EVENT_TIME,
             new double[][] {
               {1.1, 2.2, 3.3, 4.4}, {51, 24.2, 33.3, 34.24}, {31.1, 232.2, 43.3, 4.4}
             },
             new double[] {4.3, 3.23, 5.324},
             SlaeSolver.NUMPY_EXACT_SOLVER);
     var ack = mock(Acknowledger.class);
-    var jobMessage = new Message<>(job, new HashMap<>(), Instant.now());
+    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
     // when
     handler.handle(jobMessage, ack);
 

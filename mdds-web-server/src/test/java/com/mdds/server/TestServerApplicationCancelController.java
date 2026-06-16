@@ -17,7 +17,9 @@ import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.CancelBus;
 import com.mdds.storage.DataStorage;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,8 @@ import org.springframework.http.HttpStatus;
 class TestServerApplicationCancelController {
   private CancelBus cancelBus;
   private DataStorage dataStorage;
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+  private static final Clock FIXED_CLOCK = Clock.fixed(BASE_EVENT_TIME, ZoneOffset.UTC);
 
   @BeforeEach
   void setUp() {
@@ -35,13 +39,13 @@ class TestServerApplicationCancelController {
 
   @Test
   void testCancel() {
-    var scc = new ServerCancelController(dataStorage, cancelBus);
+    var scc = new ServerCancelController(dataStorage, cancelBus, FIXED_CLOCK);
     var jobId = "testJobId";
     var result =
         new ResultDTO(
             jobId,
-            Instant.now(),
-            Instant.now(),
+            BASE_EVENT_TIME,
+            BASE_EVENT_TIME,
             JobStatus.IN_PROGRESS,
             "test-executor-id",
             10,
@@ -55,7 +59,7 @@ class TestServerApplicationCancelController {
 
   @Test
   void testCancelNoQueueName() {
-    var scc = new ServerCancelController(dataStorage, cancelBus);
+    var scc = new ServerCancelController(dataStorage, cancelBus, FIXED_CLOCK);
     var jobId = "testJobId";
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.empty());
     assertThatThrownBy(() -> scc.cancel(jobId))
@@ -65,11 +69,11 @@ class TestServerApplicationCancelController {
 
   @Test
   void testCancelDoneJob() {
-    var scc = new ServerCancelController(dataStorage, cancelBus);
+    var scc = new ServerCancelController(dataStorage, cancelBus, FIXED_CLOCK);
     var jobId = "testJobId";
     var result =
         new ResultDTO(
-            jobId, Instant.now(), Instant.now(), JobStatus.DONE, "cancel.queue", 100, null, "");
+            jobId, BASE_EVENT_TIME, BASE_EVENT_TIME, JobStatus.DONE, "cancel.queue", 100, null, "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
     assertThatThrownBy(() -> scc.cancel(jobId))
         .isInstanceOf(CanNotCancelJobException.class)
@@ -78,10 +82,11 @@ class TestServerApplicationCancelController {
 
   @Test
   void testCancelEmptyQueueName() {
-    var scc = new ServerCancelController(dataStorage, cancelBus);
+    var scc = new ServerCancelController(dataStorage, cancelBus, FIXED_CLOCK);
     var jobId = "testJobId";
     var result =
-        new ResultDTO(jobId, Instant.now(), Instant.now(), JobStatus.IN_PROGRESS, "", 10, null, "");
+        new ResultDTO(
+            jobId, BASE_EVENT_TIME, BASE_EVENT_TIME, JobStatus.IN_PROGRESS, "", 10, null, "");
     when(dataStorage.get(anyString(), any())).thenReturn(Optional.of(result));
     assertThatThrownBy(() -> scc.cancel(jobId))
         .isInstanceOf(CanNotCancelJobException.class)

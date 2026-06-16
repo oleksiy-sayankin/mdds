@@ -21,8 +21,10 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -31,6 +33,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -41,7 +47,21 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(properties = {"spring.config.import=classpath:test-job-profiles.yml"})
 @Testcontainers
+@Import(TestJobStatusServiceIntegration.FixedClockConfiguration.class)
 class TestJobStatusServiceIntegration {
+
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class FixedClockConfiguration {
+
+    @Bean
+    @Primary
+    Clock fixedClock() {
+      return Clock.fixed(BASE_EVENT_TIME, ZoneOffset.UTC);
+    }
+  }
+
   @Autowired private JobSubmissionService jobSubmissionService;
   @Autowired private UserLookupService userLookupService;
   @Autowired private JobCreationService jobCreationService;
@@ -105,9 +125,7 @@ class TestJobStatusServiceIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
-    var beforeCreation = Instant.now();
     var jobId = jobCreationService.createOrReuseDraftJob(userId, sessionId, jobType).jobId();
-    var afterCreation = Instant.now();
 
     var statusResponse = jobStatusService.status(userId, jobId);
     assertThat(statusResponse.status()).isEqualTo(JobStatus.DRAFT.toString());
@@ -125,9 +143,7 @@ class TestJobStatusServiceIntegration {
     var params = Map.of(paramName, paramValue);
     jobParamsService.mergeParams(userId, jobId, params);
 
-    var beforeSubmission = Instant.now();
     jobSubmissionService.submit(userId, jobId);
-    var afterSubmission = Instant.now();
 
     statusResponse = jobStatusService.status(userId, jobId);
     assertThat(statusResponse.status()).isEqualTo(JobStatus.SUBMITTED.toString());
@@ -137,8 +153,8 @@ class TestJobStatusServiceIntegration {
     assertThat(statusResponse.status()).isEqualTo(JobStatus.SUBMITTED.toString());
     assertThat(statusResponse.progress()).isZero();
     assertThat(statusResponse.message()).isNull();
-    assertThat(statusResponse.submittedAt()).isStrictlyBetween(beforeSubmission, afterSubmission);
-    assertThat(statusResponse.createdAt()).isStrictlyBetween(beforeCreation, afterCreation);
+    assertThat(statusResponse.submittedAt()).isEqualTo(BASE_EVENT_TIME);
+    assertThat(statusResponse.createdAt()).isEqualTo(BASE_EVENT_TIME);
     assertThat(statusResponse.startedAt()).isNull();
     assertThat(statusResponse.finishedAt()).isNull();
 

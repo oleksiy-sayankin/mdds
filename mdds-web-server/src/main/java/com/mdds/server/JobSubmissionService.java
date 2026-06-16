@@ -14,7 +14,7 @@ import com.mdds.queue.Message;
 import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobParamsRepository;
 import com.mdds.server.jpa.JobsRepository;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +37,7 @@ public class JobSubmissionService {
   private final ObjectStorageService objectStorageService;
   private final @Qualifier("jobQueueClient") QueueClient queueClient;
   private final JobProfileRegistry jobProfileRegistry;
+  private final Clock clock;
 
   /**
    * Submits a draft job for execution.
@@ -117,7 +118,7 @@ public class JobSubmissionService {
     var manifestObjectKey = ObjectKeyBuilder.manifestObjectKey(existingUserId, existingJobId);
     objectStorageService.putManifest(manifestObjectKey, manifest);
 
-    var now = Instant.now();
+    var now = clock.instant();
     var queueName = "queue-" + existingJobType;
 
     queueClient.publish(

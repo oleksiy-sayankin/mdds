@@ -23,6 +23,7 @@ class TestRedisDataStorage {
   private static final String DEFAULT_HOST = "localhost";
   private static final int REDIS_SERVER_PORT = findFreePort();
   private static RedisServer redisServer;
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
 
   @BeforeAll
   static void startServer() throws IOException {
@@ -42,8 +43,8 @@ class TestRedisDataStorage {
     var result = new ResultDTO();
     var jobId = "test";
     result.setJobId(jobId);
-    result.setDateTimeJobStarted(Instant.now());
-    result.setDateTimeJobEnded(Instant.now());
+    result.setDateTimeJobStarted(BASE_EVENT_TIME);
+    result.setDateTimeJobEnded(BASE_EVENT_TIME);
     result.setJobStatus(JobStatus.DONE);
     result.setProgress(100);
     result.setSolution(new double[] {9.3, 6.278, 6.783, 3.874});
@@ -58,8 +59,8 @@ class TestRedisDataStorage {
     var expectedResult = new ResultDTO();
     var jobId = "test";
     expectedResult.setJobId(jobId);
-    expectedResult.setDateTimeJobStarted(Instant.now());
-    expectedResult.setDateTimeJobEnded(Instant.now());
+    expectedResult.setDateTimeJobStarted(BASE_EVENT_TIME);
+    expectedResult.setDateTimeJobEnded(BASE_EVENT_TIME);
     expectedResult.setJobStatus(JobStatus.DONE);
     expectedResult.setProgress(100);
     expectedResult.setSolution(new double[] {81.1, 82.2, 37.3, 45.497});

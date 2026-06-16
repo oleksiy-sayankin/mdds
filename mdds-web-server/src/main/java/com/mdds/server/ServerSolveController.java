@@ -18,7 +18,7 @@ import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.QueueClient;
 import com.mdds.storage.DataStorage;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -37,15 +37,18 @@ public class ServerSolveController {
   private final DataStorage storage;
   private final QueueClient queueClient;
   private final CommonProperties commonProperties;
+  private final Clock clock;
 
   @Autowired
   public ServerSolveController(
       DataStorage storage,
       @Qualifier("jobQueueClient") QueueClient queueClient,
-      CommonProperties commonProperties) {
+      CommonProperties commonProperties,
+      Clock clock) {
     this.storage = storage;
     this.queueClient = queueClient;
     this.commonProperties = commonProperties;
+    this.clock = clock;
     log.info(
         "Created Server Solve controller with storage {}, queue client '{}' = {}",
         storage,
@@ -78,7 +81,7 @@ public class ServerSolveController {
     var jobId = UUID.randomUUID().toString();
     try (var ignoredJobId = MDC.putCloseable("jobId", jobId);
         var ignoredEvent = MDC.putCloseable("event", "create_request")) {
-      var now = Instant.now();
+      var now = clock.instant();
       // Put result to storage
       storage.put(jobId, new ResultDTO(jobId, now, null, JobStatus.NEW, null, 10, null, null));
 

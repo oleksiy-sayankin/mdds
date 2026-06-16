@@ -13,8 +13,8 @@ import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
 import com.mdds.storage.DataStorage;
-import java.time.Instant;
-import java.util.HashMap;
+import java.time.Clock;
+import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -33,12 +33,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ServerCancelController {
   private final DataStorage storage;
   private final CancelBus cancelBus;
+  private final Clock clock;
   private static final Set<JobStatus> ALLOWED = Set.of(IN_PROGRESS, NEW);
 
   @Autowired
-  public ServerCancelController(DataStorage storage, CancelBus cancelBus) {
+  public ServerCancelController(DataStorage storage, CancelBus cancelBus, Clock clock) {
     this.storage = storage;
     this.cancelBus = cancelBus;
+    this.clock = clock;
   }
 
   @PostMapping("/{jobId}")
@@ -64,7 +66,7 @@ public class ServerCancelController {
       }
 
       cancelBus.sendCancel(
-          executorId, new Message<>(new CancelJobDTO(jobId), new HashMap<>(), Instant.now()));
+          executorId, new Message<>(new CancelJobDTO(jobId), Map.of(), clock.instant()));
       return ResponseEntity.accepted().build();
     }
   }

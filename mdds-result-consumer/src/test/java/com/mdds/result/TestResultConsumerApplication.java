@@ -41,6 +41,8 @@ import redis.embedded.RedisServer;
     classes = ResultConsumerApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class TestResultConsumerApplication {
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
   @Autowired private ResultConsumerService resultConsumerApplication;
   @Autowired private CommonProperties commonProperties;
 
@@ -106,12 +108,12 @@ class TestResultConsumerApplication {
     var expected = new ResultDTO();
     var jobId = "test";
     expected.setJobId(jobId);
-    expected.setDateTimeJobStarted(Instant.now());
-    expected.setDateTimeJobEnded(Instant.now());
+    expected.setDateTimeJobStarted(BASE_EVENT_TIME);
+    expected.setDateTimeJobEnded(BASE_EVENT_TIME);
     expected.setJobStatus(JobStatus.DONE);
     expected.setProgress(100);
     expected.setSolution(new double[] {1.1, 2.2, 3.3, 4.4});
-    var message = new Message<>(expected, new HashMap<>(), Instant.now());
+    var message = new Message<>(expected, new HashMap<>(), BASE_EVENT_TIME);
     try (var queue =
         new RabbitMqQueueClient(
             rabbitMq.getHost(),
@@ -141,40 +143,40 @@ class TestResultConsumerApplication {
     var expectedResult1 =
         new ResultDTO(
             jobId1,
-            Instant.now(),
-            Instant.now(),
+            BASE_EVENT_TIME,
+            BASE_EVENT_TIME,
             JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {1.1, 2.2, 3.3, 4.4},
             "");
-    var message1 = new Message<>(expectedResult1, new HashMap<>(), Instant.now());
+    var message1 = new Message<>(expectedResult1, new HashMap<>(), BASE_EVENT_TIME);
 
     var jobId2 = UUID.randomUUID().toString();
     var expectedResult2 =
         new ResultDTO(
             jobId2,
-            Instant.now(),
-            Instant.now(),
+            BASE_EVENT_TIME,
+            BASE_EVENT_TIME,
             JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {2.1, 3.2, 3.3, 4.4},
             "");
-    var message2 = new Message<>(expectedResult2, new HashMap<>(), Instant.now());
+    var message2 = new Message<>(expectedResult2, new HashMap<>(), BASE_EVENT_TIME);
 
     var jobId3 = UUID.randomUUID().toString();
     var expectedResult3 =
         new ResultDTO(
             jobId3,
-            Instant.now(),
-            Instant.now(),
+            BASE_EVENT_TIME,
+            BASE_EVENT_TIME,
             JobStatus.DONE,
             "cancel.queue-executor-0001",
             100,
             new double[] {3.1, 4.2, 3.3, 4.4},
             "");
-    var message3 = new Message<>(expectedResult3, new HashMap<>(), Instant.now());
+    var message3 = new Message<>(expectedResult3, new HashMap<>(), BASE_EVENT_TIME);
 
     try (var queue =
         new RabbitMqQueueClient(

@@ -40,6 +40,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Import(JobTestFixture.class)
 class TestJobStatusUpdateServiceIntegration {
 
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
   @Container
   private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>("postgres:17")
@@ -77,7 +79,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 1;
     var status = IN_PROGRESS;
     var update =
@@ -108,7 +110,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
-    var startedTime = Instant.now();
+    var startedTime = BASE_EVENT_TIME;
 
     var progress = 10;
     var status = IN_PROGRESS;
@@ -119,7 +121,7 @@ class TestJobStatusUpdateServiceIntegration {
 
     status = DONE;
     progress = 100;
-    var finishedTime = Instant.now();
+    var finishedTime = BASE_EVENT_TIME;
     var secondUpdate =
         new JobStatusUpdateDTO(
             jobId,
@@ -156,7 +158,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
-    var startedTime = Instant.now();
+    var startedTime = BASE_EVENT_TIME;
 
     var progress = 10;
     var status = IN_PROGRESS;
@@ -169,7 +171,7 @@ class TestJobStatusUpdateServiceIntegration {
 
     status = CANCELLED;
     progress = 25;
-    var finishedTime = Instant.now();
+    var finishedTime = BASE_EVENT_TIME;
     var secondUpdate =
         new JobStatusUpdateDTO(
             jobId,
@@ -206,7 +208,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
-    var startedTime = Instant.now();
+    var startedTime = BASE_EVENT_TIME;
 
     var progress = 10;
     var status = IN_PROGRESS;
@@ -217,7 +219,7 @@ class TestJobStatusUpdateServiceIntegration {
 
     status = ERROR;
     progress = 25;
-    var finishedTime = Instant.now();
+    var finishedTime = BASE_EVENT_TIME;
     var secondUpdate =
         new JobStatusUpdateDTO(
             jobId,
@@ -253,7 +255,7 @@ class TestJobStatusUpdateServiceIntegration {
     jobFixture.forceStatus(jobId, SUBMITTED);
 
     var workerId = newWorkerId();
-    var firstEventTime = Instant.now();
+    var firstEventTime = BASE_EVENT_TIME;
 
     jobStatusUpdateService.apply(
         new JobStatusUpdateDTO(
@@ -285,7 +287,7 @@ class TestJobStatusUpdateServiceIntegration {
   void testApplyJobDoesNotExist() {
     var jobId = "wrong_job_id";
     var workerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 1;
     var update =
         new JobStatusUpdateDTO(
@@ -309,7 +311,7 @@ class TestJobStatusUpdateServiceIntegration {
   @MethodSource("jobInvalidJobIdValues")
   void testApplyJobIdIsNullOrBlank(String jobId) {
     var workerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 1;
     var update =
         new JobStatusUpdateDTO(
@@ -358,7 +360,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
     var workerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var update =
         new JobStatusUpdateDTO(
             jobId,
@@ -388,7 +390,7 @@ class TestJobStatusUpdateServiceIntegration {
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, IN_PROGRESS);
     jobFixture.forceWorkerId(jobId, workerId);
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var update =
         new JobStatusUpdateDTO(
             jobId, workerId, DONE.getCode(), progress, "Worker finished processing", eventTime);
@@ -412,7 +414,8 @@ class TestJobStatusUpdateServiceIntegration {
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
     var update =
-        new JobStatusUpdateDTO(jobId, workerId, "UNKNOWN_STATUS", 10, "Bad status", Instant.now());
+        new JobStatusUpdateDTO(
+            jobId, workerId, "UNKNOWN_STATUS", 10, "Bad status", BASE_EVENT_TIME);
 
     assertThatExceptionOfType(UnknownJobStatusException.class)
         .isThrownBy(() -> jobStatusUpdateService.apply(update))
@@ -429,7 +432,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
     var workerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 10;
     var update =
         new JobStatusUpdateDTO(
@@ -453,7 +456,7 @@ class TestJobStatusUpdateServiceIntegration {
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 10;
     var update =
         new JobStatusUpdateDTO(
@@ -490,7 +493,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     var from = transition.from;
     jobFixture.forceStatus(jobId, from);
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var to = transition.to;
     var progress = transition.progress;
     var workerId = newWorkerId();
@@ -520,7 +523,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var firstWorkerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 1;
     var firstUpdate =
         new JobStatusUpdateDTO(
@@ -561,7 +564,7 @@ class TestJobStatusUpdateServiceIntegration {
     jobFixture.forceStatus(jobId, CANCEL_REQUESTED);
     var firstWorkerId = newWorkerId();
     jobFixture.forceWorkerId(jobId, firstWorkerId);
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 1;
 
     var update =

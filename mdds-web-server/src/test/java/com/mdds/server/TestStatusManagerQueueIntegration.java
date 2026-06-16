@@ -40,6 +40,8 @@ import org.testcontainers.utility.MountableFile;
 @Import(JobTestFixture.class)
 class TestStatusManagerQueueIntegration {
 
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
   @Container
   private static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>("postgres:17")
@@ -94,7 +96,7 @@ class TestStatusManagerQueueIntegration {
     var jobId = response.jobId();
     jobFixture.forceStatus(jobId, SUBMITTED);
     var workerId = newWorkerId();
-    var eventTime = Instant.now();
+    var eventTime = BASE_EVENT_TIME;
     var progress = 10;
     var queueName = commonProperties.getStatusQueueName();
     var message = "Started processing";

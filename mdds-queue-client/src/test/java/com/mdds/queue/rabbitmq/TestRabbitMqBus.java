@@ -27,6 +27,8 @@ import org.testcontainers.utility.MountableFile;
 @Testcontainers
 class TestRabbitMqBus {
 
+  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
+
   @Container
   private static final RabbitMQContainer rabbitMq =
       new RabbitMQContainer("rabbitmq:3.12-management")
@@ -52,7 +54,7 @@ class TestRabbitMqBus {
     var executorId = "test_executor_id";
     var cancelJobDTO = new CancelJobDTO(jobId);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(cancelJobDTO, headers, Instant.now());
+    var message = new Message<>(cancelJobDTO, headers, BASE_EVENT_TIME);
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       var bus = new RabbitMqCancelBus(queue, new CancelDestinationResolver());
       assertThatCode(() -> bus.sendCancel(executorId, message)).doesNotThrowAnyException();
@@ -65,7 +67,7 @@ class TestRabbitMqBus {
     var executorId = "test_executor_id";
     var cancelJobDTO = new CancelJobDTO(jobId);
     Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(cancelJobDTO, headers, Instant.now());
+    var message = new Message<>(cancelJobDTO, headers, BASE_EVENT_TIME);
 
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       var bus = new RabbitMqCancelBus(queue, new CancelDestinationResolver());

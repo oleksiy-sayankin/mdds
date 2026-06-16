@@ -4,6 +4,7 @@
  */
 package com.mdds.server;
 
+import static com.mdds.server.PresignedUrlAssertions.assertExpiresAtMatchesSignature;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.util.HttpTestClient;
@@ -26,7 +27,6 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -224,16 +224,8 @@ class TestJobInputUploadRestApiIntegration {
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
     var jobId = createJobResponse.getJobId();
-    var inputSlot = "matrix";
-
-    var before = Instant.now();
-    var response = issueUploadUrl(http, GUEST, jobId, inputSlot);
-    var after = Instant.now();
-    var expiresAt = response.expiresAt();
-
-    assertThat(expiresAt)
-        .isAfterOrEqualTo(before.plus(PRE_SIGNED_PUT_TTL).minusSeconds(1))
-        .isBeforeOrEqualTo(after.plus(PRE_SIGNED_PUT_TTL).plusSeconds(1));
+    var result = issueUploadUrl(http, GUEST, jobId, "matrix");
+    assertExpiresAtMatchesSignature(result.expiresAt(), result.uploadUrl(), PRE_SIGNED_PUT_TTL);
   }
 
   private static Stream<Arguments> slots() {

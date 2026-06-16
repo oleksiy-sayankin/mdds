@@ -4,6 +4,7 @@
  */
 package com.mdds.server;
 
+import static com.mdds.server.PresignedUrlAssertions.assertExpiresAtMatchesSignature;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
@@ -16,9 +17,9 @@ import io.minio.PutObjectArgs;
 import io.minio.errors.MinioException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -98,7 +99,7 @@ class TestJobOutputsServiceIntegration {
 
   @ParameterizedTest
   @MethodSource("userLoginValues")
-  void testJobOutput(String login) throws IOException, MinioException {
+  void testJobOutput(String login) throws IOException, MinioException, URISyntaxException {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
@@ -110,8 +111,7 @@ class TestJobOutputsServiceIntegration {
     var expiresAt = result.expiresAt();
     assertThat(downloadUrl).isNotNull();
     assertThat(expiresAt).isNotNull();
-    var now = Instant.now();
-    assertThat(expiresAt).isAfter(now).isBefore(now.plus(PRESIGNED_GET_TTL));
+    assertExpiresAtMatchesSignature(result.expiresAt(), result.downloadUrl(), PRESIGNED_GET_TTL);
     var objectKey = extractObjectKeyFromPresignedUrl(downloadUrl);
     assertThat(objectKey).isEqualTo(solutionObjectKey(userId, jobId));
 
@@ -227,7 +227,8 @@ class TestJobOutputsServiceIntegration {
 
   @ParameterizedTest
   @MethodSource("normalizedOutputSlotValues")
-  void testNormalizedOutputSlotValues(String outputSlot) throws IOException, MinioException {
+  void testNormalizedOutputSlotValues(String outputSlot)
+      throws IOException, MinioException, URISyntaxException {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
@@ -239,8 +240,7 @@ class TestJobOutputsServiceIntegration {
     var expiresAt = result.expiresAt();
     assertThat(downloadUrl).isNotNull();
     assertThat(expiresAt).isNotNull();
-    var now = Instant.now();
-    assertThat(expiresAt).isAfter(now).isBefore(now.plus(PRESIGNED_GET_TTL));
+    assertExpiresAtMatchesSignature(result.expiresAt(), result.downloadUrl(), PRESIGNED_GET_TTL);
     var objectKey = extractObjectKeyFromPresignedUrl(downloadUrl);
     assertThat(objectKey).isEqualTo(solutionObjectKey(userId, jobId));
 

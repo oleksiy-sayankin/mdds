@@ -10,7 +10,7 @@ import com.mdds.persistence.entity.JobEntity;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
 import com.mdds.server.jpa.JobsRepository;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class JobCancellationService {
   private final JobsRepository jobsRepository;
   private final CancelBus cancelBus;
+  private final Clock clock;
 
   /**
    * Creates job cancel request.
@@ -98,7 +99,7 @@ public class JobCancellationService {
 
     cancelBus.sendCancel(
         existingJobWorkerId,
-        new Message<>(new CancelJobDTO(existingJobId), Collections.emptyMap(), Instant.now()));
+        new Message<>(new CancelJobDTO(existingJobId), Collections.emptyMap(), clock.instant()));
 
     log.info(
         "Published cancel request for job '{}' and worker '{}'",
