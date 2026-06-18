@@ -521,7 +521,7 @@ test_python:
 # Run Python tests with coverage
 #
 test_python_coverage:
-	$(call log_info,"Running Python unit tests with coverage...")
+	$(call log_info,"Running Python tests with coverage...")
 	cd $(MDDS_PYTHON_WORKER_RUNTIME) && \
 	  PYTHONPATH=src/main/python:src/test/python:$$PYTHONPATH \
 	  python -m pytest src/test/python \
