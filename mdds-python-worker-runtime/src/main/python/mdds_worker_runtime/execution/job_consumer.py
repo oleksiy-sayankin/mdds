@@ -2,6 +2,7 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 from mdds_worker_runtime.dto.messages import JobMessageDTO
+from mdds_worker_runtime.manifest.loader import ManifestLoader
 from mdds_worker_runtime.queue.queue_client import (
     Acknowledger,
     MessageHandler,
@@ -29,6 +30,11 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
     message immediately because the message was processed terminally and should
     not be retried.
     """
+
+    def __init__(self, manifest_loader: ManifestLoader) -> None:
+        if manifest_loader is None:
+            raise ValueError("manifest_loader cannot be null.")
+        self._manifest_loader = manifest_loader
 
     def handle(
         self,
@@ -65,3 +71,5 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         - CleanupWatcher removes terminal execution records and local resources
           after terminal status publication and acknowledgement.
         """
+        manifest_object_key = message.payload.manifest_object_key
+        self._manifest_loader.load(manifest_object_key)
