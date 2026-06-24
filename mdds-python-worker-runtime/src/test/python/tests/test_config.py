@@ -1,6 +1,7 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -54,6 +55,8 @@ def test_load_config_with_required_env_and_defaults(monkeypatch):
     assert worker_config.worker_job_timeout_seconds == 3600
     assert worker_config.worker_cleanup_interval_seconds == 1
     assert worker_config.worker_progress_interval_seconds == 5
+    assert worker_config.worker_local_root == Path("/opt/mdds")
+    assert worker_config.jobs_root == Path("/opt/mdds/jobs")
 
 
 def test_load_config_with_overridden_optional_values(monkeypatch):
@@ -249,6 +252,7 @@ def valid_config() -> config.WorkerConfig:
         worker_job_timeout_seconds=3600,
         worker_cleanup_interval_seconds=1,
         worker_progress_interval_seconds=5,
+        worker_local_root=Path("/opt/mdds"),
     )
 
 
@@ -292,3 +296,61 @@ def test_validate_config_rejects_none():
         config.validate_config(None)
 
     assert str(error.value) == "Worker config must not be null."
+
+
+def test_load_config_uses_default_worker_local_root(monkeypatch):
+    set_required_worker_env(monkeypatch)
+    worker_config = config.load_config()
+
+    assert worker_config.worker_local_root == Path("/opt/mdds")
+    assert worker_config.jobs_root == Path("/opt/mdds/jobs")
+
+
+def test_load_config_reads_worker_local_root(monkeypatch):
+    set_required_worker_env(monkeypatch)
+    monkeypatch.setenv("MDDS_WORKER_LOCAL_ROOT", "/var/lib/mdds-worker")
+
+    worker_config = config.load_config()
+
+    assert worker_config.worker_local_root == Path("/var/lib/mdds-worker")
+    assert worker_config.jobs_root == Path("/var/lib/mdds-worker/jobs")
+
+
+def test_load_config_rejects_relative_worker_local_root(monkeypatch):
+    set_required_worker_env(monkeypatch)
+    monkeypatch.setenv("MDDS_WORKER_LOCAL_ROOT", "relative/path")
+
+    with pytest.raises(
+        config.WorkerConfigError,
+        match="MDDS_WORKER_LOCAL_ROOT.*absolute path",
+    ):
+        config.load_config()
+
+
+def test_validate_config_rejects_filesystem_root_as_worker_local_root(monkeypatch):
+    set_required_worker_env(monkeypatch)
+    worker_config = config.load_config()
+
+    invalid_config = replace(worker_config, worker_local_root=Path("/"))
+
+    with pytest.raises(config.WorkerConfigError, match="must not be filesystem root"):
+        config.validate_config(invalid_config)
+
+
+def test_validate_config_rejects_relative_worker_local_root() -> None:
+    invalid_config = replace(
+        valid_config(),
+        worker_local_root=Path("relative/path"),
+    )
+
+    with pytest.raises(config.WorkerConfigError, match="absolute path"):
+        config.validate_config(invalid_config)
+
+
+def test_validate_config_rejects_null_worker_local_root() -> None:
+    invalid_config = replace(valid_config(), worker_local_root=None)
+
+    with pytest.raises(
+        config.WorkerConfigError, match="worker_local_root.*must not be null"
+    ):
+        config.validate_config(invalid_config)

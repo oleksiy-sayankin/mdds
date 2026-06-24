@@ -1,11 +1,12 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 import logging
-from dataclasses import dataclass, fields
-from typing import get_type_hints
 import os
 import socket
 import uuid
+from dataclasses import dataclass, fields
+from pathlib import Path
+from typing import get_type_hints
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,13 @@ class WorkerConfig:
     worker_job_timeout_seconds: int
     worker_cleanup_interval_seconds: int
     worker_progress_interval_seconds: int
+
+    worker_local_root: Path
+
+    @property
+    def jobs_root(self) -> Path:
+        """Return local root directory for job workspaces."""
+        return self.worker_local_root / "jobs"
 
 
 def load_config() -> WorkerConfig:
@@ -91,6 +99,7 @@ def load_config() -> WorkerConfig:
             "MDDS_WORKER_PROGRESS_INTERVAL_SECONDS",
             default=5,
         ),
+        worker_local_root=_env_path("MDDS_WORKER_LOCAL_ROOT", default="/opt/mdds"),
     )
 
     logger.info("Validating Worker configuration...")
@@ -124,6 +133,23 @@ def validate_config(config: WorkerConfig) -> None:
             "Illegal worker progress interval timeout: "
             f"{config.worker_progress_interval_seconds}."
         )
+
+    _validate_worker_local_root(config.worker_local_root)
+
+
+def _validate_worker_local_root(worker_local_root: Path) -> None:
+    if worker_local_root is None:
+        raise WorkerConfigError(
+            "Worker config field 'worker_local_root' must not be null."
+        )
+
+    if not worker_local_root.is_absolute():
+        raise WorkerConfigError(
+            f"Worker local root must be an absolute path: {worker_local_root}."
+        )
+
+    if worker_local_root == Path("/"):
+        raise WorkerConfigError("Worker local root must not be filesystem root.")
 
 
 def _validate_non_blank_string_fields(config: WorkerConfig) -> None:
@@ -179,6 +205,18 @@ def _env_bool(name: str, default: bool | None = None) -> bool:
     raise WorkerConfigError(
         f"Environment variable '{name}' must be boolean, got '{raw}'."
     )
+
+
+def _env_path(name: str, default: str | None = None) -> Path:
+    raw = _env_str(name, default=default)
+    path = Path(raw)
+
+    if not path.is_absolute():
+        raise WorkerConfigError(
+            f"Environment variable '{name}' must be an absolute path, got '{raw}'."
+        )
+
+    return path
 
 
 def _generate_worker_id() -> str:
