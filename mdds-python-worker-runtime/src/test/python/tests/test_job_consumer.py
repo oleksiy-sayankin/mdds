@@ -22,7 +22,10 @@ def test_job_consumer_loads_manifest_prepares_inputs_and_does_not_ack_yet() -> N
     manifest_loader.load.return_value = manifest
 
     input_artifact_preparer = MagicMock()
-    consumer = JobConsumer(manifest_loader, input_artifact_preparer)
+    job_execution_context_factory = MagicMock()
+    consumer = JobConsumer(
+        manifest_loader, input_artifact_preparer, job_execution_context_factory
+    )
 
     ack = MagicMock()
     message = QueueMessage(
@@ -39,15 +42,24 @@ def test_job_consumer_loads_manifest_prepares_inputs_and_does_not_ack_yet() -> N
         "job-1",
         manifest.inputs,
     )
+    job_execution_context_factory.create.assert_called_once_with(
+        manifest,
+        input_artifact_preparer.prepare.return_value,
+    )
     ack.ack.assert_not_called()
     ack.nack.assert_not_called()
 
 
 def test_job_consumer_rejects_null_manifest_loader() -> None:
     with pytest.raises(ValueError, match="manifest_loader cannot be null"):
-        JobConsumer(None, None)
+        JobConsumer(None, None, MagicMock())
 
 
 def test_job_consumer_rejects_null_input_artifact_preparer() -> None:
     with pytest.raises(ValueError, match="input_artifact_preparer cannot be null"):
-        JobConsumer(MagicMock(), None)
+        JobConsumer(MagicMock(), None, MagicMock())
+
+
+def test_job_consumer_rejects_null_context_factory() -> None:
+    with pytest.raises(ValueError, match="context_factory cannot be null"):
+        JobConsumer(MagicMock(), MagicMock(), None)

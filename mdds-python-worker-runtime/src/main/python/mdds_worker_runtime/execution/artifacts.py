@@ -1,10 +1,12 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Mapping
 
+from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
 from mdds_worker_runtime.domain.manifest import ArtifactRef
+from mdds_worker_runtime.execution.object_keys import file_name_from_object_key
 from mdds_worker_runtime.storage.s3_client import S3Storage
 
 
@@ -14,6 +16,14 @@ class PreparedInputArtifact:
 
     object_key: str
     local_path: Path
+    format: ArtifactFormat
+
+
+@dataclass(frozen=True)
+class PreparedOutputArtifact:
+    object_key: str
+    local_path: Path
+    format: ArtifactFormat
 
 
 @dataclass(frozen=True)
@@ -59,7 +69,7 @@ class InputArtifactPreparer:
                 raise ValueError(
                     f"Input artifact ref for slot '{input_slot}' cannot be null."
                 )
-            file_name = self._file_name_from_object_key(artifact_ref.object_key)
+            file_name = file_name_from_object_key(artifact_ref.object_key)
             local_path = input_dir / file_name
             if local_path in used_local_paths:
                 raise ValueError(f"Duplicate local input artifact path: {local_path}")
@@ -69,6 +79,7 @@ class InputArtifactPreparer:
             prepared_inputs[input_slot] = PreparedInputArtifact(
                 object_key=artifact_ref.object_key,
                 local_path=local_path,
+                format=artifact_ref.format,
             )
 
         return PreparedJobInputs(
@@ -93,18 +104,3 @@ class InputArtifactPreparer:
 
         if value in {".", ".."} or "/" in value or "\\" in value:
             raise ValueError(f"{name} is not a valid slot name: {value}")
-
-    @staticmethod
-    def _file_name_from_object_key(object_key: str) -> str:
-        if object_key is None or object_key.strip() == "":
-            raise ValueError("object_key cannot be null or blank.")
-
-        if object_key.endswith("/"):
-            raise ValueError(f"Object key has no file name: {object_key}")
-
-        file_name = PurePosixPath(object_key).name
-
-        if file_name in {"", ".", ".."}:
-            raise ValueError(f"Object key has no valid file name: {object_key}")
-
-        return file_name

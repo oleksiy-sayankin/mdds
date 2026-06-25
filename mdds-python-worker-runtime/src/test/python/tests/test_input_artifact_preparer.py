@@ -51,10 +51,12 @@ def test_prepare_downloads_input_artifacts_to_local_job_workspace(
             "matrix": PreparedInputArtifact(
                 object_key="jobs/42/job-1/in/matrix.csv",
                 local_path=expected_input_dir / "matrix.csv",
+                format=ArtifactFormat.CSV,
             ),
             "rhs": PreparedInputArtifact(
                 object_key="jobs/42/job-1/in/rhs.csv",
                 local_path=expected_input_dir / "rhs.csv",
+                format=ArtifactFormat.CSV,
             ),
         },
     )
@@ -303,6 +305,7 @@ def test_prepared_input_artifact_is_immutable() -> None:
     artifact = PreparedInputArtifact(
         object_key="jobs/42/job-1/in/matrix.csv",
         local_path=Path("/tmp/matrix.csv"),
+        format=ArtifactFormat.CSV,
     )
 
     with pytest.raises(FrozenInstanceError):

@@ -3,6 +3,9 @@
 
 from mdds_worker_runtime.dto.messages import JobMessageDTO
 from mdds_worker_runtime.execution.artifacts import InputArtifactPreparer
+from mdds_worker_runtime.execution.context import (
+    JobExecutionContextFactory,
+)
 from mdds_worker_runtime.manifest.loader import ManifestLoader
 from mdds_worker_runtime.queue.queue_client import (
     Acknowledger,
@@ -36,13 +39,18 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         self,
         manifest_loader: ManifestLoader,
         input_artifact_preparer: InputArtifactPreparer,
+        context_factory: JobExecutionContextFactory,
     ) -> None:
         if manifest_loader is None:
             raise ValueError("manifest_loader cannot be null.")
         if input_artifact_preparer is None:
             raise ValueError("input_artifact_preparer cannot be null.")
+        if context_factory is None:
+            raise ValueError("context_factory cannot be null.")
+
         self._manifest_loader = manifest_loader
         self._input_artifact_preparer = input_artifact_preparer
+        self._context_factory = context_factory
 
     def handle(
         self,
@@ -81,8 +89,9 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         """
         manifest_object_key = message.payload.manifest_object_key
         manifest = self._manifest_loader.load(manifest_object_key)
-        self._input_artifact_preparer.prepare(
+        prepared_job_inputs = self._input_artifact_preparer.prepare(
             manifest.user_id,
             manifest.job_id,
             manifest.inputs,
         )
+        self._context_factory.create(manifest, prepared_job_inputs)
