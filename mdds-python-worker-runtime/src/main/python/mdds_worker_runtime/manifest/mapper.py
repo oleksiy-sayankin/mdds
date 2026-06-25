@@ -44,7 +44,6 @@ def _artifacts_to_domain(
     """Convert a ManifestArtifactDTO object to a ManifestRef."""
     return {
         slot_name: ArtifactRef(
-            slot_name=slot_name,
             object_key=artifact.object_key,
             format=ArtifactFormat.from_raw(artifact.format),
         )

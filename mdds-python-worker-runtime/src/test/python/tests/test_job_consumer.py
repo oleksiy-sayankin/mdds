@@ -12,24 +12,42 @@ from mdds_worker_runtime.execution.job_consumer import JobConsumer
 from mdds_worker_runtime.queue.queue_client import QueueMessage
 
 
-def test_job_consumer_loads_manifest_by_object_key_and_does_not_ack_yet() -> None:
-    manifest_loader = MagicMock()
-    consumer = JobConsumer(manifest_loader)
+def test_job_consumer_loads_manifest_prepares_inputs_and_does_not_ack_yet() -> None:
+    manifest = MagicMock()
+    manifest.user_id = 42
+    manifest.job_id = "job-1"
+    manifest.inputs = {"matrix": MagicMock()}
 
+    manifest_loader = MagicMock()
+    manifest_loader.load.return_value = manifest
+
+    input_artifact_preparer = MagicMock()
+    consumer = JobConsumer(manifest_loader, input_artifact_preparer)
+
+    ack = MagicMock()
     message = QueueMessage(
         payload=JobMessageDTO(
             manifestObjectKey="jobs/42/job-1/manifest.json",
-        ),
+        )
     )
-    acknowledger = MagicMock()
 
-    consumer.handle(message, acknowledger)
+    consumer.handle(message, ack)
 
     manifest_loader.load.assert_called_once_with("jobs/42/job-1/manifest.json")
-    acknowledger.ack.assert_not_called()
-    acknowledger.nack.assert_not_called()
+    input_artifact_preparer.prepare.assert_called_once_with(
+        42,
+        "job-1",
+        manifest.inputs,
+    )
+    ack.ack.assert_not_called()
+    ack.nack.assert_not_called()
 
 
 def test_job_consumer_rejects_null_manifest_loader() -> None:
     with pytest.raises(ValueError, match="manifest_loader cannot be null"):
-        JobConsumer(None)
+        JobConsumer(None, None)
+
+
+def test_job_consumer_rejects_null_input_artifact_preparer() -> None:
+    with pytest.raises(ValueError, match="input_artifact_preparer cannot be null"):
+        JobConsumer(MagicMock(), None)

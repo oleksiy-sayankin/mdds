@@ -44,10 +44,6 @@ def test_to_domain():
     assert actual.job_id == "job-1"
     assert actual.job_type == "solving_slae"
 
-    assert actual.inputs["matrix"].slot_name == "matrix"
-    assert actual.inputs["rhs"].slot_name == "rhs"
-    assert actual.outputs["solution"].slot_name == "solution"
-
     assert actual.inputs["matrix"].object_key == "jobs/12345/job-1/in/matrix.csv"
     assert actual.inputs["matrix"].format == ArtifactFormat.CSV
 

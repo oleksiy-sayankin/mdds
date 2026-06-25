@@ -11,7 +11,6 @@ from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
 class ArtifactRef:
     """Represents artifact reference: input or output slot"""
 
-    slot_name: str
     object_key: str
     format: ArtifactFormat
 
