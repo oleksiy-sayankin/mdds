@@ -27,6 +27,7 @@ Refer to the LICENSE file in the root directory for full license details.
     * [Worker environment variables](#worker-environment-variables)
     * [Job cancellation](#job-cancellation)
     * [Job handler contract](#job-handler-contract)
+      * [Job handler data access pattern](#job-handler-data-access-pattern)
     * [Local execution registry](#local-execution-registry)
     * [Terminal status publication rule](#terminal-status-publication-rule)
     * [Submitted job message](#submitted-job-message)
@@ -507,13 +508,81 @@ The Worker Runtime may call `validate(context)` in the main worker process and `
 Therefore `execute(context)` must be able to run using only `JobExecutionContext` and files available through that context.
 Any data required by `execute(context)` must be read from `JobExecutionContext` inputs, parameters, or other runtime-provided artifacts, not from state produced during `validate(context)`.
 
-The concrete API is implementation-specific, but conceptually the handler writes:
+#### Job handler data access pattern
+
+A concrete `JobHandler` must access job inputs, parameters, and outputs only through `JobExecutionContext`.
+
+The handler must use logical input slots declared in `manifest.inputs` to read input artifacts:
 
 ```python
-context.outputs.write("solution", solution_bytes)
+input_bytes = context.inputs.read("inputSlot")
 ```
 
-The runtime maps logical output slots to object keys from `manifest.outputs` and uploads the bytes to object storage.
+For large input artifacts, or when a library expects a file path, the handler should use the local input path instead of loading the full artifact into memory:
+
+```python
+input_path = context.inputs.path("inputSlot")
+```
+
+If artifact metadata is required, the handler may access it through:
+
+```python
+input_artifact = context.inputs.get("inputSlot")
+input_format = input_artifact.format
+```
+
+Execution parameters must be read through `context.params`:
+
+```python
+required_value = context.params.required("requiredParameter")
+optional_value = context.params.get("optionalParameter", default_value)
+```
+
+Output artifacts must be written through logical output slots declared in `manifest.outputs`:
+
+```python
+context.outputs.write("outputSlot", output_bytes)
+```
+
+If a library needs to write directly to a file path, the handler may resolve the runtime-managed local output path:
+
+```python
+output_path = context.outputs.path("outputSlot")
+```
+
+The Worker Runtime maps logical output slots to object keys from `manifest.outputs` and uploads produced local output files to object storage after successful execution.
+
+Conceptually, a job handler follows this structure:
+
+```python
+class ExampleJobHandler:
+    def validate(self, context: JobExecutionContext) -> None:
+        input_a = context.inputs.read("inputSlotA")
+        input_b_path = context.inputs.path("inputSlotB")
+        required_parameter = context.params.required("requiredParameter")
+
+        # Validate input artifacts and parameters.
+        # Do not write output artifacts here.
+        # Do not store data in self for later use by execute().
+
+    def execute(self, context: JobExecutionContext) -> None:
+        input_a = context.inputs.read("inputSlotA")
+        input_b_path = context.inputs.path("inputSlotB")
+        required_parameter = context.params.required("requiredParameter")
+
+        # Execute job-specific business logic.
+        output_bytes = run_job_specific_logic(
+            input_a,
+            input_b_path,
+            required_parameter,
+        )
+
+        context.outputs.write("outputSlot", output_bytes)
+```
+
+`validate(context)` and `execute(context)` may run in different processes. Therefore `execute(context)` must re-read all required inputs and parameters from `JobExecutionContext`; it must not depend on values cached or computed during `validate(context)`.
+
+The handler must not access internal context fields or runtime implementation details. In particular, it must not access private artifact mappings directly, construct S3 object keys manually, upload artifacts to object storage, publish lifecycle statuses, or acknowledge queue messages.
 
 The handler is not responsible for progress reporting in v1.
 The handler must not publish progress or lifecycle status messages directly.
