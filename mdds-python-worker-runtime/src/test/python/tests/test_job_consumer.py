@@ -26,12 +26,17 @@ def test_job_consumer_loads_manifest_prepares_inputs_creates_context_and_validat
     input_artifact_preparer = MagicMock()
     job_execution_context_factory = MagicMock()
     job_handler_loader = MagicMock()
+    execution_supervisor = MagicMock()
+    execution_registry = MagicMock()
 
     consumer = JobConsumer(
         manifest_loader,
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
+        execution_supervisor,
+        execution_registry,
+        "test-worker-id",
     )
 
     ack = MagicMock()
@@ -59,6 +64,20 @@ def test_job_consumer_loads_manifest_prepares_inputs_creates_context_and_validat
     )
     ack.ack.assert_not_called()
     ack.nack.assert_not_called()
+    execution_supervisor.start.assert_called_once()
+
+    supervised_execution_request = execution_supervisor.start.call_args.args[0]
+
+    assert supervised_execution_request.context is (
+        job_execution_context_factory.create.return_value
+    )
+    assert supervised_execution_request.worker_id == "test-worker-id"
+    assert (
+        supervised_execution_request.manifest_object_key
+        == "jobs/42/job-1/manifest.json"
+    )
+    assert supervised_execution_request.manifest is manifest
+    assert supervised_execution_request.submitted_ack is ack
 
 
 def test_job_consumer_propagates_validation_failure_and_does_not_ack_yet() -> None:
@@ -78,12 +97,17 @@ def test_job_consumer_propagates_validation_failure_and_does_not_ack_yet() -> No
 
     job_handler_loader = MagicMock()
     job_handler_loader.load.return_value = job_handler
+    execution_supervisor = MagicMock()
+    execution_registry = MagicMock()
 
     consumer = JobConsumer(
         manifest_loader,
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
+        execution_supervisor,
+        execution_registry,
+        "test-worker-id",
     )
 
     ack = MagicMock()
@@ -106,19 +130,64 @@ def test_job_consumer_propagates_validation_failure_and_does_not_ack_yet() -> No
 
 def test_job_consumer_rejects_null_manifest_loader() -> None:
     with pytest.raises(ValueError, match="manifest_loader cannot be null"):
-        JobConsumer(None, None, MagicMock(), MagicMock())
+        JobConsumer(
+            None,
+            None,
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            "test-worker-id",
+        )
 
 
 def test_job_consumer_rejects_null_input_artifact_preparer() -> None:
     with pytest.raises(ValueError, match="input_artifact_preparer cannot be null"):
-        JobConsumer(MagicMock(), None, MagicMock(), MagicMock())
+        JobConsumer(
+            MagicMock(),
+            None,
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            "test-worker-id",
+        )
 
 
 def test_job_consumer_rejects_null_context_factory() -> None:
     with pytest.raises(ValueError, match="context_factory cannot be null"):
-        JobConsumer(MagicMock(), MagicMock(), None, MagicMock())
+        JobConsumer(
+            MagicMock(),
+            MagicMock(),
+            None,
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            "test-worker-id",
+        )
 
 
 def test_job_consumer_rejects_null_job_handler_loader() -> None:
     with pytest.raises(ValueError, match="job_handler_loader cannot be null"):
-        JobConsumer(MagicMock(), MagicMock(), MagicMock(), None)
+        JobConsumer(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            None,
+            MagicMock(),
+            MagicMock(),
+            "test-worker-id",
+        )
+
+
+def test_job_consumer_rejects_null_execution_registry() -> None:
+    with pytest.raises(ValueError, match="execution_registry cannot be null"):
+        JobConsumer(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            None,
+            "test-worker-id",
+        )

@@ -171,3 +171,19 @@ class OptionalConstructorArgumentJobHandler(JobHandler):
 
     def execute(self, context: JobExecutionContext) -> None:
         pass
+
+
+class WritingExecuteJobHandler(JobHandler):
+    def validate(self, context: JobExecutionContext) -> None:
+        pass
+
+    def execute(self, context: JobExecutionContext) -> None:
+        context.outputs.write("solution", b"execution-result")
+
+
+class FailingExecuteJobHandler(JobHandler):
+    def validate(self, context: JobExecutionContext) -> None:
+        pass
+
+    def execute(self, context: JobExecutionContext) -> None:
+        raise RuntimeError("execute failed")
