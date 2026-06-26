@@ -491,6 +491,22 @@ The handler must not:
 - update the Metadata Store directly;
 - upload output artifacts directly to S3.
 
+Also note that in `JobHandler`
+
+```python
+class JobHandler:
+    def validate(self, context: JobExecutionContext) -> None:
+        ...
+
+    def execute(self, context: JobExecutionContext) -> None:
+        ...
+```
+
+`validate(context)` and `execute(context)` must not rely on shared in-memory state.
+The Worker Runtime may call `validate(context)` in the main worker process and `execute(context)` in a fresh supervised process.
+Therefore `execute(context)` must be able to run using only `JobExecutionContext` and files available through that context.
+Any data required by `execute(context)` must be read from `JobExecutionContext` inputs, parameters, or other runtime-provided artifacts, not from state produced during `validate(context)`.
+
 The concrete API is implementation-specific, but conceptually the handler writes:
 
 ```python
