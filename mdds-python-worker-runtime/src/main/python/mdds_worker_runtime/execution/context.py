@@ -1,21 +1,31 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from mdds_worker_runtime.domain.manifest import JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     PreparedInputArtifact,
     PreparedOutputArtifact,
     PreparedJobInputs,
+    InputArtifacts,
+    OutputArtifacts,
+    JobParameters,
 )
 from mdds_worker_runtime.execution.object_keys import file_name_from_object_key
 
 
 @dataclass(frozen=True)
 class JobExecutionContext:
+    def __post_init__(self) -> None:
+        if self.inputs is None:
+            raise ValueError("inputs cannot be null.")
+        if self.outputs is None:
+            raise ValueError("outputs cannot be null.")
+        if self.params is None:
+            raise ValueError("params cannot be null.")
+
     user_id: int
     job_id: str
     job_type: str
@@ -24,48 +34,27 @@ class JobExecutionContext:
     input_dir: Path
     output_dir: Path
 
-    _inputs: Mapping[str, PreparedInputArtifact] = field(repr=False)
-    _outputs: Mapping[str, PreparedOutputArtifact] = field(repr=False)
-    _params: Mapping[str, Any] = field(repr=False)
+    inputs: InputArtifacts
+    outputs: OutputArtifacts
+    params: JobParameters
 
     def input(self, slot: str) -> PreparedInputArtifact:
-        if slot is None or slot.strip() == "":
-            raise ValueError("input slot cannot be null or blank.")
-
-        try:
-            return self._inputs[slot]
-        except KeyError as exc:
-            raise KeyError(f"Input slot is not available: {slot}") from exc
+        return self.inputs.get(slot)
 
     def input_path(self, slot: str) -> Path:
-        return self.input(slot).local_path
+        return self.inputs.path(slot)
 
     def output(self, slot: str) -> PreparedOutputArtifact:
-        if slot is None or slot.strip() == "":
-            raise ValueError("output slot cannot be null or blank.")
-
-        try:
-            return self._outputs[slot]
-        except KeyError as exc:
-            raise KeyError(f"Output slot is not declared: {slot}") from exc
+        return self.outputs.get(slot)
 
     def output_path(self, slot: str) -> Path:
-        return self.output(slot).local_path
+        return self.outputs.path(slot)
 
     def param(self, name: str, default: Any = None) -> Any:
-        if name is None or name.strip() == "":
-            raise ValueError("parameter name cannot be null or blank.")
-
-        return self._params.get(name, default)
+        return self.params.get(name, default)
 
     def required_param(self, name: str) -> Any:
-        if name is None or name.strip() == "":
-            raise ValueError("parameter name cannot be null or blank.")
-
-        if name not in self._params:
-            raise KeyError(f"Required parameter is missing: {name}")
-
-        return self._params[name]
+        return self.params.required(name)
 
 
 class JobExecutionContextFactory:
@@ -119,7 +108,7 @@ class JobExecutionContextFactory:
             work_dir=work_dir,
             input_dir=input_dir,
             output_dir=output_dir,
-            _inputs=MappingProxyType(dict(prepared_job_inputs.inputs)),
-            _outputs=MappingProxyType(outputs),
-            _params=MappingProxyType(dict(manifest.params)),
+            inputs=InputArtifacts(prepared_job_inputs.inputs),
+            outputs=OutputArtifacts(outputs),
+            params=JobParameters(manifest.params),
         )

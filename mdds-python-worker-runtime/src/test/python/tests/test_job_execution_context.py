@@ -1,6 +1,7 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 from pathlib import Path
+from typing import cast, Any
 
 import pytest
 
@@ -8,6 +9,9 @@ from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
 from mdds_worker_runtime.execution.artifacts import (
     PreparedInputArtifact,
     PreparedOutputArtifact,
+    InputArtifacts,
+    OutputArtifacts,
+    JobParameters,
 )
 from mdds_worker_runtime.execution.context import JobExecutionContext
 
@@ -142,9 +146,9 @@ def _create_context(
         work_dir=Path("/tmp/mdds/jobs/42/job-1"),
         input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
         output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
-        _inputs=inputs or {},
-        _outputs=outputs or {},
-        _params=params or {},
+        inputs=InputArtifacts(inputs or {}),
+        outputs=OutputArtifacts(outputs or {}),
+        params=JobParameters(params or {}),
     )
 
 
@@ -153,3 +157,65 @@ def test_context_required_param_rejects_blank_parameter_name() -> None:
 
     with pytest.raises(ValueError, match="parameter name cannot be null or blank."):
         context.required_param(" ")
+
+
+def test_input_artifacts_reads_bytes(tmp_path: Path) -> None:
+    matrix_path = tmp_path / "matrix.csv"
+    matrix_path.write_bytes(b"1,2\n3,4\n")
+
+    artifacts = InputArtifacts(
+        {
+            "matrix": PreparedInputArtifact(
+                object_key="jobs/42/job-1/in/matrix.csv",
+                local_path=matrix_path,
+                format=ArtifactFormat.CSV,
+            )
+        }
+    )
+
+    assert artifacts.read("matrix") == b"1,2\n3,4\n"
+
+
+def test_context_rejects_null_inputs() -> None:
+    with pytest.raises(ValueError, match="inputs cannot be null."):
+        JobExecutionContext(
+            user_id=42,
+            job_id="job-1",
+            job_type="SOLVING_SLAE",
+            work_dir=Path("/tmp/mdds/jobs/42/job-1"),
+            input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
+            output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
+            inputs=cast(Any, None),
+            outputs=OutputArtifacts({}),
+            params=JobParameters({}),
+        )
+
+
+def test_context_rejects_null_outputs() -> None:
+    with pytest.raises(ValueError, match="outputs cannot be null."):
+        JobExecutionContext(
+            user_id=42,
+            job_id="job-1",
+            job_type="SOLVING_SLAE",
+            work_dir=Path("/tmp/mdds/jobs/42/job-1"),
+            input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
+            output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
+            inputs=InputArtifacts({}),
+            outputs=cast(Any, None),
+            params=JobParameters({}),
+        )
+
+
+def test_context_rejects_null_params() -> None:
+    with pytest.raises(ValueError, match="params cannot be null."):
+        JobExecutionContext(
+            user_id=42,
+            job_id="job-1",
+            job_type="SOLVING_SLAE",
+            work_dir=Path("/tmp/mdds/jobs/42/job-1"),
+            input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
+            output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
+            inputs=InputArtifacts({}),
+            outputs=OutputArtifacts({}),
+            params=cast(Any, None),
+        )
