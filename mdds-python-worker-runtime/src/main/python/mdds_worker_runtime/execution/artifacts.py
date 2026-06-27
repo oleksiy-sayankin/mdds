@@ -1,5 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
+from collections.abc import ItemsView
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -182,6 +183,9 @@ class OutputArtifacts:
         output_path = self.path(slot)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(data)
+
+    def items(self) -> ItemsView[str, PreparedOutputArtifact]:
+        return self._artifacts.items()
 
 
 @dataclass(frozen=True)

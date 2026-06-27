@@ -59,6 +59,10 @@ class JsonLogFormatter(logging.Formatter):
             "inputSlots",
             "outputSlots",
             "paramNames",
+            "destination",
+            "localPath",
+            "sizeBytes",
+            "uploadedArtifactCount",
         ):
             value = getattr(record, field, None)
             if value is not None:

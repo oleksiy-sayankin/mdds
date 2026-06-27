@@ -134,3 +134,39 @@ def test_download_file_rejects_null_destination() -> None:
         storage.download_file("jobs/42/job-1/in/matrix.csv", None)
 
     client.download_file.assert_not_called()
+
+
+def test_s3_storage_upload_file_uploads_local_file_to_s3() -> None:
+    client = MagicMock()
+    storage = S3Storage(client, "mdds")
+
+    local_path = Path("/tmp/solution.csv")
+
+    storage.upload_file("jobs/42/job-1/out/solution.csv", local_path)
+
+    client.upload_file.assert_called_once_with(
+        str(local_path),
+        "mdds",
+        "jobs/42/job-1/out/solution.csv",
+    )
+
+
+@pytest.mark.parametrize("key", [None, "", " "])
+def test_s3_storage_upload_file_rejects_null_or_blank_key(key) -> None:
+    client = MagicMock()
+    storage = S3Storage(client, "mdds")
+
+    with pytest.raises(ValueError, match="key cannot be null or blank."):
+        storage.upload_file(key, Path("/tmp/solution.csv"))
+
+    client.upload_file.assert_not_called()
+
+
+def test_s3_storage_upload_file_rejects_null_local_path() -> None:
+    client = MagicMock()
+    storage = S3Storage(client, "mdds")
+
+    with pytest.raises(ValueError, match="local_path cannot be null."):
+        storage.upload_file("jobs/42/job-1/out/solution.csv", None)
+
+    client.upload_file.assert_not_called()

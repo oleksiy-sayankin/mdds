@@ -80,3 +80,38 @@ class S3Storage:
                 "destination": str(destination),
             },
         )
+
+    def upload_file(self, key: str, local_path: Path) -> None:
+        """Upload local file to S3-compatible storage."""
+        if key is None or key.strip() == "":
+            raise ValueError("key cannot be null or blank.")
+        if local_path is None:
+            raise ValueError("local_path cannot be null.")
+
+        logger.debug(
+            "Uploading object to S3-compatible storage.",
+            extra={
+                "component": "s3_storage",
+                "event": "s3_file_upload_started",
+                "bucket": self._bucket,
+                "objectKey": key,
+                "localPath": str(local_path),
+            },
+        )
+
+        self._client.upload_file(
+            str(local_path),
+            self._bucket,
+            key,
+        )
+
+        logger.debug(
+            "Object uploaded to S3-compatible storage.",
+            extra={
+                "component": "s3_storage",
+                "event": "s3_file_upload_completed",
+                "bucket": self._bucket,
+                "objectKey": key,
+                "localPath": str(local_path),
+            },
+        )
