@@ -18,6 +18,7 @@ def test_job_consumer_loads_manifest_prepares_inputs_creates_context_and_validat
     manifest = MagicMock()
     manifest.user_id = 42
     manifest.job_id = "job-1"
+    manifest.job_type = "SOLVING_SLAE"
     manifest.inputs = {"matrix": MagicMock()}
 
     manifest_loader = MagicMock()
@@ -28,6 +29,7 @@ def test_job_consumer_loads_manifest_prepares_inputs_creates_context_and_validat
     job_handler_loader = MagicMock()
     execution_supervisor = MagicMock()
     execution_registry = MagicMock()
+    status_publisher = MagicMock()
 
     consumer = JobConsumer(
         manifest_loader,
@@ -36,6 +38,7 @@ def test_job_consumer_loads_manifest_prepares_inputs_creates_context_and_validat
         job_handler_loader,
         execution_supervisor,
         execution_registry,
+        status_publisher,
         "test-worker-id",
     )
 
@@ -68,6 +71,15 @@ def test_job_consumer_loads_manifest_prepares_inputs_creates_context_and_validat
 
     supervised_execution_request = execution_supervisor.start.call_args.args[0]
 
+    status_publisher.publish_in_progress.assert_called_once_with(
+        42,
+        "job-1",
+        "SOLVING_SLAE",
+        "test-worker-id",
+        0,
+        "Start job execution",
+    )
+
     assert supervised_execution_request.context is (
         job_execution_context_factory.create.return_value
     )
@@ -99,6 +111,7 @@ def test_job_consumer_propagates_validation_failure_and_does_not_ack_yet() -> No
     job_handler_loader.load.return_value = job_handler
     execution_supervisor = MagicMock()
     execution_registry = MagicMock()
+    status_publisher = MagicMock()
 
     consumer = JobConsumer(
         manifest_loader,
@@ -107,6 +120,7 @@ def test_job_consumer_propagates_validation_failure_and_does_not_ack_yet() -> No
         job_handler_loader,
         execution_supervisor,
         execution_registry,
+        status_publisher,
         "test-worker-id",
     )
 
@@ -126,6 +140,7 @@ def test_job_consumer_propagates_validation_failure_and_does_not_ack_yet() -> No
     )
     ack.ack.assert_not_called()
     ack.nack.assert_not_called()
+    status_publisher.publish_in_progress.assert_not_called()
 
 
 def test_job_consumer_rejects_null_manifest_loader() -> None:
@@ -133,6 +148,7 @@ def test_job_consumer_rejects_null_manifest_loader() -> None:
         JobConsumer(
             None,
             None,
+            MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
@@ -150,6 +166,7 @@ def test_job_consumer_rejects_null_input_artifact_preparer() -> None:
             MagicMock(),
             MagicMock(),
             MagicMock(),
+            MagicMock(),
             "test-worker-id",
         )
 
@@ -160,6 +177,7 @@ def test_job_consumer_rejects_null_context_factory() -> None:
             MagicMock(),
             MagicMock(),
             None,
+            MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
@@ -176,6 +194,7 @@ def test_job_consumer_rejects_null_job_handler_loader() -> None:
             None,
             MagicMock(),
             MagicMock(),
+            MagicMock(),
             "test-worker-id",
         )
 
@@ -183,6 +202,21 @@ def test_job_consumer_rejects_null_job_handler_loader() -> None:
 def test_job_consumer_rejects_null_execution_registry() -> None:
     with pytest.raises(ValueError, match="execution_registry cannot be null"):
         JobConsumer(
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            None,
+            MagicMock(),
+            "test-worker-id",
+        )
+
+
+def test_job_consumer_rejects_null_status_publisher() -> None:
+    with pytest.raises(ValueError, match="status_publisher cannot be null"):
+        JobConsumer(
+            MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),

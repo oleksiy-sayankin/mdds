@@ -24,3 +24,32 @@ class JobMessageDTO:
     def manifest_object_key(self) -> str:
         """Return manifest object key using Python naming style."""
         return self.manifestObjectKey
+
+
+@dataclass(frozen=True)
+class JobStatusUpdateDTO:
+    """
+    Job status update message published by the Python Worker Runtime.
+
+    This DTO mirrors the Java JobStatusUpdateDTO wire contract consumed by
+    the Web Server status update pipeline.
+    """
+
+    jobId: str
+    workerId: str
+    status: str
+    progress: int
+    message: str
+    eventTime: str
+
+    @property
+    def job_id(self) -> str:
+        return self.jobId
+
+    @property
+    def worker_id(self) -> str:
+        return self.workerId
+
+    @property
+    def event_time(self) -> str:
+        return self.eventTime

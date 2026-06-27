@@ -8,6 +8,7 @@ from mdds_worker_runtime.execution.context import (
 )
 from mdds_worker_runtime.execution.handler_loader import JobHandlerLoader
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
+from mdds_worker_runtime.execution.status_publisher import StatusPublisher
 from mdds_worker_runtime.execution.supervisor import (
     ExecutionSupervisor,
     SupervisedExecutionRequest,
@@ -49,6 +50,7 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         job_handler_loader: JobHandlerLoader,
         execution_supervisor: ExecutionSupervisor,
         execution_registry: ExecutionRegistry,
+        status_publisher: StatusPublisher,
         worker_id: str,
     ) -> None:
         if manifest_loader is None:
@@ -63,6 +65,8 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
             raise ValueError("execution_supervisor cannot be null.")
         if execution_registry is None:
             raise ValueError("execution_registry cannot be null.")
+        if status_publisher is None:
+            raise ValueError("status_publisher cannot be null.")
         if worker_id is None or worker_id.strip() == "":
             raise ValueError("worker_id cannot be null or blank.")
 
@@ -72,6 +76,7 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         self._job_handler_loader = job_handler_loader
         self._execution_supervisor = execution_supervisor
         self._execution_registry = execution_registry
+        self._status_publisher = status_publisher
         self._worker_id = worker_id
 
     def handle(
@@ -111,10 +116,14 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         """
         manifest_object_key = message.payload.manifest_object_key
         manifest = self._manifest_loader.load(manifest_object_key)
+        user_id = manifest.user_id
+        job_id = manifest.job_id
+        worker_id = self._worker_id
+        job_type = manifest.job_type
 
         prepared_job_inputs = self._input_artifact_preparer.prepare(
-            manifest.user_id,
-            manifest.job_id,
+            user_id,
+            job_id,
             manifest.inputs,
         )
 
@@ -125,10 +134,14 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
 
         supervised_execution_request = SupervisedExecutionRequest(
             context=context,
-            worker_id=self._worker_id,
+            worker_id=worker_id,
             manifest_object_key=manifest_object_key,
             manifest=manifest,
             submitted_ack=ack,
+        )
+
+        self._status_publisher.publish_in_progress(
+            user_id, job_id, job_type, worker_id, 0, "Start job execution"
         )
 
         execution_record = self._execution_supervisor.start(
