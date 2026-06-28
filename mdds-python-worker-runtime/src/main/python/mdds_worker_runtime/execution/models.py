@@ -11,6 +11,7 @@ from enum import Enum
 from multiprocessing.connection import Connection
 
 from mdds_worker_runtime.domain.manifest import JobManifest
+from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 
@@ -31,6 +32,8 @@ class ExecutionRecord:
 
     manifest_object_key: str
     manifest: JobManifest
+
+    context: JobExecutionContext
 
     process: mp.Process
     parent_connection: Connection

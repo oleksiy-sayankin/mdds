@@ -203,3 +203,128 @@ def test_status_publisher_rejects_null_or_blank_message(message) -> None:
             progress=0,
             message=message,
         )
+
+
+def test_status_publisher_publishes_done_status_message() -> None:
+    queue_client = MagicMock()
+
+    publisher = StatusPublisher(
+        worker_status_queue_name="mdds_status_queue",
+        queue_client=queue_client,
+        clock=lambda: FIXED_TIME,
+    )
+
+    publisher.publish_done(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Job completed successfully",
+    )
+
+    queue_client.publish.assert_called_once()
+    queue_name, published_message = queue_client.publish.call_args.args
+
+    assert queue_name == "mdds_status_queue"
+    assert isinstance(published_message, QueueMessage)
+
+    payload = published_message.payload
+
+    assert isinstance(payload, JobStatusUpdateDTO)
+    assert payload.jobId == "job-1"
+    assert payload.job_id == "job-1"
+    assert payload.workerId == "worker-1"
+    assert payload.worker_id == "worker-1"
+    assert payload.status == WorkerStatus.DONE.value
+    assert payload.progress == 100
+    assert payload.message == "Job completed successfully"
+    assert payload.eventTime == "2026-01-01T00:00:00Z"
+    assert payload.event_time == payload.eventTime
+
+
+def test_status_publisher_publishes_done_status_message_with_default_message() -> None:
+    queue_client = MagicMock()
+
+    publisher = StatusPublisher(
+        worker_status_queue_name="mdds_status_queue",
+        queue_client=queue_client,
+        clock=lambda: FIXED_TIME,
+    )
+
+    publisher.publish_done(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+    )
+
+    queue_client.publish.assert_called_once()
+    queue_name, published_message = queue_client.publish.call_args.args
+
+    assert queue_name == "mdds_status_queue"
+    assert isinstance(published_message, QueueMessage)
+
+    payload = published_message.payload
+
+    assert isinstance(payload, JobStatusUpdateDTO)
+    assert payload.jobId == "job-1"
+    assert payload.workerId == "worker-1"
+    assert payload.status == WorkerStatus.DONE.value
+    assert payload.progress == 100
+    assert payload.message == "Job completed successfully."
+    assert payload.eventTime == "2026-01-01T00:00:00Z"
+
+
+def test_status_publisher_publishes_error_status_message() -> None:
+    queue_client = MagicMock()
+
+    publisher = StatusPublisher(
+        worker_status_queue_name="mdds_status_queue",
+        queue_client=queue_client,
+        clock=lambda: FIXED_TIME,
+    )
+
+    publisher.publish_error(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Supervised execution failed",
+    )
+
+    queue_client.publish.assert_called_once()
+    queue_name, published_message = queue_client.publish.call_args.args
+
+    assert queue_name == "mdds_status_queue"
+    assert isinstance(published_message, QueueMessage)
+
+    payload = published_message.payload
+
+    assert isinstance(payload, JobStatusUpdateDTO)
+    assert payload.jobId == "job-1"
+    assert payload.job_id == "job-1"
+    assert payload.workerId == "worker-1"
+    assert payload.worker_id == "worker-1"
+    assert payload.status == WorkerStatus.ERROR.value
+    assert payload.progress == 100
+    assert payload.message == "Supervised execution failed"
+    assert payload.eventTime == "2026-01-01T00:00:00Z"
+    assert payload.event_time == payload.eventTime
+
+
+@pytest.mark.parametrize("message", [None, "", " "])
+def test_status_publisher_publish_error_rejects_null_or_blank_message(message) -> None:
+    publisher = StatusPublisher(
+        worker_status_queue_name="mdds_status_queue",
+        queue_client=MagicMock(),
+        clock=lambda: FIXED_TIME,
+    )
+
+    with pytest.raises(ValueError, match="message cannot be null or blank."):
+        publisher.publish_error(
+            user_id=42,
+            job_id="job-1",
+            job_type="SOLVING_SLAE",
+            worker_id="worker-1",
+            message=message,
+        )

@@ -51,6 +51,42 @@ class StatusPublisher:
             message=message,
         )
 
+    def publish_done(
+        self,
+        user_id: int,
+        job_id: str,
+        job_type: str,
+        worker_id: str,
+        message: str = "Job completed successfully.",
+    ) -> None:
+        self._publish(
+            user_id=user_id,
+            job_id=job_id,
+            job_type=job_type,
+            worker_id=worker_id,
+            status=WorkerStatus.DONE,
+            progress=100,
+            message=message,
+        )
+
+    def publish_error(
+        self,
+        user_id: int,
+        job_id: str,
+        job_type: str,
+        worker_id: str,
+        message: str,
+    ) -> None:
+        self._publish(
+            user_id=user_id,
+            job_id=job_id,
+            job_type=job_type,
+            worker_id=worker_id,
+            status=WorkerStatus.ERROR,
+            progress=100,
+            message=message,
+        )
+
     def _publish(
         self,
         user_id: int,

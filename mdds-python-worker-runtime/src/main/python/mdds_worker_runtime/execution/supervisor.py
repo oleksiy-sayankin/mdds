@@ -110,6 +110,7 @@ class ExecutionSupervisor:
             worker_id=request.worker_id,
             manifest_object_key=request.manifest_object_key,
             manifest=request.manifest,
+            context=request.context,
             process=process,
             parent_connection=parent_connection,
             submitted_ack=request.submitted_ack,

@@ -57,6 +57,7 @@ def _record(job_id: str = "job-1") -> ExecutionRecord:
         worker_id="worker-1",
         manifest_object_key=f"jobs/42/{job_id}/manifest.json",
         manifest=_manifest(job_id),
+        context=MagicMock(),
         process=MagicMock(),
         parent_connection=MagicMock(),
         submitted_ack=MagicMock(),
