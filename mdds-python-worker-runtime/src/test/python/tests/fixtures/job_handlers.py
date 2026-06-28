@@ -187,3 +187,21 @@ class FailingExecuteJobHandler(JobHandler):
 
     def execute(self, context: JobExecutionContext) -> None:
         raise RuntimeError("execute failed")
+
+
+class TwoNumbersSumJobHandler(JobHandler):
+    def validate(self, context: JobExecutionContext) -> None:
+        _parse_int(context.inputs.read("number_a"))
+        _parse_int(context.inputs.read("number_b"))
+
+    def execute(self, context: JobExecutionContext) -> None:
+        number_a = _parse_int(context.inputs.read("number_a"))
+        number_b = _parse_int(context.inputs.read("number_b"))
+
+        result = number_a + number_b
+
+        context.outputs.write("sum", str(result).encode("utf-8"))
+
+
+def _parse_int(value: bytes) -> int:
+    return int(value.decode("utf-8").strip())
