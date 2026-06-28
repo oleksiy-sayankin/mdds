@@ -146,7 +146,7 @@ class StatusPublisher:
                 "jobType": job_type,
                 "status": status.value,
                 "progress": progress,
-                "queueName": self._worker_status_queue_name,
+                "statusQueueName": self._worker_status_queue_name,
             },
         )
 
