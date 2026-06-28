@@ -328,3 +328,40 @@ def test_status_publisher_publish_error_rejects_null_or_blank_message(message) -
             worker_id="worker-1",
             message=message,
         )
+
+
+def test_status_publisher_publishes_cancelled_status_message() -> None:
+    queue_client = MagicMock()
+
+    publisher = StatusPublisher(
+        worker_status_queue_name="mdds_status_queue",
+        queue_client=queue_client,
+        clock=lambda: FIXED_TIME,
+    )
+
+    publisher.publish_cancelled(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Job cancellation requested and applied",
+    )
+
+    queue_client.publish.assert_called_once()
+    queue_name, published_message = queue_client.publish.call_args.args
+
+    assert queue_name == "mdds_status_queue"
+    assert isinstance(published_message, QueueMessage)
+
+    payload = published_message.payload
+
+    assert isinstance(payload, JobStatusUpdateDTO)
+    assert payload.jobId == "job-1"
+    assert payload.job_id == "job-1"
+    assert payload.workerId == "worker-1"
+    assert payload.worker_id == "worker-1"
+    assert payload.status == WorkerStatus.CANCELLED.value
+    assert payload.progress == 100
+    assert payload.message == "Job cancellation requested and applied"
+    assert payload.eventTime == "2026-01-01T00:00:00Z"
+    assert payload.event_time == payload.eventTime
