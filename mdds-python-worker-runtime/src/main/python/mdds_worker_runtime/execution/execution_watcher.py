@@ -178,6 +178,8 @@ class ExecutionWatcher:
             self._publish_in_progress_if_due(record, now)
             return
 
+        self._close_supervised_execution_resources(record)
+
         if result.status == SupervisedExecutionStatus.SUCCEEDED:
             self._handle_succeeded(record, result, now)
             return
@@ -240,6 +242,38 @@ class ExecutionWatcher:
             )
 
         return result
+
+    @staticmethod
+    def _close_supervised_execution_resources(record: ExecutionRecord) -> None:
+        try:
+            record.parent_connection.close()
+        except Exception:
+            logger.exception(
+                "Failed to close supervised execution parent connection.",
+                extra={
+                    "component": "execution_watcher",
+                    "event": "supervised_execution_parent_connection_close_failed",
+                    "jobId": record.job_id,
+                    "userId": record.user_id,
+                    "jobType": record.job_type,
+                    "workerId": record.worker_id,
+                },
+            )
+
+        try:
+            record.process.join(timeout=0)
+        except Exception:
+            logger.exception(
+                "Failed to join supervised execution process.",
+                extra={
+                    "component": "execution_watcher",
+                    "event": "supervised_execution_process_join_failed",
+                    "jobId": record.job_id,
+                    "userId": record.user_id,
+                    "jobType": record.job_type,
+                    "workerId": record.worker_id,
+                },
+            )
 
     def _publish_in_progress_if_due(
         self,

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1003,6 +1004,259 @@ def test_execution_watcher_failed_result_without_error_type_uses_message_only(
     assert record.cleanup_ready is True
 
 
+def test_execution_watcher_does_not_close_resources_when_no_result_is_available(
+    tmp_path: Path,
+) -> None:
+    clock = _MutableClock(FIXED_TIME + timedelta(seconds=4))
+    registry = ExecutionRegistry()
+    parent_connection = _FakeParentConnection(poll_result=False)
+    fixture = _record(
+        tmp_path,
+        parent_connection=parent_connection,
+        started_at=FIXED_TIME,
+    )
+    record = fixture.record
+    registry.add(record)
+
+    watcher = _watcher(
+        registry,
+        MagicMock(),
+        MagicMock(),
+        clock,
+    )
+
+    watcher.poll_once()
+
+    assert parent_connection.close_count == 0
+    fixture.process.join.assert_not_called()
+
+    assert record.terminal_status_claimed is False
+    assert record.terminal_status_published is False
+    assert record.acknowledgement_done is False
+    assert record.cleanup_ready is False
+
+
+def test_execution_watcher_closes_resources_after_success_result_before_upload_and_done(
+    tmp_path: Path,
+) -> None:
+    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
+    registry = ExecutionRegistry()
+    events: list[str] = []
+    result = SupervisedExecutionResult.succeeded("job-1")
+    parent_connection = _FakeParentConnection(
+        result=result,
+        close_callback=lambda: events.append("close_parent_connection"),
+    )
+    fixture = _record(
+        tmp_path,
+        parent_connection=parent_connection,
+        started_at=FIXED_TIME,
+    )
+    record = fixture.record
+    registry.add(record)
+
+    output_artifact_uploader = MagicMock()
+    status_publisher = MagicMock()
+
+    fixture.process.join.side_effect = lambda timeout: events.append(
+        f"join_process:{timeout}"
+    )
+    output_artifact_uploader.upload.side_effect = lambda context: events.append(
+        "upload_outputs"
+    )
+    status_publisher.publish_done.side_effect = lambda **_kwargs: events.append(
+        "publish_done"
+    )
+    fixture.submitted_ack.ack.side_effect = lambda: events.append("ack")
+
+    watcher = _watcher(
+        registry,
+        output_artifact_uploader,
+        status_publisher,
+        clock,
+    )
+
+    watcher.poll_once()
+
+    assert events == [
+        "close_parent_connection",
+        "join_process:0",
+        "upload_outputs",
+        "publish_done",
+        "ack",
+    ]
+
+    assert parent_connection.close_count == 1
+    fixture.process.join.assert_called_once_with(timeout=0)
+
+    output_artifact_uploader.upload.assert_called_once_with(record.context)
+    status_publisher.publish_done.assert_called_once()
+    status_publisher.publish_error.assert_not_called()
+    fixture.submitted_ack.ack.assert_called_once()
+
+    assert record.terminal_status == WorkerJobStatus.DONE
+    assert record.terminal_status_published is True
+    assert record.acknowledgement_done is True
+    assert record.cleanup_ready is True
+
+
+def test_execution_watcher_closes_resources_after_failed_result_before_error_publication(
+    tmp_path: Path,
+) -> None:
+    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
+    registry = ExecutionRegistry()
+    events: list[str] = []
+    result = SupervisedExecutionResult(
+        job_id="job-1",
+        status=SupervisedExecutionStatus.FAILED,
+        message="execute failed",
+        error_type="RuntimeError",
+    )
+    parent_connection = _FakeParentConnection(
+        result=result,
+        close_callback=lambda: events.append("close_parent_connection"),
+    )
+    fixture = _record(
+        tmp_path,
+        parent_connection=parent_connection,
+        started_at=FIXED_TIME,
+    )
+    record = fixture.record
+    registry.add(record)
+
+    status_publisher = MagicMock()
+
+    fixture.process.join.side_effect = lambda timeout: events.append(
+        f"join_process:{timeout}"
+    )
+    status_publisher.publish_error.side_effect = lambda **_kwargs: events.append(
+        "publish_error"
+    )
+    fixture.submitted_ack.ack.side_effect = lambda: events.append("ack")
+
+    watcher = _watcher(
+        registry,
+        MagicMock(),
+        status_publisher,
+        clock,
+    )
+
+    watcher.poll_once()
+
+    assert events == [
+        "close_parent_connection",
+        "join_process:0",
+        "publish_error",
+        "ack",
+    ]
+
+    assert parent_connection.close_count == 1
+    fixture.process.join.assert_called_once_with(timeout=0)
+
+    status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id=WORKER_ID,
+        message="RuntimeError: execute failed",
+    )
+    status_publisher.publish_done.assert_not_called()
+    fixture.submitted_ack.ack.assert_called_once()
+
+    assert record.terminal_status == WorkerJobStatus.ERROR
+    assert record.terminal_status_published is True
+    assert record.acknowledgement_done is True
+    assert record.cleanup_ready is True
+
+
+def test_execution_watcher_resource_close_failures_do_not_prevent_success_finalization(
+    tmp_path: Path,
+) -> None:
+    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
+    registry = ExecutionRegistry()
+    result = SupervisedExecutionResult.succeeded("job-1")
+    parent_connection = _FakeParentConnection(
+        result=result,
+        close_exception=RuntimeError("close failed"),
+    )
+    fixture = _record(
+        tmp_path,
+        parent_connection=parent_connection,
+        started_at=FIXED_TIME,
+    )
+    record = fixture.record
+    registry.add(record)
+
+    fixture.process.join.side_effect = RuntimeError("join failed")
+
+    output_artifact_uploader = MagicMock()
+    status_publisher = MagicMock()
+
+    watcher = _watcher(
+        registry,
+        output_artifact_uploader,
+        status_publisher,
+        clock,
+    )
+
+    watcher.poll_once()
+
+    assert parent_connection.close_count == 1
+    fixture.process.join.assert_called_once_with(timeout=0)
+
+    output_artifact_uploader.upload.assert_called_once_with(record.context)
+    status_publisher.publish_done.assert_called_once()
+    status_publisher.publish_error.assert_not_called()
+    fixture.submitted_ack.ack.assert_called_once()
+
+    assert record.terminal_status == WorkerJobStatus.DONE
+    assert record.terminal_status_published is True
+    assert record.acknowledgement_done is True
+    assert record.cleanup_ready is True
+
+
+def test_execution_watcher_already_terminal_claimed_record_does_not_close_resources(
+    tmp_path: Path,
+) -> None:
+    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
+    registry = ExecutionRegistry()
+    result = SupervisedExecutionResult.succeeded("job-1")
+    parent_connection = _FakeParentConnection(result=result)
+    fixture = _record(
+        tmp_path,
+        parent_connection=parent_connection,
+        started_at=FIXED_TIME,
+    )
+    record = fixture.record
+    registry.add(record)
+
+    registry.try_claim_terminal(
+        job_id="job-1",
+        terminal_status=WorkerJobStatus.ERROR,
+        message="Already claimed.",
+        finished_at=FIXED_TIME,
+    )
+
+    watcher = _watcher(
+        registry,
+        MagicMock(),
+        MagicMock(),
+        clock,
+    )
+
+    watcher.poll_once()
+
+    assert parent_connection.close_count == 0
+    fixture.process.join.assert_not_called()
+    fixture.submitted_ack.ack.assert_not_called()
+
+    assert record.terminal_status == WorkerJobStatus.ERROR
+    assert record.terminal_message == "Already claimed."
+    assert record.terminal_status_published is False
+    assert record.acknowledgement_done is False
+    assert record.cleanup_ready is False
+
+
 def _watcher(
     execution_registry: ExecutionRegistry,
     output_artifact_uploader,
@@ -1034,6 +1288,7 @@ def _record(
 ) -> "_RecordFixture":
     context = _context(tmp_path, job_id=job_id)
     submitted_ack = MagicMock()
+    process = MagicMock()
 
     record = ExecutionRecord(
         job_id=job_id,
@@ -1043,7 +1298,7 @@ def _record(
         manifest_object_key=f"jobs/{context.user_id}/{job_id}/manifest.json",
         manifest=MagicMock(),
         context=context,
-        process=MagicMock(),
+        process=process,
         parent_connection=parent_connection,
         submitted_ack=submitted_ack,
         started_at=started_at,
@@ -1052,6 +1307,7 @@ def _record(
     return _RecordFixture(
         record=record,
         submitted_ack=submitted_ack,
+        process=process,
     )
 
 
@@ -1102,6 +1358,7 @@ def _context(tmp_path: Path, *, job_id: str = "job-1") -> JobExecutionContext:
 class _RecordFixture:
     record: ExecutionRecord
     submitted_ack: MagicMock
+    process: MagicMock
 
 
 class _MutableClock:
@@ -1123,11 +1380,16 @@ class _FakeParentConnection:
         poll_result: bool = True,
         poll_exception: BaseException | None = None,
         recv_exception: BaseException | None = None,
+        close_exception: BaseException | None = None,
+        close_callback: Callable[[], None] | None = None,
     ) -> None:
         self._result = result
         self._poll_result = poll_result
         self._poll_exception = poll_exception
         self._recv_exception = recv_exception
+        self._close_exception = close_exception
+        self._close_callback = close_callback
+        self.close_count = 0
 
     def poll(self) -> bool:
         if self._poll_exception is not None:
@@ -1138,3 +1400,12 @@ class _FakeParentConnection:
         if self._recv_exception is not None:
             raise self._recv_exception
         return self._result
+
+    def close(self) -> None:
+        self.close_count += 1
+
+        if self._close_callback is not None:
+            self._close_callback()
+
+        if self._close_exception is not None:
+            raise self._close_exception
