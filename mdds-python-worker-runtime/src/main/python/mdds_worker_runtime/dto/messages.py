@@ -53,3 +53,21 @@ class JobStatusUpdateDTO:
     @property
     def event_time(self) -> str:
         return self.eventTime
+
+
+@dataclass(frozen=True)
+class CancelJobDTO:
+    """Cancellation request message consumed by Worker Runtime.
+
+    The Web Server sends this message to a worker-specific cancellation queue.
+    The message identifies the job requested for cancellation.
+
+    The DTO only represents the transport payload. Actual cancellation execution
+    is handled by Worker Runtime lifecycle services.
+    """
+
+    jobId: str
+
+    @property
+    def job_id(self) -> str:
+        return self.jobId
