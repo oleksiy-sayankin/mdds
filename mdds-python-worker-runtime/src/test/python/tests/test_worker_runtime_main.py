@@ -284,6 +284,7 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     input_artifact_preparer = MagicMock(name="input_artifact_preparer")
     job_execution_context_factory = MagicMock(name="job_execution_context_factory")
     job_handler_loader = MagicMock(name="job_handler_loader")
+    validation_handler = MagicMock(name="validation_handler")
     execution_supervisor = MagicMock(name="execution_supervisor")
     execution_registry = MagicMock(name="execution_registry")
     status_publisher = MagicMock(name="status_publisher")
@@ -310,6 +311,7 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         return_value=job_execution_context_factory
     )
     job_handler_loader_factory = MagicMock(return_value=job_handler_loader)
+    validation_handler_factory = MagicMock(return_value=validation_handler)
     execution_supervisor_factory = MagicMock(return_value=execution_supervisor)
     execution_registry_factory = MagicMock(return_value=execution_registry)
     status_publisher_factory = MagicMock(return_value=status_publisher)
@@ -356,6 +358,11 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         worker_main,
         "JobHandlerLoader",
         job_handler_loader_factory,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "ValidationHandler",
+        validation_handler_factory,
     )
     monkeypatch.setattr(
         worker_main,
@@ -441,11 +448,17 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     status_publisher_factory.assert_called_once()
     output_artifact_uploader_factory.assert_called_once_with(storage)
 
+    validation_handler_factory.assert_called_once_with(
+        status_publisher,
+        WORKER_ID,
+    )
+
     job_consumer_factory.assert_called_once_with(
         manifest_loader,
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
+        validation_handler,
         execution_supervisor,
         execution_registry,
         status_publisher,
@@ -565,6 +578,7 @@ def test_build_worker_runtime_from_environment_uses_working_clock(
     monkeypatch.setattr(worker_main, "InputArtifactPreparer", MagicMock())
     monkeypatch.setattr(worker_main, "JobExecutionContextFactory", MagicMock())
     monkeypatch.setattr(worker_main, "JobHandlerLoader", MagicMock())
+    monkeypatch.setattr(worker_main, "ValidationHandler", MagicMock())
     monkeypatch.setattr(worker_main, "ExecutionSupervisor", MagicMock())
     monkeypatch.setattr(worker_main, "ExecutionRegistry", MagicMock())
     monkeypatch.setattr(worker_main, "OutputArtifactUploader", MagicMock())

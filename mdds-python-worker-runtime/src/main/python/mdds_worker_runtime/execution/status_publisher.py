@@ -105,6 +105,24 @@ class StatusPublisher:
             message=message,
         )
 
+    def publish_validation_failed(
+        self,
+        user_id: int,
+        job_id: str,
+        job_type: str,
+        worker_id: str,
+        message: str,
+    ) -> None:
+        self._publish(
+            user_id=user_id,
+            job_id=job_id,
+            job_type=job_type,
+            worker_id=worker_id,
+            status=WorkerJobStatus.VALIDATION_FAILED,
+            progress=0,
+            message=message,
+        )
+
     def _publish(
         self,
         user_id: int,

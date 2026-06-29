@@ -13,6 +13,7 @@ from mdds_worker_runtime.execution.supervisor import (
     ExecutionSupervisor,
     SupervisedExecutionRequest,
 )
+from mdds_worker_runtime.execution.validation_handler import ValidationHandler
 from mdds_worker_runtime.manifest.loader import ManifestLoader
 from mdds_worker_runtime.queue.queue_client import (
     Acknowledger,
@@ -48,6 +49,7 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         input_artifact_preparer: InputArtifactPreparer,
         context_factory: JobExecutionContextFactory,
         job_handler_loader: JobHandlerLoader,
+        validation_handler: ValidationHandler,
         execution_supervisor: ExecutionSupervisor,
         execution_registry: ExecutionRegistry,
         status_publisher: StatusPublisher,
@@ -61,6 +63,8 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
             raise ValueError("context_factory cannot be null.")
         if job_handler_loader is None:
             raise ValueError("job_handler_loader cannot be null.")
+        if validation_handler is None:
+            raise ValueError("validation_handler cannot be null.")
         if execution_supervisor is None:
             raise ValueError("execution_supervisor cannot be null.")
         if execution_registry is None:
@@ -74,6 +78,7 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         self._input_artifact_preparer = input_artifact_preparer
         self._context_factory = context_factory
         self._job_handler_loader = job_handler_loader
+        self._validation_handler = validation_handler
         self._execution_supervisor = execution_supervisor
         self._execution_registry = execution_registry
         self._status_publisher = status_publisher
@@ -130,7 +135,14 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         context = self._context_factory.create(manifest, prepared_job_inputs)
 
         handler = self._job_handler_loader.load()
-        handler.validate(context)
+
+        if not self._validation_handler.validate_or_handle_failure(
+            handler=handler,
+            context=context,
+            manifest=manifest,
+            submitted_ack=ack,
+        ):
+            return
 
         supervised_execution_request = SupervisedExecutionRequest(
             context=context,
