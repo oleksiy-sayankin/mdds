@@ -227,3 +227,11 @@ class UnexpectedValidationErrorJobHandler(JobHandler):
 
     def execute(self, context: JobExecutionContext) -> None:
         context.outputs.write("sum", b"must-not-be-produced")
+
+
+class UnexpectedExecutionErrorJobHandler(JobHandler):
+    def validate(self, context: JobExecutionContext) -> None:
+        pass
+
+    def execute(self, context: JobExecutionContext) -> None:
+        raise RuntimeError("Unexpected execution error. Test message.")
