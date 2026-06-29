@@ -18,7 +18,7 @@ from testcontainers.rabbitmq import RabbitMqContainer
 
 from mdds_worker_runtime import main as worker_main
 from mdds_worker_runtime.dto.messages import JobMessageDTO, JobStatusUpdateDTO
-from mdds_worker_runtime.execution.status import WorkerStatus
+from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.queue.queue_client import QueueMessage
 from mdds_worker_runtime.rabbitmq.rabbitmq_queue_client import (
     RabbitMqProperties,
@@ -197,8 +197,8 @@ def test_worker_runtime_processes_two_numbers_sum_happy_path(
 
             assert _contains_status_before(
                 statuses=statuses,
-                earlier_status=WorkerStatus.IN_PROGRESS.value,
-                later_status=WorkerStatus.DONE.value,
+                earlier_status=WorkerJobStatus.IN_PROGRESS.value,
+                later_status=WorkerJobStatus.DONE.value,
                 job_id=job_id,
             )
 
@@ -206,7 +206,7 @@ def test_worker_runtime_processes_two_numbers_sum_happy_path(
             assert done_status.job_id == job_id
             assert done_status.workerId == WORKER_ID
             assert done_status.worker_id == WORKER_ID
-            assert done_status.status == WorkerStatus.DONE.value
+            assert done_status.status == WorkerJobStatus.DONE.value
             assert done_status.progress == 100
 
             output = s3_client.get_object(Bucket=S3_BUCKET, Key=sum_key)
@@ -317,7 +317,7 @@ def _wait_for_done_status(
 
         status_handler.received.put(status)
 
-        if status.jobId == job_id and status.status == WorkerStatus.DONE.value:
+        if status.jobId == job_id and status.status == WorkerJobStatus.DONE.value:
             return status
 
     raise AssertionError(f"DONE status was not published for jobId='{job_id}'.")

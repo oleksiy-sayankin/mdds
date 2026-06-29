@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mdds_worker_runtime.dto.messages import JobStatusUpdateDTO
-from mdds_worker_runtime.execution.status import WorkerStatus
+from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.execution.status_publisher import (
     StatusPublisher,
     _format_event_time,
@@ -49,7 +49,7 @@ def test_status_publisher_publishes_in_progress_status_message() -> None:
     assert payload.job_id == "job-1"
     assert payload.workerId == "worker-1"
     assert payload.worker_id == "worker-1"
-    assert payload.status == WorkerStatus.IN_PROGRESS.value
+    assert payload.status == WorkerJobStatus.IN_PROGRESS.value
     assert payload.progress == 0
     assert payload.message == "Start job execution"
     assert payload.eventTime == "2026-01-01T00:00:00Z"
@@ -235,7 +235,7 @@ def test_status_publisher_publishes_done_status_message() -> None:
     assert payload.job_id == "job-1"
     assert payload.workerId == "worker-1"
     assert payload.worker_id == "worker-1"
-    assert payload.status == WorkerStatus.DONE.value
+    assert payload.status == WorkerJobStatus.DONE.value
     assert payload.progress == 100
     assert payload.message == "Job completed successfully"
     assert payload.eventTime == "2026-01-01T00:00:00Z"
@@ -269,7 +269,7 @@ def test_status_publisher_publishes_done_status_message_with_default_message() -
     assert isinstance(payload, JobStatusUpdateDTO)
     assert payload.jobId == "job-1"
     assert payload.workerId == "worker-1"
-    assert payload.status == WorkerStatus.DONE.value
+    assert payload.status == WorkerJobStatus.DONE.value
     assert payload.progress == 100
     assert payload.message == "Job completed successfully."
     assert payload.eventTime == "2026-01-01T00:00:00Z"
@@ -305,7 +305,7 @@ def test_status_publisher_publishes_error_status_message() -> None:
     assert payload.job_id == "job-1"
     assert payload.workerId == "worker-1"
     assert payload.worker_id == "worker-1"
-    assert payload.status == WorkerStatus.ERROR.value
+    assert payload.status == WorkerJobStatus.ERROR.value
     assert payload.progress == 100
     assert payload.message == "Supervised execution failed"
     assert payload.eventTime == "2026-01-01T00:00:00Z"
@@ -360,7 +360,7 @@ def test_status_publisher_publishes_cancelled_status_message() -> None:
     assert payload.job_id == "job-1"
     assert payload.workerId == "worker-1"
     assert payload.worker_id == "worker-1"
-    assert payload.status == WorkerStatus.CANCELLED.value
+    assert payload.status == WorkerJobStatus.CANCELLED.value
     assert payload.progress == 100
     assert payload.message == "Job cancellation requested and applied"
     assert payload.eventTime == "2026-01-01T00:00:00Z"

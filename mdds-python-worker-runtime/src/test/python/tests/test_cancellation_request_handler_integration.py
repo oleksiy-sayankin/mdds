@@ -15,7 +15,6 @@ from mdds_worker_runtime.execution.cancel_consumer import CancelConsumer
 from mdds_worker_runtime.execution.cancellation import CancellationRequestHandler
 from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
-from mdds_worker_runtime.execution.status import WorkerStatus
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
 from mdds_worker_runtime.queue.queue_client import QueueMessage
 
@@ -134,7 +133,7 @@ def test_cancel_consumer_cancels_only_target_running_execution(
         assert payload.job_id == CANCELLED_JOB_ID
         assert payload.workerId == WORKER_ID
         assert payload.worker_id == WORKER_ID
-        assert payload.status == WorkerStatus.CANCELLED.value
+        assert payload.status == WorkerJobStatus.CANCELLED.value
         assert payload.progress == 100
         assert "Job cancellation requested and applied" in payload.message
         assert payload.eventTime == "2026-01-01T00:00:00Z"

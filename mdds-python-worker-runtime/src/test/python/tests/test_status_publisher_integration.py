@@ -14,7 +14,7 @@ import pytest
 from testcontainers.rabbitmq import RabbitMqContainer
 
 from mdds_worker_runtime.dto.messages import JobStatusUpdateDTO
-from mdds_worker_runtime.execution.status import WorkerStatus
+from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
 from mdds_worker_runtime.rabbitmq.rabbitmq_queue_client import (
     RabbitMqProperties,
@@ -96,7 +96,7 @@ def test_status_publisher_publishes_status_update_to_real_rabbitmq(
         assert message.payload == JobStatusUpdateDTO(
             jobId="job-1",
             workerId="worker-1",
-            status=WorkerStatus.IN_PROGRESS.value,
+            status=WorkerJobStatus.IN_PROGRESS.value,
             progress=0,
             message="Start job execution",
             eventTime="2026-01-01T00:00:00Z",

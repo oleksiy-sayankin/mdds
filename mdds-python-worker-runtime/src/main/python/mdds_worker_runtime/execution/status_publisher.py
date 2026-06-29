@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import logging
 
 from mdds_worker_runtime.dto.messages import JobStatusUpdateDTO
-from mdds_worker_runtime.execution.status import WorkerStatus
+from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.queue.queue_client import QueueClient, QueueMessage
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class StatusPublisher:
             job_id=job_id,
             job_type=job_type,
             worker_id=worker_id,
-            status=WorkerStatus.IN_PROGRESS,
+            status=WorkerJobStatus.IN_PROGRESS,
             progress=progress,
             message=message,
         )
@@ -64,7 +64,7 @@ class StatusPublisher:
             job_id=job_id,
             job_type=job_type,
             worker_id=worker_id,
-            status=WorkerStatus.DONE,
+            status=WorkerJobStatus.DONE,
             progress=100,
             message=message,
         )
@@ -82,7 +82,7 @@ class StatusPublisher:
             job_id=job_id,
             job_type=job_type,
             worker_id=worker_id,
-            status=WorkerStatus.ERROR,
+            status=WorkerJobStatus.ERROR,
             progress=100,
             message=message,
         )
@@ -100,7 +100,7 @@ class StatusPublisher:
             job_id=job_id,
             job_type=job_type,
             worker_id=worker_id,
-            status=WorkerStatus.CANCELLED,
+            status=WorkerJobStatus.CANCELLED,
             progress=100,
             message=message,
         )
@@ -111,7 +111,7 @@ class StatusPublisher:
         job_id: str,
         job_type: str,
         worker_id: str,
-        status: WorkerStatus,
+        status: WorkerJobStatus,
         progress: int,
         message: str,
     ) -> None:
