@@ -15,6 +15,8 @@ from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 logger = logging.getLogger(__name__)
 
+_UNEXPECTED_VALIDATION_ERROR_MESSAGE = "Worker-side validation processing failed."
+
 
 class ValidationFailed(RuntimeError):
     """Raised when worker-side semantic validation fails."""
@@ -77,6 +79,27 @@ class ValidationHandler:
                 error=error,
             )
             return False
+        except Exception as error:
+            logger.exception(
+                "Worker-side validation processing failed.",
+                extra={
+                    "component": "validation_handler",
+                    "event": "unexpected_validation_error",
+                    "jobId": manifest.job_id,
+                    "userId": manifest.user_id,
+                    "jobType": manifest.job_type,
+                    "workerId": self._worker_id,
+                    "errorType": type(error).__name__,
+                },
+            )
+
+            self._handle_unexpected_validation_error(
+                context=context,
+                manifest=manifest,
+                submitted_ack=submitted_ack,
+                error=error,
+            )
+            return False
 
     def _handle_validation_failed(
         self,
@@ -97,7 +120,11 @@ class ValidationHandler:
         )
 
         submitted_ack.ack()
-        self._cleanup_local_workspace(context)
+        self._cleanup_local_workspace(
+            context,
+            event_prefix="validation_failed",
+            reason="validation failure",
+        )
 
         logger.info(
             "Worker-side validation failure was processed.",
@@ -112,16 +139,59 @@ class ValidationHandler:
             },
         )
 
-    def _cleanup_local_workspace(self, context: JobExecutionContext) -> None:
+    def _handle_unexpected_validation_error(
+        self,
+        *,
+        context: JobExecutionContext,
+        manifest: JobManifest,
+        submitted_ack: Acknowledger,
+        error: Exception,
+    ) -> None:
+        self._status_publisher.publish_error(
+            user_id=manifest.user_id,
+            job_id=manifest.job_id,
+            job_type=manifest.job_type,
+            worker_id=self._worker_id,
+            message=_UNEXPECTED_VALIDATION_ERROR_MESSAGE,
+        )
+
+        submitted_ack.ack()
+        self._cleanup_local_workspace(
+            context,
+            event_prefix="unexpected_validation_error",
+            reason="unexpected validation error",
+        )
+
+        logger.info(
+            "Unexpected worker-side validation error was processed.",
+            extra={
+                "component": "validation_handler",
+                "event": "unexpected_validation_error_processed",
+                "jobId": manifest.job_id,
+                "userId": manifest.user_id,
+                "jobType": manifest.job_type,
+                "workerId": self._worker_id,
+                "errorType": type(error).__name__,
+                "localPath": str(context.work_dir),
+            },
+        )
+
+    def _cleanup_local_workspace(
+        self,
+        context: JobExecutionContext,
+        *,
+        event_prefix: str,
+        reason: str,
+    ) -> None:
         work_dir = Path(context.work_dir)
 
         try:
             if not work_dir.exists():
                 logger.info(
-                    "Local job workspace is already absent after validation failure.",
+                    f"Local job workspace is already absent after {reason}.",
                     extra={
                         "component": "validation_handler",
-                        "event": "validation_failed_workspace_already_absent",
+                        "event": f"{event_prefix}_workspace_already_absent",
                         "jobId": context.job_id,
                         "userId": context.user_id,
                         "jobType": context.job_type,
@@ -140,10 +210,10 @@ class ValidationHandler:
             shutil.rmtree(work_dir)
 
             logger.info(
-                "Local job workspace deleted after validation failure.",
+                f"Local job workspace deleted after {reason}.",
                 extra={
                     "component": "validation_handler",
-                    "event": "validation_failed_workspace_deleted",
+                    "event": f"{event_prefix}_workspace_deleted",
                     "jobId": context.job_id,
                     "userId": context.user_id,
                     "jobType": context.job_type,
@@ -154,10 +224,10 @@ class ValidationHandler:
 
         except Exception:
             logger.exception(
-                "Local job workspace cleanup failed after validation failure.",
+                f"Local job workspace cleanup failed after {reason}.",
                 extra={
                     "component": "validation_handler",
-                    "event": "validation_failed_workspace_cleanup_failed",
+                    "event": f"{event_prefix}_workspace_cleanup_failed",
                     "jobId": context.job_id,
                     "userId": context.user_id,
                     "jobType": context.job_type,

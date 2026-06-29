@@ -58,6 +58,7 @@ class JsonLogFormatter(logging.Formatter):
             "cancelQueueName",
             "statusQueueName",
             "errorCode",
+            "errorType",
             "signal",
             "inputSlots",
             "outputSlots",

@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
-
+import logging
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -190,11 +190,17 @@ def test_validation_handler_does_not_ack_when_validation_failed_publication_fail
         ValueError("unexpected value error"),
     ],
 )
-def test_validation_handler_does_not_catch_unexpected_validation_errors(
+def test_validation_handler_handles_unexpected_validation_errors_as_error(
     tmp_path: Path,
     unexpected_error: Exception,
 ) -> None:
+    events: list[str] = []
+
     status_publisher = MagicMock()
+    status_publisher.publish_error.side_effect = lambda **_kwargs: events.append(
+        "publish_error"
+    )
+
     validation_handler = ValidationHandler(status_publisher, "worker-1")
 
     handler = MagicMock()
@@ -202,20 +208,44 @@ def test_validation_handler_does_not_catch_unexpected_validation_errors(
 
     context = _context(tmp_path)
     context.work_dir.mkdir(parents=True)
+    (context.work_dir / "input.csv").write_text("bad-input", encoding="utf-8")
+
+    manifest = _manifest()
 
     submitted_ack = MagicMock()
 
-    with pytest.raises(type(unexpected_error), match=str(unexpected_error)):
-        validation_handler.validate_or_handle_failure(
-            handler=handler,
-            context=context,
-            manifest=_manifest(),
-            submitted_ack=submitted_ack,
-        )
+    def ack_side_effect() -> None:
+        assert events == ["publish_error"]
+        assert context.work_dir.exists()
+        events.append("ack")
+
+    submitted_ack.ack.side_effect = ack_side_effect
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=manifest,
+        submitted_ack=submitted_ack,
+    )
+
+    assert result is False
+
+    handler.validate.assert_called_once_with(context)
+
+    status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Worker-side validation processing failed.",
+    )
 
     status_publisher.publish_validation_failed.assert_not_called()
-    submitted_ack.ack.assert_not_called()
-    assert context.work_dir.exists()
+
+    submitted_ack.ack.assert_called_once_with()
+    assert events == ["publish_error", "ack"]
+
+    assert not context.work_dir.exists()
 
 
 def test_validation_handler_rejects_null_status_publisher() -> None:
@@ -381,3 +411,166 @@ def test_validation_handler_suppresses_cleanup_failure_when_rmtree_fails(
     submitted_ack.ack.assert_called_once_with()
 
     assert context.work_dir.exists()
+
+
+def test_validation_handler_does_not_ack_when_unexpected_validation_error_publication_fails(
+    tmp_path: Path,
+) -> None:
+    status_publisher = MagicMock()
+    status_publisher.publish_error.side_effect = RuntimeError("status publish failed")
+
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+
+    context = _context(tmp_path)
+    context.work_dir.mkdir(parents=True)
+
+    submitted_ack = MagicMock()
+
+    with pytest.raises(RuntimeError, match="status publish failed"):
+        validation_handler.validate_or_handle_failure(
+            handler=handler,
+            context=context,
+            manifest=_manifest(),
+            submitted_ack=submitted_ack,
+        )
+
+    status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Worker-side validation processing failed.",
+    )
+
+    status_publisher.publish_validation_failed.assert_not_called()
+
+    submitted_ack.ack.assert_not_called()
+    assert context.work_dir.exists()
+
+
+def test_validation_handler_suppresses_cleanup_failure_after_unexpected_validation_error(
+    tmp_path: Path,
+) -> None:
+    status_publisher = MagicMock()
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+
+    context = _context(tmp_path)
+    context.work_dir.parent.mkdir(parents=True)
+    context.work_dir.write_text("not-a-directory", encoding="utf-8")
+
+    submitted_ack = MagicMock()
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=_manifest(),
+        submitted_ack=submitted_ack,
+    )
+
+    assert result is False
+
+    status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Worker-side validation processing failed.",
+    )
+
+    status_publisher.publish_validation_failed.assert_not_called()
+
+    submitted_ack.ack.assert_called_once_with()
+
+    assert context.work_dir.exists()
+    assert context.work_dir.is_file()
+
+
+def test_validation_handler_logs_unexpected_validation_error_with_traceback(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.ERROR,
+        logger="mdds_worker_runtime.execution.validation_handler",
+    )
+
+    status_publisher = MagicMock()
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+
+    context = _context(tmp_path)
+    context.work_dir.mkdir(parents=True)
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=_manifest(),
+        submitted_ack=MagicMock(),
+    )
+
+    assert result is False
+
+    assert any(
+        record.message == "Worker-side validation processing failed."
+        and record.exc_info is not None
+        and getattr(record, "event", None) == "unexpected_validation_error"
+        for record in caplog.records
+    )
+
+
+def test_validation_handler_logs_cleanup_failure_after_unexpected_validation_error(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.ERROR,
+        logger="mdds_worker_runtime.execution.validation_handler",
+    )
+
+    status_publisher = MagicMock()
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+
+    context = _context(tmp_path)
+    context.work_dir.parent.mkdir(parents=True)
+    context.work_dir.write_text("not-a-directory", encoding="utf-8")
+
+    submitted_ack = MagicMock()
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=_manifest(),
+        submitted_ack=submitted_ack,
+    )
+
+    assert result is False
+
+    status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Worker-side validation processing failed.",
+    )
+
+    submitted_ack.ack.assert_called_once_with()
+
+    assert any(
+        record.message
+        == "Local job workspace cleanup failed after unexpected validation error."
+        and record.exc_info is not None
+        and getattr(record, "event", None)
+        == "unexpected_validation_error_workspace_cleanup_failed"
+        for record in caplog.records
+    )
