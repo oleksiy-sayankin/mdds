@@ -147,12 +147,14 @@ class ValidationHandler:
         submitted_ack: Acknowledger,
         error: Exception,
     ) -> None:
+        message = str(error).strip() or "Worker-side validation processing failed."
+
         self._status_publisher.publish_error(
             user_id=manifest.user_id,
             job_id=manifest.job_id,
             job_type=manifest.job_type,
             worker_id=self._worker_id,
-            message=_UNEXPECTED_VALIDATION_ERROR_MESSAGE,
+            message=message,
         )
 
         submitted_ack.ack()

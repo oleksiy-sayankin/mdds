@@ -184,16 +184,18 @@ def test_validation_handler_does_not_ack_when_validation_failed_publication_fail
 
 
 @pytest.mark.parametrize(
-    "unexpected_error",
+    ("error_type", "error_message"),
     [
-        RuntimeError("unexpected runtime error"),
-        ValueError("unexpected value error"),
+        (RuntimeError, "Unexpected runtime error. Test message."),
+        (ValueError, "Unexpected value error. Test message."),
     ],
 )
-def test_validation_handler_handles_unexpected_validation_errors_as_error(
+def test_validation_handler_propagates_unexpected_validation_error_message(
     tmp_path: Path,
-    unexpected_error: Exception,
+    error_type: type[Exception],
+    error_message: str,
 ) -> None:
+    unexpected_error = error_type(error_message)
     events: list[str] = []
 
     status_publisher = MagicMock()
@@ -237,7 +239,7 @@ def test_validation_handler_handles_unexpected_validation_errors_as_error(
         job_id="job-1",
         job_type="SOLVING_SLAE",
         worker_id="worker-1",
-        message="Worker-side validation processing failed.",
+        message=error_message,
     )
 
     status_publisher.publish_validation_failed.assert_not_called()
@@ -245,6 +247,44 @@ def test_validation_handler_handles_unexpected_validation_errors_as_error(
     submitted_ack.ack.assert_called_once_with()
     assert events == ["publish_error", "ack"]
 
+    assert not context.work_dir.exists()
+
+
+@pytest.mark.parametrize("error_message", ["", "   "])
+def test_validation_handler_uses_fallback_message_when_unexpected_validation_error_message_is_blank(
+    tmp_path: Path,
+    error_message: str,
+) -> None:
+    status_publisher = MagicMock()
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = RuntimeError(error_message)
+
+    context = _context(tmp_path)
+    context.work_dir.mkdir(parents=True)
+
+    submitted_ack = MagicMock()
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=_manifest(),
+        submitted_ack=submitted_ack,
+    )
+
+    assert result is False
+
+    status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Worker-side validation processing failed.",
+    )
+
+    status_publisher.publish_validation_failed.assert_not_called()
+    submitted_ack.ack.assert_called_once_with()
     assert not context.work_dir.exists()
 
 
@@ -422,7 +462,9 @@ def test_validation_handler_does_not_ack_when_unexpected_validation_error_public
     validation_handler = ValidationHandler(status_publisher, "worker-1")
 
     handler = MagicMock()
-    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+    handler.validate.side_effect = RuntimeError(
+        "Unexpected runtime error. Test message."
+    )
 
     context = _context(tmp_path)
     context.work_dir.mkdir(parents=True)
@@ -442,7 +484,7 @@ def test_validation_handler_does_not_ack_when_unexpected_validation_error_public
         job_id="job-1",
         job_type="SOLVING_SLAE",
         worker_id="worker-1",
-        message="Worker-side validation processing failed.",
+        message="Unexpected runtime error. Test message.",
     )
 
     status_publisher.publish_validation_failed.assert_not_called()
@@ -458,7 +500,9 @@ def test_validation_handler_suppresses_cleanup_failure_after_unexpected_validati
     validation_handler = ValidationHandler(status_publisher, "worker-1")
 
     handler = MagicMock()
-    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+    handler.validate.side_effect = RuntimeError(
+        "Unexpected runtime error. Test message."
+    )
 
     context = _context(tmp_path)
     context.work_dir.parent.mkdir(parents=True)
@@ -480,7 +524,7 @@ def test_validation_handler_suppresses_cleanup_failure_after_unexpected_validati
         job_id="job-1",
         job_type="SOLVING_SLAE",
         worker_id="worker-1",
-        message="Worker-side validation processing failed.",
+        message="Unexpected runtime error. Test message.",
     )
 
     status_publisher.publish_validation_failed.assert_not_called()
@@ -504,7 +548,9 @@ def test_validation_handler_logs_unexpected_validation_error_with_traceback(
     validation_handler = ValidationHandler(status_publisher, "worker-1")
 
     handler = MagicMock()
-    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+    handler.validate.side_effect = RuntimeError(
+        "Unexpected runtime error. Test message."
+    )
 
     context = _context(tmp_path)
     context.work_dir.mkdir(parents=True)
@@ -539,7 +585,9 @@ def test_validation_handler_logs_cleanup_failure_after_unexpected_validation_err
     validation_handler = ValidationHandler(status_publisher, "worker-1")
 
     handler = MagicMock()
-    handler.validate.side_effect = RuntimeError("unexpected runtime error")
+    handler.validate.side_effect = RuntimeError(
+        "Unexpected runtime error. Test message."
+    )
 
     context = _context(tmp_path)
     context.work_dir.parent.mkdir(parents=True)
@@ -561,7 +609,7 @@ def test_validation_handler_logs_cleanup_failure_after_unexpected_validation_err
         job_id="job-1",
         job_type="SOLVING_SLAE",
         worker_id="worker-1",
-        message="Worker-side validation processing failed.",
+        message="Unexpected runtime error. Test message.",
     )
 
     submitted_ack.ack.assert_called_once_with()

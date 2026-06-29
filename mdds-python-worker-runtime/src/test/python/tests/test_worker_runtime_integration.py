@@ -46,7 +46,9 @@ TWO_NUMBERS_SUM_HANDLER = "tests.fixtures.job_handlers:TwoNumbersSumJobHandler"
 UNEXPECTED_VALIDATION_ERROR_HANDLER = (
     "tests.fixtures.job_handlers:UnexpectedValidationErrorJobHandler"
 )
-UNEXPECTED_VALIDATION_ERROR_STATUS_MESSAGE = "Worker-side validation processing failed."
+UNEXPECTED_VALIDATION_ERROR_STATUS_MESSAGE = (
+    "Unexpected validation error. Test message."
+)
 
 UNEXPECTED_EXECUTION_ERROR_HANDLER = (
     "tests.fixtures.job_handlers:UnexpectedExecutionErrorJobHandler"
@@ -493,7 +495,7 @@ def test_worker_runtime_publishes_error_when_handler_validation_raises_unexpecte
             assert error_status.workerId == WORKER_ID
             assert error_status.worker_id == WORKER_ID
             assert error_status.status == WorkerJobStatus.ERROR.value
-            assert error_status.message == UNEXPECTED_VALIDATION_ERROR_STATUS_MESSAGE
+            assert UNEXPECTED_VALIDATION_ERROR_STATUS_MESSAGE in error_status.message
 
             assert (
                 _index_of_status(
