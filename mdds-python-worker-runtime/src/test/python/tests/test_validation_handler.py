@@ -302,6 +302,95 @@ def test_validation_handler_rejects_null_or_blank_worker_id(
 
 
 @pytest.mark.parametrize(
+    ("error_message", "expected_message"),
+    [
+        (
+            "Custom semantic validation failed. Test message.",
+            "Custom semantic validation failed. Test message.",
+        ),
+        (
+            "  Custom semantic validation failed. Test message.  ",
+            "Custom semantic validation failed. Test message.",
+        ),
+    ],
+)
+def test_validation_handler_propagates_validation_failed_message(
+    tmp_path: Path,
+    error_message: str,
+    expected_message: str,
+) -> None:
+    status_publisher = MagicMock()
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = ValidationFailed(error_message)
+
+    context = _context(tmp_path)
+    context.work_dir.mkdir(parents=True)
+
+    submitted_ack = MagicMock()
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=_manifest(),
+        submitted_ack=submitted_ack,
+    )
+
+    assert result is False
+
+    status_publisher.publish_validation_failed.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message=expected_message,
+    )
+
+    status_publisher.publish_error.assert_not_called()
+    submitted_ack.ack.assert_called_once_with()
+    assert not context.work_dir.exists()
+
+
+@pytest.mark.parametrize("error_message", ["", "   "])
+def test_validation_handler_uses_fallback_message_when_validation_failed_message_is_blank(
+    tmp_path: Path,
+    error_message: str,
+) -> None:
+    status_publisher = MagicMock()
+    validation_handler = ValidationHandler(status_publisher, "worker-1")
+
+    handler = MagicMock()
+    handler.validate.side_effect = ValidationFailed(error_message)
+
+    context = _context(tmp_path)
+    context.work_dir.mkdir(parents=True)
+
+    submitted_ack = MagicMock()
+
+    result = validation_handler.validate_or_handle_failure(
+        handler=handler,
+        context=context,
+        manifest=_manifest(),
+        submitted_ack=submitted_ack,
+    )
+
+    assert result is False
+
+    status_publisher.publish_validation_failed.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Worker-side semantic validation failed.",
+    )
+
+    status_publisher.publish_error.assert_not_called()
+    submitted_ack.ack.assert_called_once_with()
+    assert not context.work_dir.exists()
+
+
+@pytest.mark.parametrize(
     ("field_name", "field_value", "error_message"),
     [
         ("handler", None, "handler cannot be null."),
