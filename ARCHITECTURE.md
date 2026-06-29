@@ -27,6 +27,7 @@ Refer to the LICENSE file in the root directory for full license details.
     * [Worker environment variables](#worker-environment-variables)
     * [Job cancellation](#job-cancellation)
     * [Job handler contract](#job-handler-contract)
+      * [Job handler validation method contract](#job-handler-validation-method-contract)
       * [Job handler data access pattern](#job-handler-data-access-pattern)
     * [Local execution registry](#local-execution-registry)
     * [Terminal status publication rule](#terminal-status-publication-rule)
@@ -162,13 +163,14 @@ The diagram below shows the main lifecycle transitions.
 
 ```mermaid
 graph TD;
-    DRAFT-->SUBMITTED;
-    SUBMITTED-->IN_PROGRESS;
-    SUBMITTED-->VALIDATION_FAILED;
-    IN_PROGRESS-->DONE;
-    IN_PROGRESS-->CANCEL_REQUESTED;
-    CANCEL_REQUESTED-->CANCELLED
-    IN_PROGRESS-->ERROR;
+  DRAFT-->SUBMITTED;
+  SUBMITTED-->IN_PROGRESS;
+  SUBMITTED-->VALIDATION_FAILED;
+  SUBMITTED-->ERROR;
+  IN_PROGRESS-->DONE;
+  IN_PROGRESS-->CANCEL_REQUESTED;
+  CANCEL_REQUESTED-->CANCELLED;
+  IN_PROGRESS-->ERROR;
 ```
 
 - `DRAFT` — the job has been created, but input artifacts are still being uploaded;
@@ -192,7 +194,7 @@ graph TD;
 - Downloading results is allowed only when the job is in `DONE`.
 - An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
 - `SUBMITTED` means the job has been accepted into the execution pipeline and became immutable.
-- Semantic validation is performed by the Worker after submission; if it fails, the job transitions to `VALIDATION_FAILED` instead of `IN_PROGRESS`.
+- Semantic validation is performed by the Worker after submission. If validation raises `ValidationFailed`, the job transitions to `VALIDATION_FAILED` instead of `IN_PROGRESS`. If validation raises an unexpected non-`ValidationFailed` exception and job identity is known, the job transitions to `ERROR`.
 ---
 
 ## Client-Server Interaction 
@@ -327,14 +329,15 @@ For each job message the runtime:
 3. validates manifest schema;
 4. downloads declared input artifacts;
 5. creates `JobExecutionContext`;
-6. calls `handler.validate(context)`;
-7. publishes `VALIDATION_FAILED` and acknowledges the job message if validation fails;
-8. publishes `IN_PROGRESS` with `workerId` if validation succeeds;
-9. registers the running job in the local execution registry;
+6. calls `handler.validate(context)` through the Worker Runtime validation handling component;
+7. if `handler.validate(context)` raises `ValidationFailed`, publishes `VALIDATION_FAILED`, acknowledges the job message after successful status publication, cleans up the local workspace, and does not start supervised execution;
+8. if `handler.validate(context)` raises any other exception and job identity is known, publishes `ERROR` and acknowledges the job message after successful status publication;
+9. publishes `IN_PROGRESS` with `workerId` only if validation returns normally;
 10. starts job execution in a supervised execution process;
-11. collects output artifacts produced through runtime-provided output abstractions and uploads them to object storage when the process completes successfully;
-12. publishes `DONE` with progress `100`;
-13. acknowledges the job message.
+11. registers the running job in the local execution registry;
+12. collects output artifacts produced through runtime-provided output abstractions and uploads them to object storage when the process completes successfully;
+13. publishes `DONE` with progress `100`;
+14. acknowledges the job message.
 
 The runtime also starts a cancellation listener. The listener subscribes to
 `MDDS_WORKER_CANCEL_QUEUE_NAME`. 
@@ -383,24 +386,35 @@ It returns execution outcome to the main runtime, and the main runtime publishes
 
 ### Failure policy
 
-If `handler.validate(context)` raises `ValidationFailed`, the runtime publishes `VALIDATION_FAILED` and acknowledges 
-the job message.
+If `handler.validate(context)` raises `ValidationFailed`, the runtime publishes
+`VALIDATION_FAILED` and acknowledges the job message after successful status
+publication. This is treated as expected semantic invalidity of submitted job
+inputs or parameters.
 
-If supervised execution fails after `IN_PROGRESS` was published, the runtime publishes `ERROR`
-and acknowledges the job message. Failure may be detected through an IPC error result,
-an unexpected child process exit, or an execution watcher error.
+If `handler.validate(context)` raises any other exception and the job identity is
+known, the runtime must publish `ERROR` and acknowledge the job message after
+successful status publication. Such exceptions are treated as Worker-side
+processing failures, not as semantic validation failures.
 
-If manifest loading or manifest schema validation fails, the runtime publishes `VALIDATION_FAILED` when `jobId` can be determined from the manifest or message.
-If `jobId` cannot be determined, the runtime logs the error and rejects/nacks the message according to retry policy.
+If supervised execution fails after `IN_PROGRESS` was published, the runtime
+publishes `ERROR` and acknowledges the job message. Failure may be detected
+through an IPC error result, an unexpected child process exit, or an execution
+watcher error.
 
-If the runtime cannot read or parse the job message or cannot determine `jobId`, it logs the error and rejects/nacks the message according to the configured retry policy.
+If manifest loading, manifest schema validation, submitted job message parsing,
+or input preparation fails before the runtime can determine `jobId`, `userId`,
+or `jobType`, the runtime logs the error and rejects or nacks the message
+according to the configured retry policy.
 
 The exact retry and dead-letter policy is implementation-specific in v1.
 
-In v1, semantic validation is performed in the main worker process before supervised execution starts.
-If validation is expected to be long-running for some future job type, it should be moved into supervised execution in a later version.
-Cancellation is supported only after the job enters `IN_PROGRESS`; therefore validation itself is not cancellable in v1.
+In v1, semantic validation is performed in the main worker process before
+supervised execution starts. If validation is expected to be long-running for
+some future job type, it should be moved into supervised execution in a later
+version.
 
+Cancellation is supported only after the job enters `IN_PROGRESS`; therefore
+validation itself is not cancellable in v1.
 
 ### Timeout policy
 
@@ -507,6 +521,76 @@ class JobHandler:
 The Worker Runtime may call `validate(context)` in the main worker process and `execute(context)` in a fresh supervised process.
 Therefore `execute(context)` must be able to run using only `JobExecutionContext` and files available through that context.
 Any data required by `execute(context)` must be read from `JobExecutionContext` inputs, parameters, or other runtime-provided artifacts, not from state produced during `validate(context)`.
+
+
+#### Job handler validation method contract
+
+A concrete `JobHandler` must implement semantic validation in:
+
+```python
+def validate(self, context: JobExecutionContext) -> None:
+    ...
+```
+
+The purpose of `validate(context)` is to check whether submitted job inputs and parameters are semantically valid for the concrete job type.
+
+The method must use only `JobExecutionContext` to access inputs and parameters. It must not publish lifecycle statuses, acknowledge queue messages, access RabbitMQ, access object storage directly, or update external metadata.
+
+If validation succeeds, `validate(context)` must return normally.
+
+If submitted job inputs or parameters are semantically invalid, the handler must raise `ValidationFailed`.
+
+`validate(context)` must not produce output artifacts and must not store data in `self` for later use by `execute(context)`. The Worker Runtime may call `validate(context)` in the main worker process and `execute(context)` in a fresh supervised process.
+
+
+Example:
+
+```python
+#
+# Pseudo-code example; imports are omitted for brevity.
+#
+class ExampleJobHandler:
+    def validate(self, context: JobExecutionContext) -> None:
+        # Replace "input_slot" with a real logical input slot declared
+        # in manifest.inputs.
+        raw_value = context.inputs.read("input_slot")
+
+        try:
+            # Perform job-specific semantic checks for raw_value here.
+            ...
+        except ValueError as error:
+            raise ValidationFailed(
+                "Invalid data for input 'input_slot'."
+            ) from error
+```
+
+Only `ValidationFailed` represents expected domain validation failure.
+
+When `validate(context)` raises `ValidationFailed`, the Worker Runtime treats the job as terminally validation-failed:
+
+* publishes `VALIDATION_FAILED`;
+* includes the validation failure message in the status update;
+* does not publish `IN_PROGRESS`;
+* does not start supervised execution;
+* does not add the job to the local execution registry;
+* acknowledges the submitted job message after successful status publication;
+* cleans up the local prepared job workspace.
+
+Other exceptions raised from `validate(context)` are not treated as `VALIDATION_FAILED`.
+
+Unexpected exceptions from `validate(context)`, such as `RuntimeError`, `ValueError`, `TypeError`, `AttributeError`, or any other non-`ValidationFailed` exception, represent worker-side validation processing failure rather than domain validation failure.
+
+When the Worker Runtime can determine the job identity, such unexpected validation exceptions should be converted into terminal `ERROR` status, not `VALIDATION_FAILED`.
+
+This distinction is intentional:
+
+* `VALIDATION_FAILED` means the submitted job data is invalid for the selected job type;
+* `ERROR` means the Worker failed while trying to process the job.
+
+The Worker Runtime should log unexpected validation exceptions with traceback for diagnostics.
+
+The handler author should therefore convert expected data validation problems into `ValidationFailed` explicitly. The runtime must not infer `VALIDATION_FAILED` from arbitrary exception types.
+
 
 #### Job handler data access pattern
 
