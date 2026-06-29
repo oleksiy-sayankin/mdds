@@ -3,6 +3,7 @@
 
 from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.handler import JobHandler
+from mdds_worker_runtime.execution.validation_handler import ValidationFailed
 
 
 class ValidJobHandler(JobHandler):
@@ -191,8 +192,14 @@ class FailingExecuteJobHandler(JobHandler):
 
 class TwoNumbersSumJobHandler(JobHandler):
     def validate(self, context: JobExecutionContext) -> None:
-        _parse_int(context.inputs.read("number_a"))
-        _parse_int(context.inputs.read("number_b"))
+        _parse_int_or_raise_validation_failed(
+            context.inputs.read("number_a"),
+            "number_a",
+        )
+        _parse_int_or_raise_validation_failed(
+            context.inputs.read("number_b"),
+            "number_b",
+        )
 
     def execute(self, context: JobExecutionContext) -> None:
         number_a = _parse_int(context.inputs.read("number_a"))
@@ -201,6 +208,13 @@ class TwoNumbersSumJobHandler(JobHandler):
         result = number_a + number_b
 
         context.outputs.write("sum", str(result).encode("utf-8"))
+
+
+def _parse_int_or_raise_validation_failed(value: bytes, input_slot: str) -> int:
+    try:
+        return _parse_int(value)
+    except ValueError as error:
+        raise ValidationFailed(f"Invalid data for input '{input_slot}'.") from error
 
 
 def _parse_int(value: bytes) -> int:

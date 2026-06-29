@@ -13,6 +13,7 @@ import boto3
 from botocore.config import Config
 import pika
 import pytest
+from botocore.exceptions import ClientError
 from testcontainers.minio import MinioContainer
 from testcontainers.rabbitmq import RabbitMqContainer
 
@@ -38,6 +39,8 @@ USER_ID = 123
 NUMBER_A_VALUE = "40\n"
 NUMBER_B_VALUE = "2\n"
 EXPECTED_SUM = "42"
+
+INVALID_NUMBER_B_VALUE = "2kjhhkj\n"
 
 
 class StatusCollectingHandler:
@@ -231,6 +234,154 @@ def test_worker_runtime_processes_two_numbers_sum_happy_path(
     _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
 
 
+def test_worker_runtime_publishes_validation_failed_when_handler_validation_fails(
+    rabbitmq_properties: RabbitMqProperties,
+    s3_client_and_endpoint,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    s3_client, s3_endpoint = s3_client_and_endpoint
+
+    test_id = str(uuid4())
+    job_id = f"job-{test_id}"
+
+    job_queue_name = f"test.job.two_numbers_sum.validation_failed.{test_id}"
+    status_queue_name = f"test.status.two_numbers_sum.validation_failed.{test_id}"
+    cancel_queue_name = f"test.cancel.two_numbers_sum.validation_failed.{test_id}"
+
+    manifest_key = f"jobs/{USER_ID}/{job_id}/manifest.json"
+    number_a_key = f"jobs/{USER_ID}/{job_id}/in/number_a.csv"
+    number_b_key = f"jobs/{USER_ID}/{job_id}/in/number_b.csv"
+    sum_key = f"jobs/{USER_ID}/{job_id}/out/sum.csv"
+
+    job_workspace = tmp_path / "jobs" / str(USER_ID) / job_id
+
+    _declare_queue(rabbitmq_properties, job_queue_name)
+    _declare_queue(rabbitmq_properties, status_queue_name)
+    _declare_queue(rabbitmq_properties, cancel_queue_name)
+
+    _put_json(
+        s3_client=s3_client,
+        bucket=S3_BUCKET,
+        key=manifest_key,
+        value=_manifest(
+            job_id=job_id,
+            number_a_key=number_a_key,
+            number_b_key=number_b_key,
+            sum_key=sum_key,
+        ),
+    )
+    _put_bytes(
+        s3_client=s3_client,
+        bucket=S3_BUCKET,
+        key=number_a_key,
+        body=NUMBER_A_VALUE.encode("utf-8"),
+    )
+    _put_bytes(
+        s3_client=s3_client,
+        bucket=S3_BUCKET,
+        key=number_b_key,
+        body=INVALID_NUMBER_B_VALUE.encode("utf-8"),
+    )
+
+    _configure_worker_runtime_environment(
+        monkeypatch=monkeypatch,
+        rabbitmq_properties=rabbitmq_properties,
+        s3_endpoint=s3_endpoint,
+        jobs_root=tmp_path,
+        job_queue_name=job_queue_name,
+        status_queue_name=status_queue_name,
+        cancel_queue_name=cancel_queue_name,
+    )
+
+    status_handler = StatusCollectingHandler()
+    runtime = None
+
+    with RabbitMqQueueClient(rabbitmq_properties, prefetch_count=1) as status_client:
+        status_subscription = status_client.subscribe(
+            status_queue_name,
+            JobStatusUpdateDTO,
+            status_handler,
+        )
+
+        try:
+            runtime = worker_main.build_worker_runtime_from_environment()
+            runtime.start()
+
+            with RabbitMqQueueClient(rabbitmq_properties) as publisher_client:
+                publisher_client.publish(
+                    job_queue_name,
+                    QueueMessage(
+                        payload=JobMessageDTO(
+                            manifestObjectKey=manifest_key,
+                        ),
+                    ),
+                )
+
+            validation_failed_status = _wait_for_status(
+                status_handler=status_handler,
+                job_id=job_id,
+                expected_status=WorkerJobStatus.VALIDATION_FAILED,
+            )
+            statuses = _drain_statuses(status_handler)
+
+            assert validation_failed_status.jobId == job_id
+            assert validation_failed_status.job_id == job_id
+            assert validation_failed_status.workerId == WORKER_ID
+            assert validation_failed_status.worker_id == WORKER_ID
+            assert (
+                validation_failed_status.status
+                == WorkerJobStatus.VALIDATION_FAILED.value
+            )
+
+            assert (
+                _index_of_status(
+                    statuses,
+                    WorkerJobStatus.IN_PROGRESS.value,
+                    job_id,
+                )
+                is None
+            )
+            assert (
+                _index_of_status(
+                    statuses,
+                    WorkerJobStatus.DONE.value,
+                    job_id,
+                )
+                is None
+            )
+            assert (
+                _index_of_status(
+                    statuses,
+                    WorkerJobStatus.ERROR.value,
+                    job_id,
+                )
+                is None
+            )
+
+            assert not _object_exists(
+                s3_client=s3_client,
+                bucket=S3_BUCKET,
+                key=sum_key,
+            )
+
+            _wait_until(lambda: not job_workspace.exists())
+
+        finally:
+            if runtime is not None:
+                runtime.stop()
+
+            status_subscription.close()
+
+    _wait_for_ack_to_be_processed()
+
+    assert _basic_get(rabbitmq_properties, job_queue_name) is None
+
+    _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
+    _delete_queue_if_exists(rabbitmq_properties, status_queue_name)
+    _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
+
+
 def _manifest(
     *,
     job_id: str,
@@ -301,9 +452,11 @@ def _configure_worker_runtime_environment(
     monkeypatch.setenv("MDDS_WORKER_CLEANUP_INTERVAL_SECONDS", "1")
 
 
-def _wait_for_done_status(
+def _wait_for_status(
+    *,
     status_handler: StatusCollectingHandler,
     job_id: str,
+    expected_status: WorkerJobStatus,
 ) -> JobStatusUpdateDTO:
     deadline = time.monotonic() + 30.0
 
@@ -317,10 +470,23 @@ def _wait_for_done_status(
 
         status_handler.received.put(status)
 
-        if status.jobId == job_id and status.status == WorkerJobStatus.DONE.value:
+        if status.jobId == job_id and status.status == expected_status.value:
             return status
 
-    raise AssertionError(f"DONE status was not published for jobId='{job_id}'.")
+    raise AssertionError(
+        f"{expected_status.value} status was not published " f"for jobId='{job_id}'."
+    )
+
+
+def _wait_for_done_status(
+    status_handler: StatusCollectingHandler,
+    job_id: str,
+) -> JobStatusUpdateDTO:
+    return _wait_for_status(
+        status_handler=status_handler,
+        job_id=job_id,
+        expected_status=WorkerJobStatus.DONE,
+    )
 
 
 def _drain_statuses(
@@ -400,6 +566,25 @@ def _create_bucket_if_absent(s3_client, bucket: str) -> None:
 
     if bucket not in existing_bucket_names:
         s3_client.create_bucket(Bucket=bucket)
+
+
+def _object_exists(
+    *,
+    s3_client,
+    bucket: str,
+    key: str,
+) -> bool:
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as error:
+        error_code = error.response.get("Error", {}).get("Code")
+        http_status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+
+        if error_code in {"404", "NoSuchKey", "NotFound"} or http_status == 404:
+            return False
+
+        raise
 
 
 def _wait_until(
