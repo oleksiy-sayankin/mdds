@@ -219,3 +219,11 @@ def _parse_int_or_raise_validation_failed(value: bytes, input_slot: str) -> int:
 
 def _parse_int(value: bytes) -> int:
     return int(value.decode("utf-8").strip())
+
+
+class UnexpectedValidationErrorJobHandler(JobHandler):
+    def validate(self, context: JobExecutionContext) -> None:
+        raise RuntimeError("Unexpected validation error.")
+
+    def execute(self, context: JobExecutionContext) -> None:
+        context.outputs.write("sum", b"must-not-be-produced")
