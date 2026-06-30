@@ -1002,8 +1002,8 @@ def test_rabbitmq_queue_client_check_messaging_readiness_cleanup_failure_after_p
         with pytest.raises(RabbitMqConnectionError) as error:
             client.check_messaging_readiness(timeout_seconds=0.1)
 
-    assert error.value is primary_error
-    assert error.value.__cause__ is None
+    assert str(error.value) == "RabbitMQ messaging readiness check failed."
+    assert error.value.__cause__ is primary_error
     subscription.close.assert_called_once_with()
     client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
 

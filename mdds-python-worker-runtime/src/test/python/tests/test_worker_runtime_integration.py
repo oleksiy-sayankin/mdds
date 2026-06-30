@@ -22,9 +22,12 @@ from mdds_worker_runtime.dto.messages import JobMessageDTO, JobStatusUpdateDTO
 from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.queue.queue_client import QueueMessage
 from mdds_worker_runtime.rabbitmq.rabbitmq_queue_client import (
+    RabbitMqConnectionError,
     RabbitMqProperties,
     RabbitMqQueueClient,
 )
+from mdds_worker_runtime.execution.handler_loader import JobHandlerLoadError
+from mdds_worker_runtime.storage.s3_client import S3StorageReadinessError
 
 RABBITMQ_IMAGE = "rabbitmq:3.12-management"
 
@@ -54,6 +57,8 @@ UNEXPECTED_EXECUTION_ERROR_HANDLER = (
     "tests.fixtures.job_handlers:UnexpectedExecutionErrorJobHandler"
 )
 UNEXPECTED_EXECUTION_ERROR_STATUS_MESSAGE = "Unexpected execution error. Test message."
+
+CONSTRUCTOR_RAISES_HANDLER = "tests.fixtures.job_handlers:ConstructorRaisesJobHandler"
 
 
 class StatusCollectingHandler:
@@ -99,25 +104,7 @@ def rabbitmq_properties(rabbitmq_container) -> RabbitMqProperties:
 
 @pytest.fixture
 def s3_client_and_endpoint(minio_container):
-    config = minio_container.get_config()
-
-    endpoint = (
-        config.get("endpoint")
-        if isinstance(config, dict)
-        else getattr(config, "endpoint")
-    )
-
-    if not endpoint.startswith(("http://", "https://")):
-        endpoint = "http://" + endpoint
-
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=endpoint,
-        aws_access_key_id=MINIO_ACCESS_KEY,
-        aws_secret_access_key=MINIO_SECRET_KEY,
-        region_name="us-east-1",
-        config=Config(s3={"addressing_style": "path"}),
-    )
+    s3_client, endpoint = _create_s3_client_and_endpoint(minio_container)
 
     _create_bucket_if_absent(s3_client, S3_BUCKET)
 
@@ -708,6 +695,171 @@ def test_worker_runtime_publishes_error_when_handler_execution_fails(
     _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
 
 
+def test_worker_runtime_startup_fails_when_s3_bucket_is_missing(
+    rabbitmq_properties: RabbitMqProperties,
+    minio_container,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, s3_endpoint = _create_s3_client_and_endpoint(minio_container)
+
+    test_id = str(uuid4())
+    missing_bucket = f"{S3_BUCKET}-missing-{test_id}"
+
+    job_queue_name = f"test.job.startup.s3_missing.{test_id}"
+    status_queue_name = f"test.status.startup.s3_missing.{test_id}"
+    cancel_queue_name = f"test.cancel.startup.s3_missing.{test_id}"
+
+    _declare_queue(rabbitmq_properties, job_queue_name)
+    _declare_queue(rabbitmq_properties, status_queue_name)
+    _declare_queue(rabbitmq_properties, cancel_queue_name)
+
+    try:
+        _configure_worker_runtime_environment(
+            monkeypatch=monkeypatch,
+            rabbitmq_properties=rabbitmq_properties,
+            s3_endpoint=s3_endpoint,
+            jobs_root=tmp_path,
+            job_queue_name=job_queue_name,
+            status_queue_name=status_queue_name,
+            cancel_queue_name=cancel_queue_name,
+            s3_bucket=missing_bucket,
+        )
+
+        with pytest.raises(
+            S3StorageReadinessError,
+            match="S3-compatible storage bucket is not ready",
+        ):
+            worker_main.build_worker_runtime_from_environment()
+
+        _assert_worker_runtime_did_not_start_consuming(
+            rabbitmq_properties=rabbitmq_properties,
+            job_queue_name=job_queue_name,
+            cancel_queue_name=cancel_queue_name,
+            status_queue_name=status_queue_name,
+        )
+
+    finally:
+        _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, status_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
+
+
+def test_worker_runtime_startup_fails_when_job_handler_is_not_loadable(
+    rabbitmq_properties: RabbitMqProperties,
+    s3_client_and_endpoint,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, s3_endpoint = s3_client_and_endpoint
+
+    test_id = str(uuid4())
+
+    job_queue_name = f"test.job.startup.handler_not_loadable.{test_id}"
+    status_queue_name = f"test.status.startup.handler_not_loadable.{test_id}"
+    cancel_queue_name = f"test.cancel.startup.handler_not_loadable.{test_id}"
+
+    _declare_queue(rabbitmq_properties, job_queue_name)
+    _declare_queue(rabbitmq_properties, status_queue_name)
+    _declare_queue(rabbitmq_properties, cancel_queue_name)
+
+    try:
+        _configure_worker_runtime_environment(
+            monkeypatch=monkeypatch,
+            rabbitmq_properties=rabbitmq_properties,
+            s3_endpoint=s3_endpoint,
+            jobs_root=tmp_path,
+            job_queue_name=job_queue_name,
+            status_queue_name=status_queue_name,
+            cancel_queue_name=cancel_queue_name,
+            handler_import_path=CONSTRUCTOR_RAISES_HANDLER,
+        )
+
+        with pytest.raises(
+            JobHandlerLoadError,
+            match="Cannot instantiate handler class while loading",
+        ):
+            worker_main.build_worker_runtime_from_environment()
+
+        _assert_worker_runtime_did_not_start_consuming(
+            rabbitmq_properties=rabbitmq_properties,
+            job_queue_name=job_queue_name,
+            cancel_queue_name=cancel_queue_name,
+            status_queue_name=status_queue_name,
+        )
+
+    finally:
+        _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, status_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
+
+
+def test_worker_runtime_startup_fails_when_rabbitmq_messaging_readiness_fails(
+    rabbitmq_container,
+    rabbitmq_properties: RabbitMqProperties,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    test_id = str(uuid4()).replace("-", "")
+    restricted_user = f"restricted_{test_id}"
+    restricted_password = f"restricted_password_{test_id}"
+
+    job_queue_name = f"test.job.startup.rabbitmq_messaging_denied.{test_id}"
+    status_queue_name = f"test.status.startup.rabbitmq_messaging_denied.{test_id}"
+    cancel_queue_name = f"test.cancel.startup.rabbitmq_messaging_denied.{test_id}"
+
+    _declare_queue(rabbitmq_properties, job_queue_name)
+    _declare_queue(rabbitmq_properties, status_queue_name)
+    _declare_queue(rabbitmq_properties, cancel_queue_name)
+
+    try:
+        _create_restricted_rabbitmq_user(
+            rabbitmq_container=rabbitmq_container,
+            username=restricted_user,
+            password=restricted_password,
+        )
+
+        restricted_rabbitmq_properties = RabbitMqProperties(
+            host=rabbitmq_properties.host,
+            port=rabbitmq_properties.port,
+            user=restricted_user,
+            password=restricted_password,
+            connection_timeout_seconds=20.0,
+        )
+
+        _configure_worker_runtime_environment(
+            monkeypatch=monkeypatch,
+            rabbitmq_properties=restricted_rabbitmq_properties,
+            s3_endpoint="http://127.0.0.1:1",
+            jobs_root=tmp_path,
+            job_queue_name=job_queue_name,
+            status_queue_name=status_queue_name,
+            cancel_queue_name=cancel_queue_name,
+        )
+
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="RabbitMQ messaging readiness check failed",
+        ):
+            worker_main.build_worker_runtime_from_environment()
+
+        _assert_worker_runtime_did_not_start_consuming(
+            rabbitmq_properties=rabbitmq_properties,
+            job_queue_name=job_queue_name,
+            cancel_queue_name=cancel_queue_name,
+            status_queue_name=status_queue_name,
+        )
+
+    finally:
+        _delete_rabbitmq_user_if_exists(
+            rabbitmq_container=rabbitmq_container,
+            username=restricted_user,
+        )
+        _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, status_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
+
+
 def _manifest(
     *,
     job_id: str,
@@ -750,6 +902,7 @@ def _configure_worker_runtime_environment(
     status_queue_name: str,
     cancel_queue_name: str,
     handler_import_path: str = TWO_NUMBERS_SUM_HANDLER,
+    s3_bucket: str = S3_BUCKET,
 ) -> None:
     monkeypatch.setenv("MDDS_WORKER_ID", WORKER_ID)
     monkeypatch.setenv("MDDS_WORKER_JOB_TYPE", JOB_TYPE)
@@ -763,7 +916,7 @@ def _configure_worker_runtime_environment(
     monkeypatch.setenv("MDDS_RABBITMQ_USER", rabbitmq_properties.user)
     monkeypatch.setenv("MDDS_RABBITMQ_PASSWORD", rabbitmq_properties.password)
 
-    monkeypatch.setenv("MDDS_OBJECT_STORAGE_BUCKET", S3_BUCKET)
+    monkeypatch.setenv("MDDS_OBJECT_STORAGE_BUCKET", s3_bucket)
     monkeypatch.setenv("MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT", s3_endpoint)
     monkeypatch.setenv("MDDS_OBJECT_STORAGE_REGION", "us-east-1")
     monkeypatch.setenv("MDDS_OBJECT_STORAGE_ACCESS_KEY", MINIO_ACCESS_KEY)
@@ -1006,3 +1159,105 @@ def _connection_parameters(properties: RabbitMqProperties) -> pika.ConnectionPar
         blocked_connection_timeout=properties.connection_timeout_seconds,
         connection_attempts=1,
     )
+
+
+def _create_s3_client_and_endpoint(minio_container):
+    config = minio_container.get_config()
+
+    endpoint = (
+        config.get("endpoint")
+        if isinstance(config, dict)
+        else getattr(config, "endpoint")
+    )
+
+    if not endpoint.startswith(("http://", "https://")):
+        endpoint = "http://" + endpoint
+
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+        region_name="us-east-1",
+        config=Config(s3={"addressing_style": "path"}),
+    )
+
+    return s3_client, endpoint
+
+
+def _assert_worker_runtime_did_not_start_consuming(
+    *,
+    rabbitmq_properties: RabbitMqProperties,
+    job_queue_name: str,
+    cancel_queue_name: str,
+    status_queue_name: str,
+) -> None:
+    assert _queue_consumer_count(rabbitmq_properties, job_queue_name) == 0
+    assert _queue_consumer_count(rabbitmq_properties, cancel_queue_name) == 0
+    assert _basic_get(rabbitmq_properties, status_queue_name) is None
+
+
+def _queue_consumer_count(
+    properties: RabbitMqProperties,
+    queue_name: str,
+) -> int:
+    connection = pika.BlockingConnection(_connection_parameters(properties))
+    try:
+        channel = connection.channel()
+        result = channel.queue_declare(queue=queue_name, passive=True)
+        return result.method.consumer_count
+    finally:
+        connection.close()
+
+
+def _create_restricted_rabbitmq_user(
+    *,
+    rabbitmq_container,
+    username: str,
+    password: str,
+) -> None:
+    _exec_rabbitmqctl(
+        rabbitmq_container,
+        "add_user",
+        username,
+        password,
+    )
+    _exec_rabbitmqctl(
+        rabbitmq_container,
+        "set_permissions",
+        "-p",
+        "/",
+        username,
+        "^$",
+        "^$",
+        "^$",
+    )
+
+
+def _delete_rabbitmq_user_if_exists(
+    *,
+    rabbitmq_container,
+    username: str,
+) -> None:
+    _exec_rabbitmqctl(
+        rabbitmq_container,
+        "delete_user",
+        username,
+        check=False,
+    )
+
+
+def _exec_rabbitmqctl(
+    rabbitmq_container,
+    *args: str,
+    check: bool = True,
+) -> None:
+    result = rabbitmq_container.get_wrapped_container().exec_run(["rabbitmqctl", *args])
+
+    output = result.output.decode("utf-8", errors="replace")
+
+    if check and result.exit_code != 0:
+        raise AssertionError(
+            "rabbitmqctl command failed: "
+            f"args={args}, exit_code={result.exit_code}, output={output}"
+        )
