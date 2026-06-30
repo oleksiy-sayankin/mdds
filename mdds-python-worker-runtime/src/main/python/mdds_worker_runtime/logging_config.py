@@ -51,6 +51,8 @@ class JsonLogFormatter(logging.Formatter):
             "component",
             "status",
             "progress",
+            "host",
+            "port",
             "manifestObjectKey",
             "bucket",
             "objectKey",

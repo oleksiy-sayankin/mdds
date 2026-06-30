@@ -21,6 +21,7 @@ from mdds_worker_runtime.execution.handler_loader import JobHandlerLoadError
 from mdds_worker_runtime.execution.job_consumer import JobConsumer
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
 from mdds_worker_runtime.main import WorkerRuntime
+from mdds_worker_runtime.rabbitmq import RabbitMqConnectionError
 from mdds_worker_runtime.storage.s3_client import S3StorageReadinessError
 
 WORKER_ID = "worker-1"
@@ -766,6 +767,64 @@ def test_build_worker_runtime_from_environment_fails_fast_when_job_handler_is_no
     fixture.worker_runtime_factory.assert_not_called()
 
 
+def test_build_worker_runtime_from_environment_checks_rabbitmq_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = _build_runtime_composition_fixture(monkeypatch, tmp_path)
+
+    result = worker_main.build_worker_runtime_from_environment()
+
+    assert result is fixture.runtime
+    fixture.queue_client.check_readiness.assert_called_once_with()
+
+
+def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_is_not_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    queue_client = MagicMock(name="queue_client")
+    queue_client.check_readiness.side_effect = RabbitMqConnectionError(
+        "RabbitMQ connection readiness check failed."
+    )
+
+    fixture = _build_runtime_composition_fixture(
+        monkeypatch,
+        tmp_path,
+        queue_client=queue_client,
+    )
+
+    with pytest.raises(
+        RabbitMqConnectionError,
+        match="RabbitMQ connection readiness check failed.",
+    ):
+        worker_main.build_worker_runtime_from_environment()
+
+    fixture.queue_client.check_readiness.assert_called_once_with()
+
+    fixture.infrastructure_factories["S3Properties"].assert_not_called()
+    fixture.infrastructure_factories["Boto3S3ClientFactory"].assert_not_called()
+    fixture.infrastructure_factories["S3Storage"].assert_not_called()
+
+    fixture.component_factories["ManifestLoader"].assert_not_called()
+    fixture.component_factories["InputArtifactPreparer"].assert_not_called()
+    fixture.component_factories["JobExecutionContextFactory"].assert_not_called()
+    fixture.component_factories["JobHandlerLoader"].assert_not_called()
+    fixture.component_factories["ExecutionSupervisor"].assert_not_called()
+    fixture.component_factories["ExecutionRegistry"].assert_not_called()
+    fixture.component_factories["StatusPublisher"].assert_not_called()
+    fixture.component_factories["OutputArtifactUploader"].assert_not_called()
+    fixture.component_factories["ValidationHandler"].assert_not_called()
+    fixture.component_factories["JobConsumer"].assert_not_called()
+    fixture.component_factories["CancellationRequestHandler"].assert_not_called()
+    fixture.component_factories["CancelConsumer"].assert_not_called()
+    fixture.component_factories["ExecutionWatcher"].assert_not_called()
+    fixture.component_factories["CleanupWatcher"].assert_not_called()
+    fixture.component_factories["TimeoutWatcher"].assert_not_called()
+
+    fixture.worker_runtime_factory.assert_not_called()
+
+
 def _runtime_kwargs() -> dict[str, Any]:
     fixture = _runtime_fixture()
 
@@ -978,6 +1037,7 @@ def _build_runtime_composition_fixture(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     *,
+    queue_client: MagicMock | None = None,
     storage: MagicMock | None = None,
     worker_handler: str = "tests.fixtures.job_handlers:TwoNumbersSumJobHandler",
     use_real_job_handler_loader: bool = False,
@@ -1004,7 +1064,7 @@ def _build_runtime_composition_fixture(
         worker_cleanup_interval_seconds=1,
     )
 
-    queue_client = MagicMock(name="queue_client")
+    resolved_queue_client = queue_client or MagicMock(name="queue_client")
     boto3_client = MagicMock(name="boto3_client")
     resolved_storage = storage or MagicMock(name="storage")
 
@@ -1022,27 +1082,30 @@ def _build_runtime_composition_fixture(
         "load_config",
         MagicMock(return_value=worker_config),
     )
-    monkeypatch.setattr(worker_main, "RabbitMqProperties", MagicMock())
-    monkeypatch.setattr(
-        worker_main,
-        "RabbitMqQueueClient",
-        MagicMock(return_value=queue_client),
+
+    rabbitmq_properties_factory = MagicMock(name="RabbitMqProperties_factory")
+    queue_client_factory = MagicMock(
+        name="RabbitMqQueueClient_factory",
+        return_value=resolved_queue_client,
     )
-    monkeypatch.setattr(
-        worker_main,
-        "S3Properties",
-        MagicMock(return_value=SimpleNamespace(bucket="mdds")),
+    s3_properties_factory = MagicMock(
+        name="S3Properties_factory",
+        return_value=SimpleNamespace(bucket="mdds"),
     )
-    monkeypatch.setattr(
-        worker_main,
-        "Boto3S3ClientFactory",
-        MagicMock(return_value=s3_client_factory),
+    s3_client_factory_factory = MagicMock(
+        name="Boto3S3ClientFactory_factory",
+        return_value=s3_client_factory,
     )
-    monkeypatch.setattr(
-        worker_main,
-        "S3Storage",
-        MagicMock(return_value=resolved_storage),
+    storage_factory = MagicMock(
+        name="S3Storage_factory",
+        return_value=resolved_storage,
     )
+
+    monkeypatch.setattr(worker_main, "RabbitMqProperties", rabbitmq_properties_factory)
+    monkeypatch.setattr(worker_main, "RabbitMqQueueClient", queue_client_factory)
+    monkeypatch.setattr(worker_main, "S3Properties", s3_properties_factory)
+    monkeypatch.setattr(worker_main, "Boto3S3ClientFactory", s3_client_factory_factory)
+    monkeypatch.setattr(worker_main, "S3Storage", storage_factory)
 
     component_factories: dict[str, MagicMock] = {}
 
@@ -1074,10 +1137,17 @@ def _build_runtime_composition_fixture(
 
     return SimpleNamespace(
         runtime=runtime,
-        queue_client=queue_client,
+        queue_client=resolved_queue_client,
         boto3_client=boto3_client,
         storage=resolved_storage,
         s3_client_factory=s3_client_factory,
+        infrastructure_factories={
+            "RabbitMqProperties": rabbitmq_properties_factory,
+            "RabbitMqQueueClient": queue_client_factory,
+            "S3Properties": s3_properties_factory,
+            "Boto3S3ClientFactory": s3_client_factory_factory,
+            "S3Storage": storage_factory,
+        },
         component_factories=component_factories,
         worker_runtime_factory=worker_runtime_factory,
     )

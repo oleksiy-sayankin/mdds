@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -576,3 +578,132 @@ def _subscription_for_on_message(
     subscription._connection = connection
 
     return subscription, connection, channel
+
+
+def test_rabbitmq_queue_client_check_readiness_succeeds_when_connection_and_channel_are_open() -> (
+    None
+):
+    client = _rabbitmq_client_for_readiness()
+
+    client.check_readiness()
+
+    client._connection.process_data_events.assert_called_once_with(time_limit=0)
+
+
+def test_rabbitmq_queue_client_check_readiness_logs_started_and_completed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _rabbitmq_client_for_readiness()
+
+    with caplog.at_level(
+        logging.INFO,
+        logger="mdds_worker_runtime.rabbitmq.rabbitmq_queue_client",
+    ):
+        client.check_readiness()
+
+    events = [record.__dict__.get("event") for record in caplog.records]
+
+    assert "rabbitmq_readiness_check_started" in events
+    assert "rabbitmq_readiness_check_completed" in events
+
+
+def test_rabbitmq_queue_client_check_readiness_rejects_closed_client() -> None:
+    client = _rabbitmq_client_for_readiness(closed=True)
+
+    with pytest.raises(
+        RabbitMqConnectionError,
+        match="RabbitMQ queue client is already closed.",
+    ):
+        client.check_readiness()
+
+    client._connection.process_data_events.assert_not_called()
+
+
+def test_rabbitmq_queue_client_check_readiness_rejects_closed_connection() -> None:
+    client = _rabbitmq_client_for_readiness(connection_is_open=False)
+
+    with pytest.raises(
+        RabbitMqConnectionError,
+        match="RabbitMQ readiness check failed: connection is not open.",
+    ):
+        client.check_readiness()
+
+    client._connection.process_data_events.assert_not_called()
+
+
+def test_rabbitmq_queue_client_check_readiness_rejects_closed_channel() -> None:
+    client = _rabbitmq_client_for_readiness(channel_is_open=False)
+
+    with pytest.raises(
+        RabbitMqConnectionError,
+        match="RabbitMQ readiness check failed: channel is not open.",
+    ):
+        client.check_readiness()
+
+    client._connection.process_data_events.assert_not_called()
+
+
+def test_rabbitmq_queue_client_check_readiness_wraps_process_data_events_failure() -> (
+    None
+):
+    client = _rabbitmq_client_for_readiness()
+    original_error = RuntimeError("broker connection lost")
+    client._connection.process_data_events.side_effect = original_error
+
+    with pytest.raises(
+        RabbitMqConnectionError,
+        match="RabbitMQ connection readiness check failed.",
+    ) as error:
+        client.check_readiness()
+
+    assert error.value.__cause__ is original_error
+
+
+def test_rabbitmq_queue_client_check_readiness_logs_failed_event_with_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _rabbitmq_client_for_readiness()
+    client._connection.process_data_events.side_effect = RuntimeError(
+        "broker connection lost"
+    )
+
+    with caplog.at_level(
+        logging.ERROR,
+        logger="mdds_worker_runtime.rabbitmq.rabbitmq_queue_client",
+    ):
+        with pytest.raises(RabbitMqConnectionError):
+            client.check_readiness()
+
+    failed_records = [
+        record
+        for record in caplog.records
+        if record.__dict__.get("event") == "rabbitmq_readiness_check_failed"
+    ]
+
+    assert len(failed_records) == 1
+    assert failed_records[0].exc_info is not None
+
+
+def _rabbitmq_client_for_readiness(
+    *,
+    closed: bool = False,
+    connection_is_open: bool = True,
+    channel_is_open: bool = True,
+) -> RabbitMqQueueClient:
+    client = RabbitMqQueueClient.__new__(RabbitMqQueueClient)
+
+    client._properties = RabbitMqProperties(
+        host="rabbitmq",
+        port=5672,
+        user="mdds",
+        password="secret",
+    )
+    client._connection = MagicMock(name="connection")
+    client._connection.is_open = connection_is_open
+    client._channel = MagicMock(name="channel")
+    client._channel.is_open = channel_is_open
+    client._subscriptions = []
+    client._closed = closed
+    client._lock = threading.RLock()
+
+    return cast(RabbitMqQueueClient, client)

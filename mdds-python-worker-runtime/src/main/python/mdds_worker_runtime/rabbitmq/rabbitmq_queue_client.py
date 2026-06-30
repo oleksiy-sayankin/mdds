@@ -541,6 +541,69 @@ class RabbitMqQueueClient(QueueClient):
                     "Failed to close RabbitMQ publisher connection.", exc_info=True
                 )
 
+    def check_readiness(self) -> None:
+        """Check that RabbitMQ connection and channel are ready for startup."""
+        logger.info(
+            "Checking RabbitMQ connection readiness.",
+            extra={
+                "component": "rabbitmq_queue_client",
+                "event": "rabbitmq_readiness_check_started",
+                "host": self._properties.host,
+                "port": self._properties.port,
+            },
+        )
+
+        with self._lock:
+            try:
+                self._raise_if_closed()
+
+                if not self._connection.is_open:
+                    raise RabbitMqConnectionError(
+                        "RabbitMQ readiness check failed: connection is not open."
+                    )
+
+                if not self._channel.is_open:
+                    raise RabbitMqConnectionError(
+                        "RabbitMQ readiness check failed: channel is not open."
+                    )
+
+                self._connection.process_data_events(time_limit=0)
+
+            except RabbitMqConnectionError:
+                logger.exception(
+                    "RabbitMQ connection readiness check failed.",
+                    extra={
+                        "component": "rabbitmq_queue_client",
+                        "event": "rabbitmq_readiness_check_failed",
+                        "host": self._properties.host,
+                        "port": self._properties.port,
+                    },
+                )
+                raise
+            except Exception as exc:
+                logger.exception(
+                    "RabbitMQ connection readiness check failed.",
+                    extra={
+                        "component": "rabbitmq_queue_client",
+                        "event": "rabbitmq_readiness_check_failed",
+                        "host": self._properties.host,
+                        "port": self._properties.port,
+                    },
+                )
+                raise RabbitMqConnectionError(
+                    "RabbitMQ connection readiness check failed."
+                ) from exc
+
+        logger.info(
+            "RabbitMQ connection readiness check completed.",
+            extra={
+                "component": "rabbitmq_queue_client",
+                "event": "rabbitmq_readiness_check_completed",
+                "host": self._properties.host,
+                "port": self._properties.port,
+            },
+        )
+
     def _raise_if_closed(self) -> None:
         if self._closed:
             raise RabbitMqConnectionError("RabbitMQ queue client is already closed.")

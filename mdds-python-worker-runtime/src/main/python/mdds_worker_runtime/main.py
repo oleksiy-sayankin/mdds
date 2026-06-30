@@ -268,6 +268,7 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
         password=worker_config.rabbitmq_password,
     )
     queue_client = RabbitMqQueueClient(rabbitmq_properties)
+    queue_client.check_readiness()
 
     s3_properties = S3Properties(
         endpoint_url=worker_config.object_storage_endpoint_url,
