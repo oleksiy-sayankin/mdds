@@ -2,11 +2,10 @@
 # Refer to the LICENSE file in the root directory for full license details.
 
 from mdds_worker_runtime.dto.messages import JobMessageDTO
-from mdds_worker_runtime.execution.artifacts import InputArtifactPreparer
-from mdds_worker_runtime.execution.context import (
-    JobExecutionContextFactory,
+from mdds_worker_runtime.execution.job_preparation_handler import (
+    JobPreparationHandler,
+    PreparedJob,
 )
-from mdds_worker_runtime.execution.handler_loader import JobHandlerLoader
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
 from mdds_worker_runtime.execution.supervisor import (
@@ -46,9 +45,7 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
     def __init__(
         self,
         manifest_loader: ManifestLoader,
-        input_artifact_preparer: InputArtifactPreparer,
-        context_factory: JobExecutionContextFactory,
-        job_handler_loader: JobHandlerLoader,
+        job_preparation_handler: JobPreparationHandler,
         validation_handler: ValidationHandler,
         execution_supervisor: ExecutionSupervisor,
         execution_registry: ExecutionRegistry,
@@ -57,12 +54,8 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
     ) -> None:
         if manifest_loader is None:
             raise ValueError("manifest_loader cannot be null.")
-        if input_artifact_preparer is None:
-            raise ValueError("input_artifact_preparer cannot be null.")
-        if context_factory is None:
-            raise ValueError("context_factory cannot be null.")
-        if job_handler_loader is None:
-            raise ValueError("job_handler_loader cannot be null.")
+        if job_preparation_handler is None:
+            raise ValueError("job_preparation_handler cannot be null.")
         if validation_handler is None:
             raise ValueError("validation_handler cannot be null.")
         if execution_supervisor is None:
@@ -75,85 +68,72 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
             raise ValueError("worker_id cannot be null or blank.")
 
         self._manifest_loader = manifest_loader
-        self._input_artifact_preparer = input_artifact_preparer
-        self._context_factory = context_factory
-        self._job_handler_loader = job_handler_loader
+        self._job_preparation_handler = job_preparation_handler
         self._validation_handler = validation_handler
         self._execution_supervisor = execution_supervisor
         self._execution_registry = execution_registry
         self._status_publisher = status_publisher
-        self._worker_id = worker_id
+        self._worker_id = worker_id.strip()
 
     def handle(
         self,
         message: QueueMessage[JobMessageDTO],
         ack: Acknowledger,
     ) -> None:
-        """Handle a submitted job message.
-
-        Expected flow:
-
-        1. Read manifestObjectKey from JobMessageDTO.
-        2. Load manifest.json from object storage.
-        3. Prepare JobExecutionContext from the manifest.
-        4. Run fast worker-side semantic validation:
-           JobHandler.validate(JobExecutionContext).
-        5. If validation fails:
-           - publish VALIDATION_FAILED to the status queue;
-           - acknowledge the submitted job message;
-           - return without starting a supervised process.
-        6. Start supervised execution process for JobHandler.execute(...).
-        7. Create and register ExecutionRecord in ExecutionRegistry.
-           The record keeps process handle, parent IPC connection, manifest,
-           started_at timestamp, and the original submitted-message Acknowledger.
-        8. Publish IN_PROGRESS to the status queue.
-        9. Return without acknowledging the submitted job message.
-
-        After this method returns, long-running execution is owned by runtime
-        background services:
-
-        - ExecutionWatcher observes process completion, commits output artifacts,
-          publishes DONE or ERROR, and acknowledges the submitted job message.
-        - TimeoutWatcher terminates expired executions, publishes ERROR, and
-          acknowledges the submitted job message.
-        - CleanupWatcher removes terminal execution records and local resources
-          after terminal status publication and acknowledgement.
-        """
+        """Handle a submitted job message."""
         manifest_object_key = message.payload.manifest_object_key
+
+        # Identity is still unknown here. Let the exception escape to the
+        # generic message handling path. Do not publish job-level status here.
         manifest = self._manifest_loader.load(manifest_object_key)
-        user_id = manifest.user_id
-        job_id = manifest.job_id
-        worker_id = self._worker_id
-        job_type = manifest.job_type
 
-        prepared_job_inputs = self._input_artifact_preparer.prepare(
-            user_id,
-            job_id,
-            manifest.inputs,
-        )
-
-        context = self._context_factory.create(manifest, prepared_job_inputs)
-
-        handler = self._job_handler_loader.load()
-
-        if not self._validation_handler.validate_or_handle_failure(
-            handler=handler,
-            context=context,
-            manifest=manifest,
-            submitted_ack=ack,
-        ):
-            return
-
-        supervised_execution_request = SupervisedExecutionRequest(
-            context=context,
-            worker_id=worker_id,
+        prepared_job = self._job_preparation_handler.prepare_or_handle_failure(
             manifest_object_key=manifest_object_key,
             manifest=manifest,
             submitted_ack=ack,
         )
 
+        if prepared_job is None:
+            return
+
+        if not self._validation_handler.validate_or_handle_failure(
+            handler=prepared_job.handler,
+            context=prepared_job.context,
+            manifest=manifest,
+            submitted_ack=ack,
+        ):
+            return
+
+        self._start_supervised_execution(
+            prepared_job=prepared_job,
+            manifest_object_key=manifest_object_key,
+            manifest=manifest,
+            submitted_ack=ack,
+        )
+
+    def _start_supervised_execution(
+        self,
+        *,
+        prepared_job: PreparedJob,
+        manifest_object_key: str,
+        manifest,
+        submitted_ack: Acknowledger,
+    ) -> None:
+        supervised_execution_request = SupervisedExecutionRequest(
+            context=prepared_job.context,
+            worker_id=self._worker_id,
+            manifest_object_key=manifest_object_key,
+            manifest=manifest,
+            submitted_ack=submitted_ack,
+        )
+
         self._status_publisher.publish_in_progress(
-            user_id, job_id, job_type, worker_id, 0, "Start job execution"
+            manifest.user_id,
+            manifest.job_id,
+            manifest.job_type,
+            self._worker_id,
+            0,
+            "Start job execution",
         )
 
         execution_record = self._execution_supervisor.start(

@@ -43,6 +43,7 @@ from mdds_worker_runtime.execution.context import JobExecutionContextFactory
 from mdds_worker_runtime.execution.execution_watcher import ExecutionWatcher
 from mdds_worker_runtime.execution.handler_loader import JobHandlerLoader
 from mdds_worker_runtime.execution.job_consumer import JobConsumer
+from mdds_worker_runtime.execution.job_preparation_handler import JobPreparationHandler
 from mdds_worker_runtime.execution.output_artifact_uploader import (
     OutputArtifactUploader,
 )
@@ -306,16 +307,22 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
 
     validation_handler = ValidationHandler(status_publisher, worker_id)
 
+    job_preparation_handler = JobPreparationHandler(
+        input_artifact_preparer=input_artifact_preparer,
+        context_factory=job_execution_context_factory,
+        job_handler_loader=job_handler_loader,
+        status_publisher=status_publisher,
+        worker_id=worker_id,
+    )
+
     job_consumer = JobConsumer(
-        manifest_loader,
-        input_artifact_preparer,
-        job_execution_context_factory,
-        job_handler_loader,
-        validation_handler,
-        execution_supervisor,
-        execution_registry,
-        status_publisher,
-        worker_id,
+        manifest_loader=manifest_loader,
+        job_preparation_handler=job_preparation_handler,
+        validation_handler=validation_handler,
+        execution_supervisor=execution_supervisor,
+        execution_registry=execution_registry,
+        status_publisher=status_publisher,
+        worker_id=worker_id,
     )
 
     cancellation_request_handler = CancellationRequestHandler(
