@@ -277,3 +277,29 @@ def test_loader_rejects_handler_with_invalid_constructor_signature() -> None:
         match="Cannot inspect handler constructor",
     ):
         JobHandlerLoader(f"{FIXTURE_MODULE}:InvalidConstructorSignatureJobHandler")
+
+
+def test_loader_rejects_handler_constructor_returning_non_job_handler_instance() -> (
+    None
+):
+    loader = JobHandlerLoader(
+        f"{FIXTURE_MODULE}:ConstructorReturnsNonJobHandlerInstanceJobHandler"
+    )
+
+    with pytest.raises(
+        JobHandlerLoadError,
+        match="Handler constructor must return a JobHandler instance",
+    ):
+        loader.load()
+
+
+def test_loader_validate_loadable_rejects_non_job_handler_instance() -> None:
+    loader = JobHandlerLoader(
+        f"{FIXTURE_MODULE}:ConstructorReturnsNonJobHandlerInstanceJobHandler"
+    )
+
+    with pytest.raises(
+        JobHandlerLoadError,
+        match="Handler constructor must return a JobHandler instance",
+    ):
+        loader.validate_loadable()

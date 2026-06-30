@@ -17,6 +17,7 @@ from mdds_worker_runtime.dto.messages import CancelJobDTO, JobMessageDTO
 from mdds_worker_runtime.execution.cancel_consumer import CancelConsumer
 from mdds_worker_runtime.execution.cleanup_watcher import CleanupWatcher
 from mdds_worker_runtime.execution.execution_watcher import ExecutionWatcher
+from mdds_worker_runtime.execution.handler_loader import JobHandlerLoadError
 from mdds_worker_runtime.execution.job_consumer import JobConsumer
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
 from mdds_worker_runtime.main import WorkerRuntime
@@ -711,6 +712,60 @@ def test_build_worker_runtime_from_environment_fails_fast_when_s3_storage_is_not
     fixture.worker_runtime_factory.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("worker_handler", "expected_message"),
+    [
+        (
+            "tests.fixtures.job_handlers:PlainClass",
+            "Handler class must inherit from JobHandler",
+        ),
+        (
+            "tests.fixtures.job_handlers:ConstructorArgumentJobHandler",
+            "Handler class must have a no-argument constructor",
+        ),
+        (
+            "tests.fixtures.job_handlers:ConstructorRaisesJobHandler",
+            "Cannot instantiate handler class while loading",
+        ),
+        (
+            "tests.fixtures.job_handlers:ConstructorReturnsNonJobHandlerInstanceJobHandler",
+            "Handler constructor must return a JobHandler instance",
+        ),
+    ],
+)
+def test_build_worker_runtime_from_environment_fails_fast_when_job_handler_is_not_loadable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    worker_handler: str,
+    expected_message: str,
+) -> None:
+    fixture = _build_runtime_composition_fixture(
+        monkeypatch,
+        tmp_path,
+        worker_handler=worker_handler,
+        use_real_job_handler_loader=True,
+    )
+
+    with pytest.raises(JobHandlerLoadError, match=expected_message):
+        worker_main.build_worker_runtime_from_environment()
+
+    fixture.storage.check_readiness.assert_called_once_with()
+
+    fixture.component_factories["ExecutionSupervisor"].assert_not_called()
+    fixture.component_factories["ExecutionRegistry"].assert_not_called()
+    fixture.component_factories["StatusPublisher"].assert_not_called()
+    fixture.component_factories["OutputArtifactUploader"].assert_not_called()
+    fixture.component_factories["ValidationHandler"].assert_not_called()
+    fixture.component_factories["JobConsumer"].assert_not_called()
+    fixture.component_factories["CancellationRequestHandler"].assert_not_called()
+    fixture.component_factories["CancelConsumer"].assert_not_called()
+    fixture.component_factories["ExecutionWatcher"].assert_not_called()
+    fixture.component_factories["CleanupWatcher"].assert_not_called()
+    fixture.component_factories["TimeoutWatcher"].assert_not_called()
+
+    fixture.worker_runtime_factory.assert_not_called()
+
+
 def _runtime_kwargs() -> dict[str, Any]:
     fixture = _runtime_fixture()
 
@@ -924,6 +979,8 @@ def _build_runtime_composition_fixture(
     tmp_path: Path,
     *,
     storage: MagicMock | None = None,
+    worker_handler: str = "tests.fixtures.job_handlers:TwoNumbersSumJobHandler",
+    use_real_job_handler_loader: bool = False,
 ) -> SimpleNamespace:
     worker_config = SimpleNamespace(
         rabbitmq_host="rabbitmq",
@@ -937,7 +994,7 @@ def _build_runtime_composition_fixture(
         object_storage_region="us-east-1",
         object_storage_path_style_access_enabled=True,
         jobs_root=tmp_path,
-        worker_handler="tests.fixtures.job_handlers:TwoNumbersSumJobHandler",
+        worker_handler=worker_handler,
         worker_id=WORKER_ID,
         worker_status_queue_name="mdds_status_queue",
         worker_job_queue_name=JOB_QUEUE_NAME,
@@ -1006,6 +1063,9 @@ def _build_runtime_composition_fixture(
         "CleanupWatcher",
         "TimeoutWatcher",
     ]:
+        if component_name == "JobHandlerLoader" and use_real_job_handler_loader:
+            continue
+
         component_factory = MagicMock(name=f"{component_name}_factory")
         component_factories[component_name] = component_factory
         monkeypatch.setattr(worker_main, component_name, component_factory)

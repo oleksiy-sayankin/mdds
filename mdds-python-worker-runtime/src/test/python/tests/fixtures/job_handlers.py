@@ -235,3 +235,16 @@ class UnexpectedExecutionErrorJobHandler(JobHandler):
 
     def execute(self, context: JobExecutionContext) -> None:
         raise RuntimeError("Unexpected execution error. Test message.")
+
+
+class ConstructorReturnsNonJobHandlerInstanceJobHandler(JobHandler):
+    """Handler whose constructor returns an object that is not a JobHandler."""
+
+    def __new__(cls):
+        return object()
+
+    def validate(self, context: JobExecutionContext) -> None:
+        """Validate job input artifacts and parameters."""
+
+    def execute(self, context: JobExecutionContext) -> None:
+        """Execute job-specific logic."""

@@ -55,12 +55,32 @@ class JobHandlerLoader:
     def load(self) -> JobHandler:
         """Create a fresh configured JobHandler instance."""
         try:
-            return self._handler_class()
+            handler = self._handler_class()
         except Exception as exc:
             raise JobHandlerLoadError(
                 f"Cannot instantiate handler class while loading "
                 f"'{self._import_path}'."
             ) from exc
+
+        if not isinstance(handler, JobHandler):
+            raise JobHandlerLoadError(
+                f"Handler constructor must return a JobHandler instance: "
+                f"{self._import_path}"
+            )
+
+        return handler
+
+    def validate_loadable(self) -> None:
+        """Validate that the configured JobHandler can be instantiated.
+
+        This method is intended for Worker Runtime startup checks. It verifies
+        that the handler class is not only importable and structurally valid,
+        but can also be constructed before the Worker starts consuming jobs.
+
+        The created instance is discarded. Normal job processing still calls
+        load() to create a fresh handler instance for each job.
+        """
+        self.load()
 
     @staticmethod
     def _parse_import_path(import_path: str) -> tuple[str, str]:

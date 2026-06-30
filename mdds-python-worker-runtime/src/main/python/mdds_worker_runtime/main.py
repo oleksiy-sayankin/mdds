@@ -290,6 +290,7 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
     input_artifact_preparer = InputArtifactPreparer(storage, jobs_root)
     job_execution_context_factory = JobExecutionContextFactory(jobs_root)
     job_handler_loader = JobHandlerLoader(handler_import_path)
+    job_handler_loader.validate_loadable()
     execution_supervisor = ExecutionSupervisor(jobs_root, handler_import_path)
     execution_registry = ExecutionRegistry()
 
