@@ -695,7 +695,7 @@ class RabbitMqQueueClient(QueueClient):
                     ),
                 )
 
-            if isinstance(primary_error, RabbitMqConnectionError):
+            if _is_messaging_readiness_error(primary_error):
                 raise primary_error
 
             raise RabbitMqConnectionError(
@@ -925,6 +925,12 @@ def _format_datetime(value: datetime) -> str:
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _is_messaging_readiness_error(error: BaseException) -> bool:
+    return isinstance(error, RabbitMqConnectionError) and str(error).startswith(
+        "RabbitMQ messaging readiness check failed"
+    )
 
 
 class RabbitMqReadinessProbeHandler(MessageHandler[dict[str, str]]):
