@@ -50,11 +50,13 @@ def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_s
 
     execution_registry = MagicMock()
     status_publisher = MagicMock()
+    workspace_cleaner = MagicMock()
     preparation_handler = JobPreparationHandler(
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
         status_publisher,
+        workspace_cleaner,
         "test-worker-id",
     )
 
@@ -212,12 +214,14 @@ def test_job_consumer_delegates_validation_and_continues_happy_path() -> None:
 
     execution_registry = MagicMock()
     status_publisher = MagicMock()
+    workspace_cleaner = MagicMock()
 
     preparation_handler = JobPreparationHandler(
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
         status_publisher,
+        workspace_cleaner,
         "test-worker-id",
     )
 
@@ -316,12 +320,14 @@ def test_job_consumer_returns_early_when_validation_handler_handles_failure() ->
     execution_supervisor = MagicMock()
     execution_registry = MagicMock()
     status_publisher = MagicMock()
+    workspace_cleaner = MagicMock()
 
     preparation_handler = JobPreparationHandler(
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
         status_publisher,
+        workspace_cleaner,
         "test-worker-id",
     )
 

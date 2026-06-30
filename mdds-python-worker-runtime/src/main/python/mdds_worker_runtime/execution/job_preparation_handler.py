@@ -15,6 +15,7 @@ from mdds_worker_runtime.execution.context import (
 from mdds_worker_runtime.execution.handler import JobHandler
 from mdds_worker_runtime.execution.handler_loader import JobHandlerLoader
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
+from mdds_worker_runtime.execution.workspace_cleaner import LocalJobWorkspaceCleaner
 from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class JobPreparationHandler:
         context_factory: JobExecutionContextFactory,
         job_handler_loader: JobHandlerLoader,
         status_publisher: StatusPublisher,
+        workspace_cleaner: LocalJobWorkspaceCleaner,
         worker_id: str,
     ) -> None:
         if input_artifact_preparer is None:
@@ -58,6 +60,8 @@ class JobPreparationHandler:
             raise ValueError("job_handler_loader cannot be null.")
         if status_publisher is None:
             raise ValueError("status_publisher cannot be null.")
+        if workspace_cleaner is None:
+            raise ValueError("workspace_cleaner cannot be null.")
         if worker_id is None or worker_id.strip() == "":
             raise ValueError("worker_id cannot be null or blank.")
 
@@ -65,6 +69,7 @@ class JobPreparationHandler:
         self._context_factory = context_factory
         self._job_handler_loader = job_handler_loader
         self._status_publisher = status_publisher
+        self._workspace_cleaner = workspace_cleaner
         self._worker_id = worker_id.strip()
 
     def prepare_or_handle_failure(
@@ -139,6 +144,8 @@ class JobPreparationHandler:
 
         submitted_ack.ack()
 
+        self._cleanup_workspace_after_terminal_preparation_failure(manifest)
+
         logger.info(
             "Worker-side job preparation failure was processed.",
             extra={
@@ -151,3 +158,25 @@ class JobPreparationHandler:
                 "errorType": type(error).__name__,
             },
         )
+
+    def _cleanup_workspace_after_terminal_preparation_failure(
+        self,
+        manifest: JobManifest,
+    ) -> None:
+        try:
+            self._workspace_cleaner.cleanup_job_workspace(
+                manifest.user_id,
+                manifest.job_id,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to cleanup local job workspace after preparation failure.",
+                extra={
+                    "component": "job_preparation_handler",
+                    "event": "job_preparation_workspace_cleanup_failed",
+                    "jobId": manifest.job_id,
+                    "userId": manifest.user_id,
+                    "jobType": manifest.job_type,
+                    "workerId": self._worker_id,
+                },
+            )

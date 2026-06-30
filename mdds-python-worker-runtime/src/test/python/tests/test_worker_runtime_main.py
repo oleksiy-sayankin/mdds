@@ -286,6 +286,7 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     manifest_loader = MagicMock(name="manifest_loader")
     input_artifact_preparer = MagicMock(name="input_artifact_preparer")
     job_execution_context_factory = MagicMock(name="job_execution_context_factory")
+    workspace_cleaner = MagicMock(name="workspace_cleaner")
     job_preparation_handler = MagicMock(name="job_preparation_handler")
     job_handler_loader = MagicMock(name="job_handler_loader")
     validation_handler = MagicMock(name="validation_handler")
@@ -314,6 +315,7 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     job_execution_context_factory_factory = MagicMock(
         return_value=job_execution_context_factory
     )
+    workspace_cleaner_factory = MagicMock(return_value=workspace_cleaner)
     job_preparation_handler_factory = MagicMock(return_value=job_preparation_handler)
     job_handler_loader_factory = MagicMock(return_value=job_handler_loader)
     validation_handler_factory = MagicMock(return_value=validation_handler)
@@ -358,6 +360,11 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         worker_main,
         "JobExecutionContextFactory",
         job_execution_context_factory_factory,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "LocalJobWorkspaceCleaner",
+        workspace_cleaner_factory,
     )
     monkeypatch.setattr(
         worker_main,
@@ -465,11 +472,15 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         WORKER_ID,
     )
 
+    workspace_cleaner_factory.assert_called_once_with(
+        jobs_root=tmp_path,
+    )
     job_preparation_handler_factory.assert_called_once_with(
         input_artifact_preparer=input_artifact_preparer,
         context_factory=job_execution_context_factory,
         job_handler_loader=job_handler_loader,
         status_publisher=status_publisher,
+        workspace_cleaner=workspace_cleaner,
         worker_id=WORKER_ID,
     )
 
@@ -595,6 +606,7 @@ def test_build_worker_runtime_from_environment_uses_working_clock(
     monkeypatch.setattr(worker_main, "ManifestLoader", MagicMock())
     monkeypatch.setattr(worker_main, "InputArtifactPreparer", MagicMock())
     monkeypatch.setattr(worker_main, "JobExecutionContextFactory", MagicMock())
+    monkeypatch.setattr(worker_main, "LocalJobWorkspaceCleaner", MagicMock())
     monkeypatch.setattr(worker_main, "JobPreparationHandler", MagicMock())
     monkeypatch.setattr(worker_main, "JobHandlerLoader", MagicMock())
     monkeypatch.setattr(worker_main, "ValidationHandler", MagicMock())
@@ -717,6 +729,7 @@ def test_build_worker_runtime_from_environment_fails_fast_when_s3_storage_is_not
     fixture.component_factories["InputArtifactPreparer"].assert_not_called()
     fixture.component_factories["JobExecutionContextFactory"].assert_not_called()
     fixture.component_factories["JobPreparationHandler"].assert_not_called()
+    fixture.component_factories["LocalJobWorkspaceCleaner"].assert_not_called()
     fixture.component_factories["JobHandlerLoader"].assert_not_called()
     fixture.component_factories["ExecutionSupervisor"].assert_not_called()
     fixture.component_factories["ExecutionRegistry"].assert_not_called()
@@ -776,6 +789,7 @@ def test_build_worker_runtime_from_environment_fails_fast_when_job_handler_is_no
     fixture.component_factories["ExecutionRegistry"].assert_not_called()
     fixture.component_factories["StatusPublisher"].assert_not_called()
     fixture.component_factories["JobPreparationHandler"].assert_not_called()
+    fixture.component_factories["LocalJobWorkspaceCleaner"].assert_not_called()
     fixture.component_factories["OutputArtifactUploader"].assert_not_called()
     fixture.component_factories["ValidationHandler"].assert_not_called()
     fixture.component_factories["JobConsumer"].assert_not_called()
@@ -831,6 +845,7 @@ def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_is_not_r
     fixture.component_factories["InputArtifactPreparer"].assert_not_called()
     fixture.component_factories["JobExecutionContextFactory"].assert_not_called()
     fixture.component_factories["JobPreparationHandler"].assert_not_called()
+    fixture.component_factories["LocalJobWorkspaceCleaner"].assert_not_called()
     fixture.component_factories["JobHandlerLoader"].assert_not_called()
     fixture.component_factories["ExecutionSupervisor"].assert_not_called()
     fixture.component_factories["ExecutionRegistry"].assert_not_called()
@@ -1138,6 +1153,7 @@ def _build_runtime_composition_fixture(
         "InputArtifactPreparer",
         "JobExecutionContextFactory",
         "JobPreparationHandler",
+        "LocalJobWorkspaceCleaner",
         "JobHandlerLoader",
         "ExecutionSupervisor",
         "ExecutionRegistry",
@@ -1244,6 +1260,7 @@ def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_messagin
     fixture.component_factories["InputArtifactPreparer"].assert_not_called()
     fixture.component_factories["JobExecutionContextFactory"].assert_not_called()
     fixture.component_factories["JobPreparationHandler"].assert_not_called()
+    fixture.component_factories["LocalJobWorkspaceCleaner"].assert_not_called()
     fixture.component_factories["JobHandlerLoader"].assert_not_called()
     fixture.component_factories["ExecutionSupervisor"].assert_not_called()
     fixture.component_factories["ExecutionRegistry"].assert_not_called()

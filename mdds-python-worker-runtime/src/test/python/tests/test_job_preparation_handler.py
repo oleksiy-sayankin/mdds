@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -45,6 +46,7 @@ def test_job_preparation_handler_returns_prepared_job_when_preparation_succeeds(
 
     fixture.status_publisher.publish_error.assert_not_called()
     submitted_ack.ack.assert_not_called()
+    fixture.workspace_cleaner.cleanup_job_workspace.assert_not_called()
 
 
 def test_job_preparation_handler_handles_input_preparation_failure_as_error() -> None:
@@ -283,6 +285,7 @@ def test_job_preparation_handler_does_not_catch_base_exception() -> None:
         ("context_factory", None, "context_factory cannot be null."),
         ("job_handler_loader", None, "job_handler_loader cannot be null."),
         ("status_publisher", None, "status_publisher cannot be null."),
+        ("workspace_cleaner", None, "workspace_cleaner cannot be null."),
         ("worker_id", None, "worker_id cannot be null or blank."),
         ("worker_id", "", "worker_id cannot be null or blank."),
         ("worker_id", " ", "worker_id cannot be null or blank."),
@@ -348,11 +351,65 @@ def test_prepare_or_handle_failure_rejects_invalid_arguments_without_publishing_
     fixture.job_handler_loader.load.assert_not_called()
 
 
+def test_job_preparation_handler_logs_and_suppresses_workspace_cleanup_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fixture = _fixture()
+    manifest = _manifest()
+    submitted_ack = MagicMock(name="submitted_ack")
+
+    fixture.input_artifact_preparer.prepare.side_effect = RuntimeError(
+        "Cannot download input artifact."
+    )
+    fixture.workspace_cleaner.cleanup_job_workspace.side_effect = RuntimeError(
+        "cleanup failed"
+    )
+
+    with caplog.at_level(
+        logging.ERROR,
+        logger="mdds_worker_runtime.execution.job_preparation_handler",
+    ):
+        result = fixture.handler.prepare_or_handle_failure(
+            manifest_object_key="jobs/42/job-1/manifest.json",
+            manifest=manifest,
+            submitted_ack=submitted_ack,
+        )
+
+    assert result is None
+
+    fixture.status_publisher.publish_error.assert_called_once_with(
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        worker_id="worker-1",
+        message="Cannot download input artifact.",
+    )
+    submitted_ack.ack.assert_called_once_with()
+    fixture.workspace_cleaner.cleanup_job_workspace.assert_called_once_with(
+        42,
+        "job-1",
+    )
+
+    cleanup_failure_records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "job_preparation_workspace_cleanup_failed"
+    ]
+
+    assert len(cleanup_failure_records) == 1
+    assert cleanup_failure_records[0].exc_info is not None
+    assert (
+        cleanup_failure_records[0].message
+        == "Failed to cleanup local job workspace after preparation failure."
+    )
+
+
 def _fixture() -> SimpleNamespace:
     input_artifact_preparer = MagicMock(name="input_artifact_preparer")
     context_factory = MagicMock(name="context_factory")
     job_handler_loader = MagicMock(name="job_handler_loader")
     status_publisher = MagicMock(name="status_publisher")
+    workspace_cleaner = MagicMock(name="workspace_cleaner")
 
     prepared_job_inputs = MagicMock(name="prepared_job_inputs")
     context = MagicMock(name="context")
@@ -367,6 +424,7 @@ def _fixture() -> SimpleNamespace:
         context_factory=context_factory,
         job_handler_loader=job_handler_loader,
         status_publisher=status_publisher,
+        workspace_cleaner=workspace_cleaner,
         worker_id="worker-1",
     )
 
@@ -376,6 +434,7 @@ def _fixture() -> SimpleNamespace:
         context_factory=context_factory,
         job_handler_loader=job_handler_loader,
         status_publisher=status_publisher,
+        workspace_cleaner=workspace_cleaner,
         prepared_job_inputs=prepared_job_inputs,
         context=context,
         job_handler=job_handler,
@@ -388,6 +447,7 @@ def _constructor_kwargs() -> dict[str, Any]:
         "context_factory": MagicMock(name="context_factory"),
         "job_handler_loader": MagicMock(name="job_handler_loader"),
         "status_publisher": MagicMock(name="status_publisher"),
+        "workspace_cleaner": MagicMock(name="workspace_cleaner"),
         "worker_id": "worker-1",
     }
 
