@@ -8,7 +8,7 @@ import warnings
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -424,6 +424,8 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         password="secret",
     )
     queue_client_factory.assert_called_once_with(rabbitmq_properties)
+    queue_client.check_readiness.assert_called_once_with()
+    queue_client.check_messaging_readiness.assert_called_once_with()
     s3_properties_factory.assert_called_once_with(
         endpoint_url="http://minio:9000",
         bucket="mdds",
@@ -669,6 +671,9 @@ def test_build_worker_runtime_from_environment_checks_s3_storage_readiness(
 
     assert result is fixture.runtime
     fixture.storage.check_readiness.assert_called_once_with()
+    fixture.queue_client.check_readiness.assert_called_once_with()
+    fixture.queue_client.check_messaging_readiness.assert_called_once_with()
+    fixture.storage.check_readiness.assert_called_once_with()
 
 
 def test_build_worker_runtime_from_environment_fails_fast_when_s3_storage_is_not_ready(
@@ -821,6 +826,8 @@ def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_is_not_r
     fixture.component_factories["ExecutionWatcher"].assert_not_called()
     fixture.component_factories["CleanupWatcher"].assert_not_called()
     fixture.component_factories["TimeoutWatcher"].assert_not_called()
+    fixture.queue_client.check_readiness.assert_called_once_with()
+    fixture.queue_client.check_messaging_readiness.assert_not_called()
 
     fixture.worker_runtime_factory.assert_not_called()
 
@@ -1151,3 +1158,84 @@ def _build_runtime_composition_fixture(
         component_factories=component_factories,
         worker_runtime_factory=worker_runtime_factory,
     )
+
+
+def test_build_worker_runtime_from_environment_checks_rabbitmq_messaging_readiness_after_connection_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = _build_runtime_composition_fixture(monkeypatch, tmp_path)
+    calls = MagicMock(name="calls")
+
+    calls.attach_mock(fixture.queue_client.check_readiness, "check_readiness")
+    calls.attach_mock(
+        fixture.queue_client.check_messaging_readiness,
+        "check_messaging_readiness",
+    )
+    calls.attach_mock(
+        fixture.infrastructure_factories["S3Properties"],
+        "S3Properties",
+    )
+
+    result = worker_main.build_worker_runtime_from_environment()
+
+    assert result is fixture.runtime
+    assert calls.mock_calls[:3] == [
+        call.check_readiness(),
+        call.check_messaging_readiness(),
+        call.S3Properties(
+            endpoint_url="http://minio:9000",
+            bucket="mdds",
+            access_key="minioadmin",
+            secret_key="minioadmin",
+            region="us-east-1",
+            path_style_access_enabled=True,
+        ),
+    ]
+
+
+def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_messaging_is_not_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    queue_client = MagicMock(name="queue_client")
+    queue_client.check_messaging_readiness.side_effect = RabbitMqConnectionError(
+        "RabbitMQ messaging readiness check failed."
+    )
+
+    fixture = _build_runtime_composition_fixture(
+        monkeypatch,
+        tmp_path,
+        queue_client=queue_client,
+    )
+
+    with pytest.raises(
+        RabbitMqConnectionError,
+        match="RabbitMQ messaging readiness check failed.",
+    ):
+        worker_main.build_worker_runtime_from_environment()
+
+    fixture.queue_client.check_readiness.assert_called_once_with()
+    fixture.queue_client.check_messaging_readiness.assert_called_once_with()
+
+    fixture.infrastructure_factories["S3Properties"].assert_not_called()
+    fixture.infrastructure_factories["Boto3S3ClientFactory"].assert_not_called()
+    fixture.infrastructure_factories["S3Storage"].assert_not_called()
+
+    fixture.component_factories["ManifestLoader"].assert_not_called()
+    fixture.component_factories["InputArtifactPreparer"].assert_not_called()
+    fixture.component_factories["JobExecutionContextFactory"].assert_not_called()
+    fixture.component_factories["JobHandlerLoader"].assert_not_called()
+    fixture.component_factories["ExecutionSupervisor"].assert_not_called()
+    fixture.component_factories["ExecutionRegistry"].assert_not_called()
+    fixture.component_factories["StatusPublisher"].assert_not_called()
+    fixture.component_factories["OutputArtifactUploader"].assert_not_called()
+    fixture.component_factories["ValidationHandler"].assert_not_called()
+    fixture.component_factories["JobConsumer"].assert_not_called()
+    fixture.component_factories["CancellationRequestHandler"].assert_not_called()
+    fixture.component_factories["CancelConsumer"].assert_not_called()
+    fixture.component_factories["ExecutionWatcher"].assert_not_called()
+    fixture.component_factories["CleanupWatcher"].assert_not_called()
+    fixture.component_factories["TimeoutWatcher"].assert_not_called()
+
+    fixture.worker_runtime_factory.assert_not_called()

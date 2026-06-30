@@ -9,6 +9,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -604,6 +605,161 @@ class RabbitMqQueueClient(QueueClient):
             },
         )
 
+    def check_messaging_readiness(
+        self,
+        timeout_seconds: float | None = None,
+    ) -> None:
+        """Check RabbitMQ publish, consume, ack, subscription close, and delete."""
+        resolved_timeout_seconds = (
+            self._properties.connection_timeout_seconds
+            if timeout_seconds is None
+            else timeout_seconds
+        )
+
+        if resolved_timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be greater than zero.")
+
+        probe_queue_name = f"mdds.rabbitmq.readiness.{uuid.uuid4().hex}"
+        probe_payload = {"nonce": uuid.uuid4().hex}
+
+        handler = RabbitMqReadinessProbeHandler(probe_payload)
+        subscription: Subscription | None = None
+        primary_error: BaseException | None = None
+        cleanup_error: BaseException | None
+
+        logger.info(
+            "Checking RabbitMQ messaging readiness.",
+            extra={
+                "component": "rabbitmq_queue_client",
+                "event": "rabbitmq_messaging_readiness_check_started",
+                "host": self._properties.host,
+                "port": self._properties.port,
+                "queueName": probe_queue_name,
+            },
+        )
+
+        try:
+            subscription = self.subscribe(probe_queue_name, dict, handler)
+            self.publish(probe_queue_name, QueueMessage(payload=probe_payload))
+
+            if not handler.completed.wait(timeout=resolved_timeout_seconds):
+                raise RabbitMqConnectionError(
+                    "RabbitMQ messaging readiness check failed: "
+                    f"timed out waiting for probe message from queue "
+                    f"'{probe_queue_name}'."
+                )
+
+            if handler.error is not None:
+                raise handler.error
+
+        except Exception as exc:
+            primary_error = exc
+        finally:
+            cleanup_error = self._cleanup_messaging_readiness_probe(
+                subscription,
+                probe_queue_name,
+            )
+
+        if primary_error is not None:
+            logger.error(
+                "RabbitMQ messaging readiness check failed.",
+                extra={
+                    "component": "rabbitmq_queue_client",
+                    "event": "rabbitmq_messaging_readiness_check_failed",
+                    "host": self._properties.host,
+                    "port": self._properties.port,
+                    "queueName": probe_queue_name,
+                },
+                exc_info=(
+                    type(primary_error),
+                    primary_error,
+                    primary_error.__traceback__,
+                ),
+            )
+
+            if cleanup_error is not None:
+                logger.error(
+                    "RabbitMQ messaging readiness cleanup failed after primary "
+                    "readiness failure.",
+                    extra={
+                        "component": "rabbitmq_queue_client",
+                        "event": "rabbitmq_messaging_readiness_cleanup_failed",
+                        "host": self._properties.host,
+                        "port": self._properties.port,
+                        "queueName": probe_queue_name,
+                    },
+                    exc_info=(
+                        type(cleanup_error),
+                        cleanup_error,
+                        cleanup_error.__traceback__,
+                    ),
+                )
+
+            if isinstance(primary_error, RabbitMqConnectionError):
+                raise primary_error
+
+            raise RabbitMqConnectionError(
+                "RabbitMQ messaging readiness check failed."
+            ) from primary_error
+
+        if cleanup_error is not None:
+            raise RabbitMqConnectionError(
+                "RabbitMQ messaging readiness cleanup failed."
+            ) from cleanup_error
+
+        logger.info(
+            "RabbitMQ messaging readiness check completed.",
+            extra={
+                "component": "rabbitmq_queue_client",
+                "event": "rabbitmq_messaging_readiness_check_completed",
+                "host": self._properties.host,
+                "port": self._properties.port,
+                "queueName": probe_queue_name,
+            },
+        )
+
+    def _cleanup_messaging_readiness_probe(
+        self,
+        subscription: Subscription | None,
+        probe_queue_name: str,
+    ) -> BaseException | None:
+        cleanup_error: BaseException | None = None
+
+        if subscription is not None:
+            try:
+                subscription.close()
+            except Exception as exc:
+                cleanup_error = exc
+                logger.exception(
+                    "Failed to close RabbitMQ readiness probe subscription.",
+                    extra={
+                        "component": "rabbitmq_queue_client",
+                        "event": "rabbitmq_messaging_readiness_subscription_close_failed",
+                        "host": self._properties.host,
+                        "port": self._properties.port,
+                        "queueName": probe_queue_name,
+                    },
+                )
+
+        try:
+            self.delete_queue(probe_queue_name)
+        except Exception as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+
+            logger.exception(
+                "Failed to delete RabbitMQ readiness probe queue.",
+                extra={
+                    "component": "rabbitmq_queue_client",
+                    "event": "rabbitmq_messaging_readiness_queue_delete_failed",
+                    "host": self._properties.host,
+                    "port": self._properties.port,
+                    "queueName": probe_queue_name,
+                },
+            )
+
+        return cleanup_error
+
     def _raise_if_closed(self) -> None:
         if self._closed:
             raise RabbitMqConnectionError("RabbitMQ queue client is already closed.")
@@ -769,3 +925,36 @@ def _format_datetime(value: datetime) -> str:
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class RabbitMqReadinessProbeHandler(MessageHandler[dict[str, str]]):
+    """Technical handler used only by RabbitMQ startup messaging readiness check."""
+
+    def __init__(self, expected_payload: dict[str, str]) -> None:
+        self._expected_payload = expected_payload
+        self.completed = threading.Event()
+        self.error: BaseException | None = None
+
+    def handle(
+        self,
+        message: QueueMessage[dict[str, str]],
+        ack: Acknowledger,
+    ) -> None:
+        """Validate probe payload and acknowledge the readiness probe message."""
+        try:
+            if message.payload != self._expected_payload:
+                self.error = RabbitMqConnectionError(
+                    "RabbitMQ messaging readiness check failed: "
+                    "unexpected probe payload."
+                )
+
+            ack.ack()
+        except Exception as exc:
+            error = RabbitMqConnectionError(
+                "RabbitMQ messaging readiness check failed: "
+                "failed to acknowledge probe message."
+            )
+            error.__cause__ = exc
+            self.error = error
+        finally:
+            self.completed.set()

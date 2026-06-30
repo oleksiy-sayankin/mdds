@@ -9,7 +9,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import cast
+from typing import cast, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -684,6 +684,363 @@ def test_rabbitmq_queue_client_check_readiness_logs_failed_event_with_traceback(
     assert failed_records[0].exc_info is not None
 
 
+def test_rabbitmq_queue_client_check_messaging_readiness_uses_unique_probe_queue_and_publishes_nonce() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    subscription = MagicMock(name="subscription")
+    acknowledger = MagicMock(name="acknowledger")
+    captured: dict[str, Any] = {}
+
+    def subscribe(queue_name, payload_type, handler):
+        captured["subscribed_queue_name"] = queue_name
+        captured["payload_type"] = payload_type
+        captured["handler"] = handler
+        return subscription
+
+    def publish(queue_name, message):
+        captured["published_queue_name"] = queue_name
+        captured["published_message"] = message
+
+        handler = captured["handler"]
+        handler.handle(QueueMessage(payload=message.payload), acknowledger)
+
+    client.subscribe = MagicMock(side_effect=subscribe)
+    client.publish = MagicMock(side_effect=publish)
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert captured["subscribed_queue_name"] == ("mdds.rabbitmq.readiness.probequeue")
+    assert captured["payload_type"] is dict
+    assert captured["published_queue_name"] == ("mdds.rabbitmq.readiness.probequeue")
+    assert captured["published_message"].payload == {"nonce": "probenonce"}
+
+    acknowledger.ack.assert_called_once_with()
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_logs_started_and_completed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _rabbitmq_client_for_successful_messaging_readiness()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with caplog.at_level(
+            logging.INFO,
+            logger="mdds_worker_runtime.rabbitmq.rabbitmq_queue_client",
+        ):
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    events = [record.__dict__.get("event") for record in caplog.records]
+
+    assert "rabbitmq_messaging_readiness_check_started" in events
+    assert "rabbitmq_messaging_readiness_check_completed" in events
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_times_out_when_probe_message_is_not_consumed() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    subscription = MagicMock(name="subscription")
+
+    client.subscribe = MagicMock(return_value=subscription)
+    client.publish = MagicMock()
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="timed out waiting for probe message",
+        ):
+            client.check_messaging_readiness(timeout_seconds=0.001)
+
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_rejects_unexpected_probe_payload() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    subscription = MagicMock(name="subscription")
+    acknowledger = MagicMock(name="acknowledger")
+    captured: dict[str, Any] = {}
+
+    def subscribe(queue_name, payload_type, handler):
+        captured["handler"] = handler
+        return subscription
+
+    def publish(queue_name, message):
+        captured["handler"].handle(
+            QueueMessage(payload={"nonce": "wrong-nonce"}),
+            acknowledger,
+        )
+
+    client.subscribe = MagicMock(side_effect=subscribe)
+    client.publish = MagicMock(side_effect=publish)
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="expectednonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="unexpected probe payload",
+        ):
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    acknowledger.ack.assert_called_once_with()
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_wraps_ack_failure() -> None:
+    client = _rabbitmq_client_for_messaging_readiness()
+    subscription = MagicMock(name="subscription")
+    original_error = RuntimeError("ack scheduling failed")
+    acknowledger = MagicMock(name="acknowledger")
+    acknowledger.ack.side_effect = original_error
+    captured: dict[str, Any] = {}
+
+    def subscribe(queue_name, payload_type, handler):
+        captured["handler"] = handler
+        return subscription
+
+    def publish(queue_name, message):
+        captured["handler"].handle(message, acknowledger)
+
+    client.subscribe = MagicMock(side_effect=subscribe)
+    client.publish = MagicMock(side_effect=publish)
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="failed to acknowledge probe message",
+        ) as error:
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert error.value.__cause__ is original_error
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_wraps_subscribe_failure_and_attempts_cleanup() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    original_error = RuntimeError("subscribe failed")
+
+    client.subscribe = MagicMock(side_effect=original_error)
+    client.publish = MagicMock()
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="RabbitMQ messaging readiness check failed.",
+        ) as error:
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert error.value.__cause__ is original_error
+    client.publish.assert_not_called()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_wraps_publish_failure_and_cleans_up() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    subscription = MagicMock(name="subscription")
+    original_error = RuntimeError("publish failed")
+
+    client.subscribe = MagicMock(return_value=subscription)
+    client.publish = MagicMock(side_effect=original_error)
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="RabbitMQ messaging readiness check failed.",
+        ) as error:
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert error.value.__cause__ is original_error
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_fails_when_subscription_close_fails_after_successful_probe() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    close_error = RuntimeError("subscription close failed")
+    subscription = MagicMock(name="subscription")
+    subscription.close.side_effect = close_error
+
+    _configure_successful_messaging_probe(client, subscription=subscription)
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="RabbitMQ messaging readiness cleanup failed.",
+        ) as error:
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert error.value.__cause__ is close_error
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_fails_when_probe_queue_delete_fails_after_successful_probe() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    delete_error = RuntimeError("queue delete failed")
+    subscription = MagicMock(name="subscription")
+
+    _configure_successful_messaging_probe(client, subscription=subscription)
+    client.delete_queue.side_effect = delete_error
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(
+            RabbitMqConnectionError,
+            match="RabbitMQ messaging readiness cleanup failed.",
+        ) as error:
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert error.value.__cause__ is delete_error
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_cleanup_failure_after_primary_failure_does_not_hide_primary_failure() -> (
+    None
+):
+    client = _rabbitmq_client_for_messaging_readiness()
+    primary_error = RabbitMqConnectionError("publish failed")
+    cleanup_error = RuntimeError("subscription close failed")
+    subscription = MagicMock(name="subscription")
+    subscription.close.side_effect = cleanup_error
+
+    client.subscribe = MagicMock(return_value=subscription)
+    client.publish = MagicMock(side_effect=primary_error)
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with pytest.raises(RabbitMqConnectionError) as error:
+            client.check_messaging_readiness(timeout_seconds=0.1)
+
+    assert error.value is primary_error
+    assert error.value.__cause__ is None
+    subscription.close.assert_called_once_with()
+    client.delete_queue.assert_called_once_with("mdds.rabbitmq.readiness.probequeue")
+
+
+def test_rabbitmq_queue_client_check_messaging_readiness_logs_failed_event_with_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = _rabbitmq_client_for_messaging_readiness()
+    client.subscribe = MagicMock(side_effect=RuntimeError("subscribe failed"))
+    client.publish = MagicMock()
+    client.delete_queue = MagicMock()
+
+    with patch.object(
+        rabbitmq_client.uuid,
+        "uuid4",
+        side_effect=[
+            SimpleNamespace(hex="probequeue"),
+            SimpleNamespace(hex="probenonce"),
+        ],
+    ):
+        with caplog.at_level(
+            logging.ERROR,
+            logger="mdds_worker_runtime.rabbitmq.rabbitmq_queue_client",
+        ):
+            with pytest.raises(RabbitMqConnectionError):
+                client.check_messaging_readiness(timeout_seconds=0.1)
+
+    failed_records = [
+        record
+        for record in caplog.records
+        if record.__dict__.get("event") == "rabbitmq_messaging_readiness_check_failed"
+    ]
+
+    assert len(failed_records) == 1
+    assert failed_records[0].exc_info is not None
+
+
 def _rabbitmq_client_for_readiness(
     *,
     closed: bool = False,
@@ -707,3 +1064,49 @@ def _rabbitmq_client_for_readiness(
     client._lock = threading.RLock()
 
     return cast(RabbitMqQueueClient, client)
+
+
+def _rabbitmq_client_for_messaging_readiness() -> RabbitMqQueueClient:
+    client = RabbitMqQueueClient.__new__(RabbitMqQueueClient)
+
+    client._properties = RabbitMqProperties(
+        host="rabbitmq",
+        port=5672,
+        user="mdds",
+        password="secret",
+        connection_timeout_seconds=0.1,
+    )
+    client._subscriptions = []
+    client._closed = False
+    client._lock = threading.RLock()
+
+    return cast(RabbitMqQueueClient, client)
+
+
+def _rabbitmq_client_for_successful_messaging_readiness() -> RabbitMqQueueClient:
+    client = _rabbitmq_client_for_messaging_readiness()
+    _configure_successful_messaging_probe(client)
+    return client
+
+
+def _configure_successful_messaging_probe(
+    client: RabbitMqQueueClient,
+    *,
+    subscription: MagicMock | None = None,
+) -> MagicMock:
+    resolved_subscription = subscription or MagicMock(name="subscription")
+    acknowledger = MagicMock(name="acknowledger")
+    captured: dict[str, Any] = {}
+
+    def subscribe(queue_name, payload_type, handler):
+        captured["handler"] = handler
+        return resolved_subscription
+
+    def publish(queue_name, message):
+        captured["handler"].handle(message, acknowledger)
+
+    client.subscribe = MagicMock(side_effect=subscribe)
+    client.publish = MagicMock(side_effect=publish)
+    client.delete_queue = MagicMock()
+
+    return resolved_subscription
