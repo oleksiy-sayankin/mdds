@@ -8,12 +8,56 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+class S3StorageReadinessError(RuntimeError):
+    """Raised when S3-compatible storage is not ready for Worker Runtime startup."""
+
+
 class S3Storage:
     """Class to handle S3 storage."""
 
     def __init__(self, client, bucket: str):
+        if client is None:
+            raise ValueError("client cannot be null.")
+        if bucket is None or bucket.strip() == "":
+            raise ValueError("bucket cannot be null or blank.")
         self._client = client
-        self._bucket = bucket
+        self._bucket = bucket.strip()
+
+    def check_readiness(self) -> None:
+        """Check that configured S3-compatible bucket is reachable and accessible."""
+        logger.info(
+            "Checking S3-compatible storage bucket readiness.",
+            extra={
+                "component": "s3_storage",
+                "event": "s3_bucket_readiness_check_started",
+                "bucket": self._bucket,
+            },
+        )
+
+        try:
+            self._client.head_bucket(Bucket=self._bucket)
+        except Exception as exc:
+            logger.exception(
+                "S3-compatible storage bucket readiness check failed.",
+                extra={
+                    "component": "s3_storage",
+                    "event": "s3_bucket_readiness_check_failed",
+                    "bucket": self._bucket,
+                },
+            )
+            raise S3StorageReadinessError(
+                "S3-compatible storage bucket is not ready: "
+                f"bucket='{self._bucket}'."
+            ) from exc
+
+        logger.info(
+            "S3-compatible storage bucket readiness check completed.",
+            extra={
+                "component": "s3_storage",
+                "event": "s3_bucket_readiness_check_completed",
+                "bucket": self._bucket,
+            },
+        )
 
     def get_json(self, key: str) -> Any:
         """Gets JSON from S3 storage."""

@@ -20,6 +20,7 @@ from mdds_worker_runtime.execution.execution_watcher import ExecutionWatcher
 from mdds_worker_runtime.execution.job_consumer import JobConsumer
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
 from mdds_worker_runtime.main import WorkerRuntime
+from mdds_worker_runtime.storage.s3_client import S3StorageReadinessError
 
 WORKER_ID = "worker-1"
 JOB_QUEUE_NAME = "queue-two_numbers_sum"
@@ -656,6 +657,60 @@ def test_module_script_guard_invokes_main(
             runpy.run_module("mdds_worker_runtime.main", run_name="__main__")
 
 
+def test_build_worker_runtime_from_environment_checks_s3_storage_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = _build_runtime_composition_fixture(monkeypatch, tmp_path)
+
+    result = worker_main.build_worker_runtime_from_environment()
+
+    assert result is fixture.runtime
+    fixture.storage.check_readiness.assert_called_once_with()
+
+
+def test_build_worker_runtime_from_environment_fails_fast_when_s3_storage_is_not_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    storage = MagicMock(name="storage")
+    storage.check_readiness.side_effect = S3StorageReadinessError(
+        "S3-compatible storage bucket is not ready: bucket='mdds'."
+    )
+
+    fixture = _build_runtime_composition_fixture(
+        monkeypatch,
+        tmp_path,
+        storage=storage,
+    )
+
+    with pytest.raises(
+        S3StorageReadinessError,
+        match="S3-compatible storage bucket is not ready: bucket='mdds'.",
+    ):
+        worker_main.build_worker_runtime_from_environment()
+
+    fixture.storage.check_readiness.assert_called_once_with()
+
+    fixture.component_factories["ManifestLoader"].assert_not_called()
+    fixture.component_factories["InputArtifactPreparer"].assert_not_called()
+    fixture.component_factories["JobExecutionContextFactory"].assert_not_called()
+    fixture.component_factories["JobHandlerLoader"].assert_not_called()
+    fixture.component_factories["ExecutionSupervisor"].assert_not_called()
+    fixture.component_factories["ExecutionRegistry"].assert_not_called()
+    fixture.component_factories["StatusPublisher"].assert_not_called()
+    fixture.component_factories["OutputArtifactUploader"].assert_not_called()
+    fixture.component_factories["ValidationHandler"].assert_not_called()
+    fixture.component_factories["JobConsumer"].assert_not_called()
+    fixture.component_factories["CancellationRequestHandler"].assert_not_called()
+    fixture.component_factories["CancelConsumer"].assert_not_called()
+    fixture.component_factories["ExecutionWatcher"].assert_not_called()
+    fixture.component_factories["CleanupWatcher"].assert_not_called()
+    fixture.component_factories["TimeoutWatcher"].assert_not_called()
+
+    fixture.worker_runtime_factory.assert_not_called()
+
+
 def _runtime_kwargs() -> dict[str, Any]:
     fixture = _runtime_fixture()
 
@@ -862,3 +917,107 @@ class _ShutdownEventFake:
 
     def set(self) -> None:
         self.set_count += 1
+
+
+def _build_runtime_composition_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    storage: MagicMock | None = None,
+) -> SimpleNamespace:
+    worker_config = SimpleNamespace(
+        rabbitmq_host="rabbitmq",
+        rabbitmq_port=5672,
+        rabbitmq_user="mdds",
+        rabbitmq_password="secret",
+        object_storage_endpoint_url="http://minio:9000",
+        object_storage_bucket="mdds",
+        object_storage_access_key="minioadmin",
+        object_storage_secret_key="minioadmin",
+        object_storage_region="us-east-1",
+        object_storage_path_style_access_enabled=True,
+        jobs_root=tmp_path,
+        worker_handler="tests.fixtures.job_handlers:TwoNumbersSumJobHandler",
+        worker_id=WORKER_ID,
+        worker_status_queue_name="mdds_status_queue",
+        worker_job_queue_name=JOB_QUEUE_NAME,
+        worker_cancel_queue_name=CANCEL_QUEUE_NAME,
+        worker_job_timeout_seconds=3600,
+        worker_progress_interval_seconds=5,
+        worker_cleanup_interval_seconds=1,
+    )
+
+    queue_client = MagicMock(name="queue_client")
+    boto3_client = MagicMock(name="boto3_client")
+    resolved_storage = storage or MagicMock(name="storage")
+
+    s3_client_factory = MagicMock(name="boto3_s3_client_factory")
+    s3_client_factory.create.return_value = boto3_client
+
+    runtime = MagicMock(name="runtime")
+    worker_runtime_factory = MagicMock(
+        name="worker_runtime_factory",
+        return_value=runtime,
+    )
+
+    monkeypatch.setattr(
+        worker_main,
+        "load_config",
+        MagicMock(return_value=worker_config),
+    )
+    monkeypatch.setattr(worker_main, "RabbitMqProperties", MagicMock())
+    monkeypatch.setattr(
+        worker_main,
+        "RabbitMqQueueClient",
+        MagicMock(return_value=queue_client),
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "S3Properties",
+        MagicMock(return_value=SimpleNamespace(bucket="mdds")),
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "Boto3S3ClientFactory",
+        MagicMock(return_value=s3_client_factory),
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "S3Storage",
+        MagicMock(return_value=resolved_storage),
+    )
+
+    component_factories: dict[str, MagicMock] = {}
+
+    for component_name in [
+        "ManifestLoader",
+        "InputArtifactPreparer",
+        "JobExecutionContextFactory",
+        "JobHandlerLoader",
+        "ExecutionSupervisor",
+        "ExecutionRegistry",
+        "StatusPublisher",
+        "OutputArtifactUploader",
+        "ValidationHandler",
+        "JobConsumer",
+        "CancellationRequestHandler",
+        "CancelConsumer",
+        "ExecutionWatcher",
+        "CleanupWatcher",
+        "TimeoutWatcher",
+    ]:
+        component_factory = MagicMock(name=f"{component_name}_factory")
+        component_factories[component_name] = component_factory
+        monkeypatch.setattr(worker_main, component_name, component_factory)
+
+    monkeypatch.setattr(worker_main, "WorkerRuntime", worker_runtime_factory)
+
+    return SimpleNamespace(
+        runtime=runtime,
+        queue_client=queue_client,
+        boto3_client=boto3_client,
+        storage=resolved_storage,
+        s3_client_factory=s3_client_factory,
+        component_factories=component_factories,
+        worker_runtime_factory=worker_runtime_factory,
+    )

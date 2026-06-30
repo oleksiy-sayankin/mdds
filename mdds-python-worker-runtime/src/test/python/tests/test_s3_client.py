@@ -1,12 +1,13 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
+import logging
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-from mdds_worker_runtime.storage.s3_client import S3Storage
+from mdds_worker_runtime.storage.s3_client import S3Storage, S3StorageReadinessError
 
 
 def test_get_json_loads_json_object_from_s3() -> None:
@@ -170,3 +171,131 @@ def test_s3_storage_upload_file_rejects_null_local_path() -> None:
         storage.upload_file("jobs/42/job-1/out/solution.csv", None)
 
     client.upload_file.assert_not_called()
+
+
+def test_s3_storage_rejects_null_client() -> None:
+    with pytest.raises(ValueError, match="client cannot be null."):
+        S3Storage(None, "mdds")
+
+
+@pytest.mark.parametrize("bucket", [None, "", "   "])
+def test_s3_storage_rejects_null_or_blank_bucket(bucket: str | None) -> None:
+    with pytest.raises(ValueError, match="bucket cannot be null or blank."):
+        S3Storage(MagicMock(), bucket)
+
+
+def test_s3_storage_trims_bucket_before_using_it() -> None:
+    client = MagicMock()
+    storage = S3Storage(client, "  mdds  ")
+
+    storage.check_readiness()
+
+    client.head_bucket.assert_called_once_with(Bucket="mdds")
+
+
+def test_s3_storage_check_readiness_calls_head_bucket() -> None:
+    client = MagicMock()
+    storage = S3Storage(client, "mdds")
+
+    storage.check_readiness()
+
+    client.head_bucket.assert_called_once_with(Bucket="mdds")
+
+
+def test_s3_storage_check_readiness_returns_normally_when_head_bucket_succeeds() -> (
+    None
+):
+    client = MagicMock()
+    storage = S3Storage(client, "mdds")
+
+    storage.check_readiness()
+
+    client.head_bucket.assert_called_once_with(Bucket="mdds")
+
+
+def test_s3_storage_check_readiness_logs_started_and_completed_events_on_success(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.INFO,
+        logger="mdds_worker_runtime.storage.s3_client",
+    )
+
+    client = MagicMock()
+    storage = S3Storage(client, "mdds")
+
+    storage.check_readiness()
+
+    assert any(
+        record.message == "Checking S3-compatible storage bucket readiness."
+        and getattr(record, "component", None) == "s3_storage"
+        and getattr(record, "event", None) == "s3_bucket_readiness_check_started"
+        and getattr(record, "bucket", None) == "mdds"
+        for record in caplog.records
+    )
+    assert any(
+        record.message == "S3-compatible storage bucket readiness check completed."
+        and getattr(record, "component", None) == "s3_storage"
+        and getattr(record, "event", None) == "s3_bucket_readiness_check_completed"
+        and getattr(record, "bucket", None) == "mdds"
+        for record in caplog.records
+    )
+
+
+def test_s3_storage_check_readiness_raises_readiness_error_when_head_bucket_fails() -> (
+    None
+):
+    original_error = RuntimeError("head bucket failed")
+
+    client = MagicMock()
+    client.head_bucket.side_effect = original_error
+
+    storage = S3Storage(client, "mdds")
+
+    with pytest.raises(
+        S3StorageReadinessError,
+        match="S3-compatible storage bucket is not ready: bucket='mdds'.",
+    ):
+        storage.check_readiness()
+
+    client.head_bucket.assert_called_once_with(Bucket="mdds")
+
+
+def test_s3_storage_check_readiness_preserves_original_exception_as_cause() -> None:
+    original_error = RuntimeError("head bucket failed")
+
+    client = MagicMock()
+    client.head_bucket.side_effect = original_error
+
+    storage = S3Storage(client, "mdds")
+
+    with pytest.raises(S3StorageReadinessError) as error:
+        storage.check_readiness()
+
+    assert error.value.__cause__ is original_error
+
+
+def test_s3_storage_check_readiness_logs_failed_event_with_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.INFO,
+        logger="mdds_worker_runtime.storage.s3_client",
+    )
+
+    client = MagicMock()
+    client.head_bucket.side_effect = RuntimeError("head bucket failed")
+
+    storage = S3Storage(client, "mdds")
+
+    with pytest.raises(S3StorageReadinessError):
+        storage.check_readiness()
+
+    assert any(
+        record.message == "S3-compatible storage bucket readiness check failed."
+        and record.exc_info is not None
+        and getattr(record, "component", None) == "s3_storage"
+        and getattr(record, "event", None) == "s3_bucket_readiness_check_failed"
+        and getattr(record, "bucket", None) == "mdds"
+        for record in caplog.records
+    )

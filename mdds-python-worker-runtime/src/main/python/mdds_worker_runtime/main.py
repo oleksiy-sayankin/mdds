@@ -280,6 +280,7 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
 
     boto3_client = Boto3S3ClientFactory(s3_properties).create()
     storage = S3Storage(boto3_client, s3_properties.bucket)
+    storage.check_readiness()
 
     jobs_root = worker_config.jobs_root
     handler_import_path = worker_config.worker_handler
