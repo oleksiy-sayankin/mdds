@@ -30,6 +30,7 @@ Refer to the LICENSE file in the root directory for full license details.
       * [Job handler validation method contract](#job-handler-validation-method-contract)
       * [Job handler data access pattern](#job-handler-data-access-pattern)
     * [Local execution registry](#local-execution-registry)
+    * [Worker job state transition coordination](#worker-job-state-transition-coordination)
     * [Terminal status publication rule](#terminal-status-publication-rule)
     * [Submitted job message](#submitted-job-message)
     * [Status update message](#status-update-message)
@@ -125,7 +126,9 @@ The Worker is responsible for:
 - selecting the correct handler for the given `jobType`;
 - downloading input artifacts;
 - performing job-specific semantic validation before execution;
-- publishing lifecycle updates, including `VALIDATION_FAILED` when inputs or parameters are semantically invalid for the given `jobType`;
+- publishing lifecycle updates through Worker Runtime; terminal statuses and
+  the initial `IN_PROGRESS` publication are coordinated by the Worker Runtime
+  job state transition coordinator;
 - executing the actual job logic;
 - uploading output artifacts;
 - publishing lifecycle status updates including its `workerId` when it claims a job for execution.
@@ -169,8 +172,10 @@ graph TD;
   SUBMITTED-->ERROR;
   IN_PROGRESS-->DONE;
   IN_PROGRESS-->CANCEL_REQUESTED;
-  CANCEL_REQUESTED-->CANCELLED;
   IN_PROGRESS-->ERROR;
+  CANCEL_REQUESTED-->CANCELLED;
+  CANCEL_REQUESTED-->DONE;
+  CANCEL_REQUESTED-->ERROR;
 ```
 
 - `DRAFT` — the job has been created, but input artifacts are still being uploaded;
@@ -187,7 +192,15 @@ graph TD;
 - A newly created job always starts in `DRAFT`.
 - A job can be submitted only after all required inputs and required parameters have been provided.
 - After a job is submitted, its input artifacts and parameters must be treated as immutable.
-- `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled. It means cancellation has been requested. The final state becomes `CANCELLED` only after confirmation from the execution side.
+- `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled.
+  It means cancellation has been requested. `CANCEL_REQUESTED` is a non-terminal
+  state. If cancellation wins on the execution side, the final state becomes
+  `CANCELLED`. If execution completion or runtime failure is committed first by
+  the Worker Runtime job state transition coordinator, the final state may become
+  `DONE` or `ERROR` instead, and the cancellation request becomes stale.
+- `CANCEL_REQUESTED` may transition to `CANCELLED`, `DONE`, or `ERROR`.
+  Cancellation is best-effort and does not reserve `CANCELLED` as the only
+  possible final state.
 - Cancellation is supported only for jobs that are already in `IN_PROGRESS` state and have a known `workerId`.
 - Jobs in `DRAFT` are not cancellable; the client may simply stop using the draft job.
 - Jobs in `SUBMITTED` are already accepted into the execution pipeline but are not yet owned by a specific Worker, therefore cancellation of `SUBMITTED` jobs is not supported in v1.
@@ -246,6 +259,7 @@ sequenceDiagram
        
        Note over Client, Server: Job is being processed
     end
+    Worker->>S3: Upload output artifacts as part of DONE terminal transition attempt
     Worker-->>Queue: Status update: DONE
     Queue-->>Server: Status update: DONE
     Server->>RDBMS: Update Job status to DONE
@@ -327,17 +341,39 @@ For each job message the runtime:
 1. extracts `manifestObjectKey`;
 2. loads `manifest.json` from object storage;
 3. validates manifest schema;
-4. downloads declared input artifacts;
-5. creates `JobExecutionContext`;
-6. calls `handler.validate(context)` through the Worker Runtime validation handling component;
-7. if `handler.validate(context)` raises `ValidationFailed`, publishes `VALIDATION_FAILED`, acknowledges the job message after successful status publication, cleans up the local workspace, and does not start supervised execution;
-8. if `handler.validate(context)` raises any other exception and job identity is known, publishes `ERROR` and acknowledges the job message after successful status publication;
-9. starts job execution in a supervised execution process only if validation returns normally;
-10. registers the running job in the local execution registry;
-11. publishes `IN_PROGRESS` with `workerId` after the execution record has been registered;
-12. collects output artifacts produced through runtime-provided output abstractions and uploads them to object storage when the process completes successfully;
-13. publishes `DONE` with progress `100`;
-14. acknowledges the job message.
+4. once `jobId`, `userId`, and `jobType` are known, creates or resolves the
+   per-job worker-local state in the job state transition coordinator;
+5. downloads declared input artifacts as a coordinator-owned preparation
+   transition for that job;
+6. creates `JobExecutionContext`;
+7. calls `handler.validate(context)` as a coordinator-owned validation
+   transition for that job;
+8. if `handler.validate(context)` raises `ValidationFailed`, requests the
+   job state transition coordinator to commit `VALIDATION_FAILED`, acknowledges
+   the job message only through the coordinator after successful
+   `VALIDATION_FAILED` status publication and successful terminal transition
+   commit, cleans up the local workspace according to the coordinator cleanup
+   policy, and does not start supervised execution;
+9. if `handler.validate(context)` raises any other exception and job identity is
+   known, requests the job state transition coordinator to commit `ERROR` and
+   acknowledges the job message only through the coordinator after successful
+   `ERROR` status publication and successful terminal transition commit;
+10. requests the job state transition coordinator to start supervised execution
+    as a coordinator-owned transition;
+11. during this transition, the Worker Runtime starts the supervised execution
+    process, registers the running job in the local execution registry, and
+    publishes `IN_PROGRESS` with `workerId` only after the execution record has
+    been registered;
+12. after successful `IN_PROGRESS` publication, the coordinator marks the
+    worker-local job state as running;
+13. when the supervised process completes successfully, requests the job state
+    transition coordinator to commit terminal `DONE` with progress `100`;
+14. the `DONE` terminal transition attempt includes collecting output artifacts
+    produced through runtime-provided output abstractions, uploading them to
+    object storage, publishing terminal `DONE`, committing the terminal
+    transition, and acknowledging the original submitted job message;
+15. acknowledges the job message only through the job state transition
+    coordinator after a terminal transition has been successfully committed.
 
 > The Worker Runtime publishes the initial `IN_PROGRESS` status only after the
 > local execution record has been registered. This ensures that once
@@ -345,10 +381,15 @@ For each job message the runtime:
 > applied by the cancellation listener.
 
 The runtime also starts a cancellation listener. The listener subscribes to
-`MDDS_WORKER_CANCEL_QUEUE_NAME`. 
-When a cancellation message is received, the cancellation listener marks the local execution as cancelled
-and notifies the execution supervisor. The Worker Runtime then terminates the supervised job process,
-publishes `CANCELLED`, and acknowledges the original submitted job message according to the RabbitMQ client threading model.
+`MDDS_WORKER_CANCEL_QUEUE_NAME`.
+When a cancellation message is received, the cancellation listener marks the
+local execution as cancelled and notifies the execution supervisor.
+The Worker Runtime then terminates the supervised job process and requests the
+job state transition coordinator to commit terminal `CANCELLED`.
+
+The original submitted job message is acknowledged only through the job state transition coordinator 
+after successful `CANCELLED` status publication and
+successful terminal transition commit.
 
 The runtime acknowledges the job message only after the job reaches a terminal state
 from the worker point of view: `DONE`, `ERROR`, `CANCELLED`, or `VALIDATION_FAILED`.
@@ -357,8 +398,8 @@ For each job, the Worker Runtime must publish at most one terminal status:
 `DONE`, `ERROR`, `CANCELLED`, or `VALIDATION_FAILED`.
 
 The first successfully committed terminal transition wins.
-After a terminal status is published, all later terminal attempts for the same `jobId`
-must be ignored and logged.
+After a terminal status has been successfully published and committed, all later
+terminal attempts for the same `jobId` must be ignored and logged.
 
 If the runtime fails before publishing a terminal status, it may reject/nack the job message according to the configured retry policy.
 
@@ -376,9 +417,13 @@ The Worker Runtime consists of the following internal services:
 - **Execution supervisor** — starts and tracks supervised job processes.
 - **Execution registry** — stores active job execution records by `jobId`.
 - **Cancellation listener** — consumes cancellation messages from the worker-specific cancellation queue.
-- **Execution watcher** — observes child process completion and converts it to `DONE` or `ERROR`.
-- **Cleanup watcher** — removes terminal execution records after status publication and acknowledgement.
-- **Timeout watcher** — terminates jobs that exceed configured runtime timeout and publishes `ERROR`.
+- **Execution watcher** — observes child process completion and requests the
+  job state transition coordinator to commit `DONE` or `ERROR`.
+- **Cleanup watcher** — requests the job state transition coordinator to perform
+  cleanup for jobs marked as cleanup-eligible. Physical resource cleanup and
+  local execution record removal are performed only as a coordinator-owned
+  cleanup transition.
+- **Timeout watcher** — terminates jobs that exceed configured runtime timeout and requests the job state transition coordinator to commit `ERROR`.
 
 These services are internal runtime implementation details. A concrete job handler must not interact with them directly.
 
@@ -387,29 +432,52 @@ The concrete IPC mechanism is implementation-specific.
 In v1 it may be a multiprocessing Pipe.
 
 The child process must not publish lifecycle statuses directly.
-It returns execution outcome to the main runtime, and the main runtime publishes final status updates.
+It returns execution outcome to the main runtime, and the main runtime requests
+terminal status publication through the job state transition coordinator.
 
 ### Failure policy
 
-If `handler.validate(context)` raises `ValidationFailed`, the runtime publishes
-`VALIDATION_FAILED` and acknowledges the job message after successful status
-publication. This is treated as expected semantic invalidity of submitted job
-inputs or parameters.
+If input artifact preparation fails after the runtime has already determined
+`jobId`, `userId`, and `jobType`, the preparation transition must be rolled back
+or marked failed through the coordinator, and the runtime must request the
+coordinator to commit terminal `ERROR`.
+
+The submitted job message is acknowledged only through the coordinator after
+successful `ERROR` status publication and successful terminal transition commit.
+
+If `handler.validate(context)` raises `ValidationFailed`, the runtime requests
+the job state transition coordinator to commit `VALIDATION_FAILED`. The submitted
+job message is acknowledged only through the coordinator after successful
+`VALIDATION_FAILED` status publication and successful terminal transition
+commit. This is treated as expected semantic invalidity of submitted job inputs
+or parameters.
 
 If `handler.validate(context)` raises any other exception and the job identity is
-known, the runtime must publish `ERROR` and acknowledge the job message after
-successful status publication. Such exceptions are treated as Worker-side
-processing failures, not as semantic validation failures.
+known, the runtime requests the job state transition coordinator to commit
+`ERROR`. The submitted job message is acknowledged only through the coordinator
+after successful `ERROR` status publication and successful terminal transition
+commit. Such exceptions are treated as Worker-side processing failures, not as
+semantic validation failures.
 
 If supervised execution fails after `IN_PROGRESS` was published, the runtime
-publishes `ERROR` and acknowledges the job message. Failure may be detected
-through an IPC error result, an unexpected child process exit, or an execution
-watcher error.
+requests the job state transition coordinator to commit `ERROR`. The submitted
+job message is acknowledged only through the coordinator after successful
+`ERROR` status publication and successful terminal transition commit.
 
 If manifest loading, manifest schema validation, submitted job message parsing,
 or input preparation fails before the runtime can determine `jobId`, `userId`,
 or `jobType`, the runtime logs the error and rejects or nacks the message
 according to the configured retry policy.
+
+If output artifact collection or upload fails during the `DONE` terminal
+transition attempt, the coordinator must roll back the `DONE` claim. The runtime
+must not publish `DONE`.
+
+After the `DONE` claim is rolled back, the runtime failure path must request the
+coordinator to commit terminal `ERROR`.
+
+A cancellation request that arrived during the `DONE` attempt is stale because
+supervised execution has already completed.
 
 The exact retry and dead-letter policy is implementation-specific in v1.
 
@@ -426,8 +494,12 @@ validation itself is not cancellable in v1.
 The Worker Runtime may enforce a maximum execution time for a running job.
 
 If a job remains in `IN_PROGRESS` longer than `MDDS_WORKER_JOB_TIMEOUT_SECONDS`,
-the timeout watcher terminates the supervised job process, publishes `ERROR`
-with a timeout message, and acknowledges the original submitted job message.
+the timeout watcher terminates the supervised job process and requests the
+job state transition coordinator to commit `ERROR` with a timeout message.
+
+The original submitted job message is acknowledged only through the job state transition
+coordinator after successful `ERROR` status publication and
+successful terminal transition commit.
 
 Timeout is treated as runtime failure, not as cancellation.
 
@@ -471,8 +543,22 @@ This must match the queue name used by the Web Server when submitting a job.
 ### Job cancellation
 
 The runtime keeps the original submitted job message unacknowledged while the job is running.
-When cancellation succeeds, the Worker Runtime publishes `CANCELLED` and acknowledges the original submitted job message.
-The acknowledgement may be performed by the execution supervisor rather than directly by the cancellation listener.
+When cancellation succeeds, the Worker Runtime requests the job state transition coordinator
+to commit `CANCELLED`. The original submitted job message is acknowledged only through the job state transition coordinator
+after successful `CANCELLED` status publication and successful terminal transition commit.
+
+If the supervised process has already completed successfully and the Worker
+Runtime has started the `DONE` terminal transition attempt, cancellation must not
+interrupt that `DONE` attempt.
+
+The cancellation request waits until the active `DONE` attempt is committed or
+rolled back.
+
+If the `DONE` attempt commits successfully, the cancellation request is stale.
+
+If the `DONE` attempt rolls back because output artifact collection or upload
+failed, the runtime failure path attempts to commit `ERROR`; the cancellation
+request remains stale because supervised execution has already completed.
 
 If `MDDS_WORKER_CANCEL_QUEUE_NAME` is not set, the runtime derives it as:
 
@@ -484,8 +570,10 @@ If a job is cancelled, the runtime must not publish `DONE`.
 Partially produced output artifacts are implementation-defined and must not be exposed through
 the public output download endpoint because downloads are allowed only in `DONE` state.
 
-Cancellation is best-effort. If the job has already reached a terminal state before the cancellation listener terminates it,
-the cancellation request is ignored and no additional terminal status is published.
+Cancellation is best-effort.
+If the job has already reached a committed terminal state before the
+cancellation listener terminates it, the cancellation request is ignored and no
+additional terminal status is published.
 
 ### Job handler contract
 
@@ -573,13 +661,18 @@ Only `ValidationFailed` represents expected domain validation failure.
 
 When `validate(context)` raises `ValidationFailed`, the Worker Runtime treats the job as terminally validation-failed:
 
-* publishes `VALIDATION_FAILED`;
+* requests the job state transition coordinator to commit `VALIDATION_FAILED`;
 * includes the validation failure message in the status update;
 * does not publish `IN_PROGRESS`;
 * does not start supervised execution;
 * does not add the job to the local execution registry;
-* acknowledges the submitted job message after successful status publication;
-* cleans up the local prepared job workspace.
+* acknowledges the submitted job message only through the job state transition
+  coordinator after successful `VALIDATION_FAILED` status publication and
+  successful terminal transition commit;
+* cleans up the local prepared job workspace only after the terminal transition
+  has been successfully committed, or after rollback only when the runtime has
+  decided to abandon, reject, or retry the submitted job according to the
+  configured retry/dead-letter policy and the workspace is no longer required.
 
 Other exceptions raised from `validate(context)` are not treated as `VALIDATION_FAILED`.
 
@@ -639,7 +732,10 @@ If a library needs to write directly to a file path, the handler may resolve the
 output_path = context.outputs.path("outputSlot")
 ```
 
-The Worker Runtime maps logical output slots to object keys from `manifest.outputs` and uploads produced local output files to object storage after successful execution.
+The Worker Runtime maps logical output slots to object keys from
+`manifest.outputs` and uploads produced local output files to object storage as
+part of the coordinator-owned `DONE` terminal transition attempt after
+successful supervised execution.
 
 Conceptually, a job handler follows this structure:
 
@@ -692,15 +788,194 @@ Each record contains at least:
 
 * job identifier;
 * supervised process handle;
-* current local execution status;
 * start time;
 * optional end time;
 * original submitted job message delivery/acknowledgement handle;
 * parent-side IPC connection used to receive process result/status;
-* terminal status publication flag;
-* cleanup eligibility flag.
+* references to local runtime resources required for supervised execution.
+
+The local execution registry does not own worker-local job state, terminal
+transition ownership, terminal publication flags, acknowledgement state, or
+cleanup eligibility. These are owned by the job state transition coordinator.
 
 The registry is internal to the Worker Runtime. A concrete job handler must not access it directly.
+
+### Worker job state transition coordination
+
+The Worker Runtime has a single job state transition coordinator.
+
+The coordinator is the only Worker Runtime component allowed to own worker-local
+job state transitions after `jobId` is known.
+
+This includes pre-execution preparation, worker-side validation, supervised
+execution state, terminal transition attempts, terminal status publication,
+acknowledgement ordering, and cleanup eligibility.
+
+The coordinator is the only Worker Runtime component allowed to accept, commit,
+roll back, and publish terminal status transitions for a job.
+
+The coordinator owns all synchronization required for worker-local job state
+transitions after `jobId` is known.
+Other Worker Runtime components must not use `JobExecutionRecord` locks or any
+other local execution locks to decide worker-local state transition ownership or
+terminal transition ownership.
+
+The following components must request terminal outcome transitions through the
+coordinator and must not publish terminal statuses directly:
+
+* validation handler;
+* execution watcher;
+* timeout watcher;
+* cancellation handler.
+
+The cleanup watcher must not publish terminal statuses, must not decide terminal
+ownership, and must not remove local execution state directly. It may only
+request cleanup through the job state transition coordinator. Physical resource
+cleanup and local execution record removal are performed as a coordinator-owned
+cleanup transition.
+
+The coordinator must support both running jobs with a registered
+`JobExecutionRecord` and pre-execution worker-local state transitions where job
+identity is known but supervised execution has not been started yet.
+
+As soon as the Worker Runtime can determine `jobId`, the coordinator creates or
+resolves a per-job worker-local state for that job.
+
+This state is independent from the local execution registry and may exist before
+a `JobExecutionRecord` is registered.
+
+All worker-local state transitions for that job must use this per-job state.
+
+Each per-job worker-local state has its own synchronization primitive.
+State transitions for different `jobId` values must not block each other.
+
+The coordinator may use a short coordinator-wide lock only to create, look up,
+or remove per-job worker-local states.
+
+External side effects such as S3 uploads, RabbitMQ publication, filesystem operations, or message acknowledgement
+must not be protected by one global coordinator-wide lock.
+
+For each `jobId`, all worker-local state transitions are serialized by the
+coordinator.
+
+Terminal transition attempts are a subset of worker-local state transitions.
+
+Every worker-local state transition follows this contract:
+
+1. acquire the per-job worker-local state lock;
+2. verify that the transition is valid for the current worker-local state;
+3. perform side effects required for that transition;
+4. if all required side effects succeed, update the worker-local state and
+   release the lock;
+5. if any required side effect fails, do not advance the worker-local state,
+   roll back or mark the transition as failed according to the transition policy,
+   and release the lock.
+
+A terminal transition attempt has two phases:
+
+1. **claim phase** — the coordinator atomically claims a candidate terminal
+   transition using its own internal synchronization;
+2. **commit phase** — the coordinator performs the required side effects and
+   commits the terminal transition only if all required side effects succeed.
+
+A claimed terminal transition is not final.
+
+Competing terminal attempts for the same `jobId` must not be permanently
+discarded only because another claim is currently active. They must either wait
+until the active claim is committed or rolled back, or be retried by the
+responsible runtime component.
+
+The first successfully committed terminal transition wins.
+
+Once a terminal transition has been committed, all later terminal attempts for
+the same `jobId` must be ignored and logged.
+
+Terminal transition claim, side effects, commit, and rollback follow this
+contract:
+
+1. atomically claim or reject the terminal transition using the coordinator's
+   internal synchronization;
+2. perform all side effects required before terminal transition commit. For
+   `DONE`, this includes collecting output artifacts, uploading them to object
+   storage, and publishing terminal `DONE`. For `ERROR`, `CANCELLED`, and
+   `VALIDATION_FAILED`, this includes publishing the corresponding terminal
+   status update;
+3. if all required side effects succeed, commit the terminal transition using
+   the coordinator's internal synchronization;
+4. acknowledge the original submitted job message only after successful terminal
+   status publication and successful terminal transition commit;
+5. mark the execution record or pre-execution terminal state as cleanup-eligible
+   only after the terminal transition has been committed;
+6. if any required side effect fails before commit, roll back the terminal
+   transition claim using the coordinator's internal synchronization.
+
+After rollback, the coordinator must return the per-job worker-local state to a
+state where another valid transition attempt may be accepted.
+
+This rollback policy is intentionally similar to transaction atomicity: either
+the terminal transition is fully committed, or the local claim is rolled back and
+the Worker Runtime behaves as if that terminal transition did not win.
+
+External side effects must be ordered so that rollback is safe.
+
+If an external side effect cannot be rolled back reliably, the Worker Runtime
+must either perform it only after the terminal transition commit point or treat
+it as a best-effort compensating action.
+
+For example:
+
+* a terminal status message must not be considered committed until the publish
+  operation has succeeded according to the queue client contract;
+* the original submitted job message must not be acknowledged before terminal
+  status publication succeeds;
+* output artifacts must not be exposed as valid results unless the job reaches
+  `DONE`;
+* partially produced or partially uploaded artifacts from failed or rolled-back
+  transitions must not be exposed through the public output download endpoint;
+* cleanup must not remove local execution state before the terminal transition
+  has either committed or rolled back.
+
+If terminal status publication fails before the terminal transition has been
+committed, the coordinator must roll back the claim. A later valid terminal
+transition attempt may then win.
+
+If terminal status publication succeeds, the transition must be committed before
+the original submitted job message is acknowledged.
+
+The Worker Runtime does not provide a distributed ACID transaction across
+RabbitMQ, S3, the local filesystem, and in-memory execution state. The
+coordinator provides worker-local atomicity for terminal transition ownership
+and uses ordering, idempotency, and best-effort compensation for external side
+effects.
+
+A worker-local state transition must hold the per-job worker-local state lock
+while performing side effects required for that same job.
+
+This is intentional. While one state transition is in progress for a job,
+competing state transitions for the same `jobId` must wait until the active
+transition is committed or rolled back.
+
+This does not block state transitions for other jobs because each job has its
+own worker-local state.
+
+The coordinator must not hold the per-job lock for the whole duration of
+supervised execution. Starting execution and marking it as running is a
+state transition. The supervised process execution itself is long-running work,
+not a state transition, and must run without holding the per-job coordinator
+lock.
+
+After a terminal transition has been committed, the coordinator may keep a short
+per-job terminal tombstone to reject or ignore late terminal attempts and stale
+cancellation messages.
+
+The per-job worker-local state may be removed only after the coordinator-owned
+cleanup transition has completed. Before that point, the state must remain
+available so that stale terminal attempts, stale cancellation messages, and
+cleanup completion can be handled consistently.
+
+Cleanup is also a worker-local state transition. Cleanup must not remove local
+execution state before the terminal transition has either committed or rolled
+back, and cleanup completion must be recorded through the coordinator.
 
 ### Terminal status publication rule
 
@@ -713,8 +988,9 @@ Terminal statuses are:
 - `CANCELLED`;
 - `VALIDATION_FAILED`.
 
-The first terminal transition wins. After a terminal status has been published,
-all later terminal attempts for the same `jobId` must be ignored and logged.
+The first successfully committed terminal transition wins. After a terminal
+status has been successfully published and committed, all later terminal
+attempts for the same `jobId` must be ignored and logged.
 
 ### Submitted job message
 
@@ -750,6 +1026,12 @@ The worker runtime publishes status updates to `MDDS_WORKER_STATUS_QUEUE_NAME` u
 | `ERROR`             | Yes                 | implementation-defined                 | required/recommended |
 | `CANCELLED`         | Yes                 | implementation-defined                 | optional/recommended |
 
+Terminal status update messages are published only through the Worker Runtime
+job state transition coordinator.
+
+`IN_PROGRESS` is a non-terminal status update, but its initial publication is
+performed as part of the coordinator-owned transition to the worker-local
+running state.
 
 The Worker must not publish `DRAFT`, `SUBMITTED`, or `CANCEL_REQUESTED`.
 These states are controlled by the Web Server.
@@ -773,8 +1055,11 @@ By default, this queue is derived as `cancel.queue-${MDDS_WORKER_ID}`.
 
 The cancellation message itself is acknowledged after the Worker Runtime accepts it for local processing.
 
-If no active execution record exists for the given `jobId`, the runtime logs the condition and acknowledges or 
-rejects the cancellation message according to the configured cancellation-message policy.
+If no active execution record exists for the given `jobId`, the runtime logs the
+condition and acknowledges or rejects the cancellation message according to the
+configured cancellation-message policy. If the coordinator already knows that
+the job has reached a committed terminal state, the cancellation message is
+treated as stale and must not create another terminal transition attempt.
 
 ## REST API v1
 
@@ -1166,6 +1451,10 @@ X-MDDS-User-Login: <user-login>
 Accepts a cancellation request for a running job.
 The job must be in `IN_PROGRESS` state and must have a known `workerId`.
 The Web Server records the job as `CANCEL_REQUESTED` and forwards a targeted cancellation signal to the Worker identified by `workerId`.
+`CANCEL_REQUESTED` is not a terminal state and does not guarantee that the final
+state will be `CANCELLED`. If the Worker Runtime commits `DONE` or `ERROR`
+before cancellation is committed, that terminal state wins and the cancellation
+request is treated as stale.
 If a job is already in `CANCEL_REQUESTED` state, repeated cancellation returns `202 Accepted`.
 Cancellation of `DRAFT` or `SUBMITTED` jobs is not supported in v1.
 
