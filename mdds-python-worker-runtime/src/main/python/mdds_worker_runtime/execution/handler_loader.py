@@ -156,6 +156,18 @@ class JobHandlerLoader:
             )
 
     @staticmethod
+    def _signature_with_resolved_annotations(
+        method,
+        import_path: str,
+    ) -> inspect.Signature:
+        try:
+            return inspect.signature(method, eval_str=True)
+        except (NameError, TypeError, ValueError) as exc:
+            raise JobHandlerLoadError(
+                f"Cannot inspect handler method annotations: {import_path}"
+            ) from exc
+
+    @staticmethod
     def _validate_handler_method_signature(
         handler_class: type[JobHandler],
         method_name: str,
@@ -169,7 +181,10 @@ class JobHandlerLoader:
                 f"(self, context): {import_path}"
             )
 
-        signature = inspect.signature(method)
+        signature = JobHandlerLoader._signature_with_resolved_annotations(
+            method,
+            import_path,
+        )
         parameters = list(signature.parameters.values())
 
         if len(parameters) != 2:

@@ -16,6 +16,9 @@ from tests.fixtures.job_handlers import (
 )
 
 FIXTURE_MODULE = "tests.fixtures.job_handlers"
+POSTPONED_ANNOTATIONS_FIXTURE_MODULE = (
+    "tests.fixtures.postponed_annotation_job_handlers"
+)
 
 
 def test_loader_loads_valid_job_handler() -> None:
@@ -303,3 +306,49 @@ def test_loader_validate_loadable_rejects_non_job_handler_instance() -> None:
         match="Handler constructor must return a JobHandler instance",
     ):
         loader.validate_loadable()
+
+
+def test_loader_loads_handler_with_postponed_job_execution_context_annotations() -> (
+    None
+):
+    loader = JobHandlerLoader(
+        f"{POSTPONED_ANNOTATIONS_FIXTURE_MODULE}:" "PostponedAnnotationsJobHandler"
+    )
+
+    handler = loader.load()
+
+    assert isinstance(handler, JobHandler)
+    assert handler.__class__.__name__ == "PostponedAnnotationsJobHandler"
+
+
+def test_loader_rejects_handler_with_postponed_wrong_context_annotation() -> None:
+    with pytest.raises(
+        JobHandlerLoadError,
+        match="Handler method validate context parameter must be annotated",
+    ):
+        JobHandlerLoader(
+            f"{POSTPONED_ANNOTATIONS_FIXTURE_MODULE}:"
+            "PostponedWrongContextAnnotationJobHandler"
+        )
+
+
+def test_loader_rejects_handler_with_postponed_wrong_return_annotation() -> None:
+    with pytest.raises(
+        JobHandlerLoadError,
+        match="Handler method validate return type must be None",
+    ):
+        JobHandlerLoader(
+            f"{POSTPONED_ANNOTATIONS_FIXTURE_MODULE}:"
+            "PostponedWrongReturnAnnotationJobHandler"
+        )
+
+
+def test_loader_rejects_handler_with_unresolvable_postponed_annotation() -> None:
+    with pytest.raises(
+        JobHandlerLoadError,
+        match="Cannot inspect handler method annotations",
+    ):
+        JobHandlerLoader(
+            f"{POSTPONED_ANNOTATIONS_FIXTURE_MODULE}:"
+            "PostponedUnresolvableContextAnnotationJobHandler"
+        )
