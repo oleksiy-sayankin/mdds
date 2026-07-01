@@ -127,6 +127,11 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
             submitted_ack=submitted_ack,
         )
 
+        execution_record = self._execution_supervisor.start(
+            supervised_execution_request
+        )
+        self._execution_registry.add(execution_record)
+
         self._status_publisher.publish_in_progress(
             manifest.user_id,
             manifest.job_id,
@@ -135,8 +140,3 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
             0,
             "Start job execution",
         )
-
-        execution_record = self._execution_supervisor.start(
-            supervised_execution_request
-        )
-        self._execution_registry.add(execution_record)

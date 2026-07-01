@@ -81,6 +81,43 @@ class StatusCollectingHandler:
         ack.ack()
 
 
+class CancelOnFirstInProgressStatusHandler(StatusCollectingHandler):
+    def __init__(
+        self,
+        *,
+        rabbitmq_properties: RabbitMqProperties,
+        cancel_queue_name: str,
+        job_id: str,
+    ) -> None:
+        super().__init__()
+        self._rabbitmq_properties = rabbitmq_properties
+        self._cancel_queue_name = cancel_queue_name
+        self._job_id = job_id
+        self._cancel_published = False
+
+    @property
+    def cancel_published(self) -> bool:
+        return self._cancel_published
+
+    def handle(self, message, ack) -> None:
+        status = message.payload
+        self.received.put(status)
+
+        if (
+            status.jobId == self._job_id
+            and status.status == WorkerJobStatus.IN_PROGRESS.value
+            and not self._cancel_published
+        ):
+            self._cancel_published = True
+            _publish_cancel_message(
+                rabbitmq_properties=self._rabbitmq_properties,
+                cancel_queue_name=self._cancel_queue_name,
+                job_id=self._job_id,
+            )
+
+        ack.ack()
+
+
 @pytest.fixture(scope="session")
 def rabbitmq_container():
     with RabbitMqContainer(
@@ -705,6 +742,208 @@ def test_worker_runtime_ignores_cancellation_message_after_done(
                 status_subscription.close()
 
         assert _basic_get(rabbitmq_properties, job_queue_name) is None
+
+    finally:
+        _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, status_queue_name)
+        _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
+
+
+def test_worker_runtime_accepts_cancel_published_immediately_after_in_progress(
+    rabbitmq_properties: RabbitMqProperties,
+    s3_client_and_endpoint,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    s3_client, s3_endpoint = s3_client_and_endpoint
+
+    test_id = str(uuid4())
+    job_id = f"job-{test_id}"
+
+    job_queue_name = f"test.job.cancellation.immediate.{test_id}"
+    status_queue_name = f"test.status.cancellation.immediate.{test_id}"
+    cancel_queue_name = f"test.cancel.cancellation.immediate.{test_id}"
+
+    manifest_key = f"jobs/{USER_ID}/{job_id}/manifest.json"
+    number_a_key = f"jobs/{USER_ID}/{job_id}/in/number_a.csv"
+    number_b_key = f"jobs/{USER_ID}/{job_id}/in/number_b.csv"
+    sum_key = f"jobs/{USER_ID}/{job_id}/out/sum.csv"
+
+    job_workspace = tmp_path / "jobs" / str(USER_ID) / job_id
+
+    _declare_queue(rabbitmq_properties, job_queue_name)
+    _declare_queue(rabbitmq_properties, status_queue_name)
+    _declare_queue(rabbitmq_properties, cancel_queue_name)
+
+    try:
+        _put_json(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=manifest_key,
+            value=_manifest(
+                job_id=job_id,
+                number_a_key=number_a_key,
+                number_b_key=number_b_key,
+                sum_key=sum_key,
+            ),
+        )
+        _put_bytes(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=number_a_key,
+            body=NUMBER_A_VALUE.encode("utf-8"),
+        )
+        _put_bytes(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=number_b_key,
+            body=NUMBER_B_VALUE.encode("utf-8"),
+        )
+
+        assert _object_exists(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=manifest_key,
+        )
+        assert _object_exists(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=number_a_key,
+        )
+        assert _object_exists(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=number_b_key,
+        )
+        assert not _object_exists(
+            s3_client=s3_client,
+            bucket=S3_BUCKET,
+            key=sum_key,
+        )
+
+        _configure_worker_runtime_environment(
+            monkeypatch=monkeypatch,
+            rabbitmq_properties=rabbitmq_properties,
+            s3_endpoint=s3_endpoint,
+            jobs_root=tmp_path,
+            job_queue_name=job_queue_name,
+            status_queue_name=status_queue_name,
+            cancel_queue_name=cancel_queue_name,
+        )
+
+        status_handler = CancelOnFirstInProgressStatusHandler(
+            rabbitmq_properties=rabbitmq_properties,
+            cancel_queue_name=cancel_queue_name,
+            job_id=job_id,
+        )
+        runtime = None
+
+        with RabbitMqQueueClient(
+            rabbitmq_properties,
+            prefetch_count=1,
+        ) as status_client:
+            status_subscription = status_client.subscribe(
+                status_queue_name,
+                JobStatusUpdateDTO,
+                status_handler,
+            )
+
+            try:
+                runtime = worker_main.build_worker_runtime_from_environment()
+                runtime.start()
+
+                with RabbitMqQueueClient(rabbitmq_properties) as publisher_client:
+                    publisher_client.publish(
+                        job_queue_name,
+                        QueueMessage(
+                            payload=JobMessageDTO(
+                                manifestObjectKey=manifest_key,
+                            ),
+                        ),
+                    )
+
+                cancelled_status = _wait_for_status(
+                    status_handler=status_handler,
+                    job_id=job_id,
+                    expected_status=WorkerJobStatus.CANCELLED,
+                )
+
+                _wait_until(lambda: not job_workspace.exists())
+                _wait_for_ack_to_be_processed()
+
+                statuses = _drain_statuses(status_handler)
+                terminal_statuses = _terminal_statuses_for_job(
+                    statuses=statuses,
+                    job_id=job_id,
+                )
+
+                assert status_handler.cancel_published is True
+
+                assert (
+                    _index_of_status(
+                        statuses,
+                        WorkerJobStatus.IN_PROGRESS.value,
+                        job_id,
+                    )
+                    is not None
+                )
+
+                assert cancelled_status.jobId == job_id
+                assert cancelled_status.job_id == job_id
+                assert cancelled_status.workerId == WORKER_ID
+                assert cancelled_status.worker_id == WORKER_ID
+                assert cancelled_status.status == WorkerJobStatus.CANCELLED.value
+
+                assert _contains_status_before(
+                    statuses=statuses,
+                    earlier_status=WorkerJobStatus.IN_PROGRESS.value,
+                    later_status=WorkerJobStatus.CANCELLED.value,
+                    job_id=job_id,
+                )
+
+                assert [status.status for status in terminal_statuses] == [
+                    WorkerJobStatus.CANCELLED.value
+                ]
+
+                assert (
+                    _index_of_status(
+                        statuses,
+                        WorkerJobStatus.DONE.value,
+                        job_id,
+                    )
+                    is None
+                )
+                assert (
+                    _index_of_status(
+                        statuses,
+                        WorkerJobStatus.ERROR.value,
+                        job_id,
+                    )
+                    is None
+                )
+                assert (
+                    _index_of_status(
+                        statuses,
+                        WorkerJobStatus.VALIDATION_FAILED.value,
+                        job_id,
+                    )
+                    is None
+                )
+
+                assert not _object_exists(
+                    s3_client=s3_client,
+                    bucket=S3_BUCKET,
+                    key=sum_key,
+                )
+
+            finally:
+                if runtime is not None:
+                    runtime.stop()
+
+                status_subscription.close()
+
+        assert _basic_get(rabbitmq_properties, job_queue_name) is None
+        assert _basic_get(rabbitmq_properties, cancel_queue_name) is None
 
     finally:
         _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
