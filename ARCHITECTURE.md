@@ -332,12 +332,17 @@ For each job message the runtime:
 6. calls `handler.validate(context)` through the Worker Runtime validation handling component;
 7. if `handler.validate(context)` raises `ValidationFailed`, publishes `VALIDATION_FAILED`, acknowledges the job message after successful status publication, cleans up the local workspace, and does not start supervised execution;
 8. if `handler.validate(context)` raises any other exception and job identity is known, publishes `ERROR` and acknowledges the job message after successful status publication;
-9. publishes `IN_PROGRESS` with `workerId` only if validation returns normally;
-10. starts job execution in a supervised execution process;
-11. registers the running job in the local execution registry;
+9. starts job execution in a supervised execution process only if validation returns normally;
+10. registers the running job in the local execution registry;
+11. publishes `IN_PROGRESS` with `workerId` after the execution record has been registered;
 12. collects output artifacts produced through runtime-provided output abstractions and uploads them to object storage when the process completes successfully;
 13. publishes `DONE` with progress `100`;
 14. acknowledges the job message.
+
+> The Worker Runtime publishes the initial `IN_PROGRESS` status only after the
+> local execution record has been registered. This ensures that once
+> `IN_PROGRESS` is externally visible, targeted cancellation for that job can be
+> applied by the cancellation listener.
 
 The runtime also starts a cancellation listener. The listener subscribes to
 `MDDS_WORKER_CANCEL_QUEUE_NAME`. 
