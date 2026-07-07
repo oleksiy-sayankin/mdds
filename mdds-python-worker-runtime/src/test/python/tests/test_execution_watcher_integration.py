@@ -9,9 +9,10 @@ import multiprocessing
 from pathlib import Path
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -21,12 +22,21 @@ from mdds_worker_runtime.execution.artifacts import (
 )
 from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.execution_watcher import ExecutionWatcher
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.execution.models import (
+    ExecutionRecord,
+    WorkerJobStatus,
+    ProcessRecord,
+)
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.supervised_process import (
     SupervisedExecutionResult,
     SupervisedExecutionStatus,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
+from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 WORKER_ID = "worker-1"
 JOB_TIMEOUT_SECONDS = 1.0
@@ -40,6 +50,7 @@ def test_execution_watcher_finalizes_multiple_real_child_processes(
     tmp_path: Path,
 ) -> None:
     registry = ExecutionRegistry()
+    coordinator = JobStateTransitionCoordinator()
     status_publisher = _StatusPublisherSpy()
     output_artifact_uploader = _OutputArtifactUploaderSpy()
 
@@ -52,6 +63,7 @@ def test_execution_watcher_finalizes_multiple_real_child_processes(
             tmp_path=tmp_path,
             process_context=process_context,
             registry=registry,
+            job_state_transition_coordinator=coordinator,
             job_id=job_id,
             should_succeed=True,
             delay_seconds=0.01 * (index + 1),
@@ -64,6 +76,7 @@ def test_execution_watcher_finalizes_multiple_real_child_processes(
             tmp_path=tmp_path,
             process_context=process_context,
             registry=registry,
+            job_state_transition_coordinator=coordinator,
             job_id=job_id,
             should_succeed=False,
             delay_seconds=0.01 * (SUCCEEDED_JOB_COUNT + index + 1),
@@ -72,6 +85,7 @@ def test_execution_watcher_finalizes_multiple_real_child_processes(
 
     watcher = ExecutionWatcher(
         execution_registry=registry,
+        job_state_transition_coordinator=coordinator,
         output_artifact_uploader=output_artifact_uploader,
         status_publisher=status_publisher,
         worker_id=WORKER_ID,
@@ -87,6 +101,7 @@ def test_execution_watcher_finalizes_multiple_real_child_processes(
         _wait_until(
             lambda: _assert_all_jobs_finalized(
                 fixtures=fixtures,
+                job_state_transition_coordinator=coordinator,
                 status_publisher=status_publisher,
             ),
             timeout_seconds=2.0,
@@ -106,19 +121,16 @@ def test_execution_watcher_finalizes_multiple_real_child_processes(
 
     for fixture in fixtures:
         record = fixture.record
+        state = coordinator.get_state(record.job_id)
 
-        assert record.terminal_status_claimed is True
-        assert record.terminal_status_published is True
-        assert record.acknowledgement_done is True
-        assert record.cleanup_ready is True
         assert fixture.submitted_ack.ack_count == 1
 
         if fixture.should_succeed:
-            assert record.terminal_status == WorkerJobStatus.DONE
+            assert state is WorkerJobStatus.DONE
             assert record.job_id in succeeded_job_ids
             assert record.job_id not in failed_job_ids
         else:
-            assert record.terminal_status == WorkerJobStatus.ERROR
+            assert state is WorkerJobStatus.ERROR
             assert record.job_id in failed_job_ids
             assert record.job_id not in succeeded_job_ids
 
@@ -128,6 +140,7 @@ def _start_child_process_and_register_execution(
     tmp_path: Path,
     process_context,
     registry: ExecutionRegistry,
+    job_state_transition_coordinator: JobStateTransitionCoordinator,
     job_id: str,
     should_succeed: bool,
     delay_seconds: float,
@@ -144,24 +157,25 @@ def _start_child_process_and_register_execution(
     submitted_ack = _SubmittedAckSpy()
     context = _context(tmp_path, job_id=job_id)
 
-    record = ExecutionRecord(
-        job_id=job_id,
-        user_id=context.user_id,
-        job_type=context.job_type,
-        worker_id=WORKER_ID,
-        manifest_object_key=f"jobs/{context.user_id}/{job_id}/manifest.json",
-        manifest=None,
+    execution_record = ExecutionRecord(
+        workspace=context.workspace,
         context=context,
-        process=process,
-        parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
-        started_at=datetime.now(timezone.utc),
+        process_record=ProcessRecord(
+            process=process,
+            parent_connection=parent_connection,
+            started_at=datetime.now(timezone.utc),
+        ),
     )
 
-    registry.add(record)
+    registry.add(execution_record)
+    record = job_state_transition_coordinator.create(
+        job_id, cast(Acknowledger, cast(object, submitted_ack))
+    )
+    with record.lock:
+        record.state = WorkerJobStatus.IN_PROGRESS
 
     return _RecordFixture(
-        record=record,
+        record=execution_record,
         submitted_ack=submitted_ack,
         should_succeed=should_succeed,
         parent_connection=parent_connection,
@@ -197,20 +211,27 @@ def _send_supervised_execution_result(
 def _assert_all_jobs_finalized(
     *,
     fixtures: list["_RecordFixture"],
+    job_state_transition_coordinator: JobStateTransitionCoordinator,
     status_publisher: "_StatusPublisherSpy",
 ) -> None:
     assert len(status_publisher.done_job_ids()) == SUCCEEDED_JOB_COUNT
     assert len(status_publisher.error_job_ids()) == FAILED_JOB_COUNT
 
     assert (
-        sum(1 for fixture in fixtures if fixture.record.terminal_status_claimed) == 10
+        sum(
+            1
+            for fixture in fixtures
+            if job_state_transition_coordinator.get_state(fixture.record.job_id)
+            in {
+                WorkerJobStatus.DONE,
+                WorkerJobStatus.ERROR,
+            }
+        )
+        == SUCCEEDED_JOB_COUNT + FAILED_JOB_COUNT
     )
-    assert (
-        sum(1 for fixture in fixtures if fixture.record.terminal_status_published) == 10
+    assert sum(fixture.submitted_ack.ack_count for fixture in fixtures) == (
+        SUCCEEDED_JOB_COUNT + FAILED_JOB_COUNT
     )
-    assert sum(1 for fixture in fixtures if fixture.record.acknowledgement_done) == 10
-    assert sum(1 for fixture in fixtures if fixture.record.cleanup_ready) == 10
-    assert sum(fixture.submitted_ack.ack_count for fixture in fixtures) == 10
 
 
 def _wait_until(
@@ -259,13 +280,42 @@ def _context(tmp_path: Path, *, job_id: str) -> JobExecutionContext:
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
         job_id=job_id,
         job_type="SOLVING_SLAE",
+        inputs={
+            "matrix": ArtifactRef(
+                object_key=f"jobs/42/{job_id}/in/matrix.csv",
+                format=ArtifactFormat.CSV,
+            ),
+            "rhs": ArtifactRef(
+                object_key=f"jobs/42/{job_id}/in/rhs.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key=f"jobs/42/{job_id}/out/solution.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id=WORKER_ID,
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts(
             {
                 "matrix": PreparedInputArtifact(
@@ -289,11 +339,7 @@ def _context(tmp_path: Path, *, job_id: str) -> JobExecutionContext:
                 ),
             }
         ),
-        params=JobParameters(
-            {
-                "solvingMethod": "numpy_exact_solver",
-            }
-        ),
+        params=JobParameters(manifest.params),
     )
 
 
@@ -324,48 +370,39 @@ class _StatusPublisherSpy:
 
     def publish_done(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         message: str = "Job completed successfully.",
     ) -> None:
         with self._lock:
             self._done.append(
                 _PublishedStatus(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_type=job_type,
-                    worker_id=worker_id,
+                    job_id=workspace.job_id,
+                    user_id=workspace.user_id,
+                    job_type=workspace.job_type,
+                    worker_id=workspace.worker_id,
                     message=message,
                 )
             )
 
     def publish_error(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         message: str,
     ) -> None:
         with self._lock:
             self._error.append(
                 _PublishedStatus(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_type=job_type,
-                    worker_id=worker_id,
+                    job_id=workspace.job_id,
+                    user_id=workspace.user_id,
+                    job_type=workspace.job_type,
+                    worker_id=workspace.worker_id,
                     message=message,
                 )
             )
 
     def publish_in_progress(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         progress: int,
         message: str,
     ) -> None:
@@ -374,10 +411,10 @@ class _StatusPublisherSpy:
         with self._lock:
             self._in_progress.append(
                 _PublishedStatus(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_type=job_type,
-                    worker_id=worker_id,
+                    job_id=workspace.job_id,
+                    user_id=workspace.user_id,
+                    job_type=workspace.job_type,
+                    worker_id=workspace.worker_id,
                     message=message,
                 )
             )

@@ -52,7 +52,8 @@ from mdds_worker_runtime.execution.status_publisher import StatusPublisher
 from mdds_worker_runtime.execution.supervisor import ExecutionSupervisor
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
 from mdds_worker_runtime.execution.validation_handler import ValidationHandler
-from mdds_worker_runtime.execution.workspace_cleaner import LocalJobWorkspaceCleaner
+from mdds_worker_runtime.execution.workspace import JobWorkspaceFactory
+from mdds_worker_runtime.job_state import JobStateTransitionCoordinator
 from mdds_worker_runtime.logging_config import setup_logging
 from mdds_worker_runtime.manifest.loader import ManifestLoader
 from mdds_worker_runtime.rabbitmq import RabbitMqProperties, RabbitMqQueueClient
@@ -290,12 +291,14 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
     handler_import_path = worker_config.worker_handler
     worker_id = worker_config.worker_id
 
+    job_workspace_factory = JobWorkspaceFactory(jobs_root, worker_id)
     manifest_loader = ManifestLoader(storage)
-    input_artifact_preparer = InputArtifactPreparer(storage, jobs_root)
+    job_state_transition_coordinator = JobStateTransitionCoordinator()
+    input_artifact_preparer = InputArtifactPreparer(storage)
     job_execution_context_factory = JobExecutionContextFactory(jobs_root)
     job_handler_loader = JobHandlerLoader(handler_import_path)
     job_handler_loader.validate_loadable()
-    execution_supervisor = ExecutionSupervisor(jobs_root, handler_import_path)
+    execution_supervisor = ExecutionSupervisor(handler_import_path)
     execution_registry = ExecutionRegistry()
 
     status_publisher = StatusPublisher(
@@ -306,29 +309,24 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
 
     output_artifact_uploader = OutputArtifactUploader(storage)
 
-    validation_handler = ValidationHandler(status_publisher, worker_id)
-
-    workspace_cleaner = LocalJobWorkspaceCleaner(
-        jobs_root=worker_config.jobs_root,
-    )
+    validation_handler = ValidationHandler()
 
     job_preparation_handler = JobPreparationHandler(
+        execution_registry=execution_registry,
         input_artifact_preparer=input_artifact_preparer,
         context_factory=job_execution_context_factory,
         job_handler_loader=job_handler_loader,
-        status_publisher=status_publisher,
-        workspace_cleaner=workspace_cleaner,
-        worker_id=worker_id,
     )
 
     job_consumer = JobConsumer(
         manifest_loader=manifest_loader,
+        job_workspace_factory=job_workspace_factory,
+        job_state_transition_coordinator=job_state_transition_coordinator,
         job_preparation_handler=job_preparation_handler,
         validation_handler=validation_handler,
         execution_supervisor=execution_supervisor,
         execution_registry=execution_registry,
         status_publisher=status_publisher,
-        worker_id=worker_id,
     )
 
     cancellation_request_handler = CancellationRequestHandler(
@@ -337,10 +335,13 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
         worker_id=worker_id,
         clock=clock,
     )
-    cancel_consumer = CancelConsumer(cancellation_request_handler, worker_id)
+    cancel_consumer = CancelConsumer(
+        job_state_transition_coordinator, cancellation_request_handler, worker_id
+    )
 
     execution_watcher = ExecutionWatcher(
         execution_registry=execution_registry,
+        job_state_transition_coordinator=job_state_transition_coordinator,
         output_artifact_uploader=output_artifact_uploader,
         status_publisher=status_publisher,
         worker_id=worker_id,
@@ -351,12 +352,14 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
 
     cleanup_watcher = CleanupWatcher(
         execution_registry=execution_registry,
+        job_state_transition_coordinator=job_state_transition_coordinator,
         worker_id=worker_id,
         cleanup_interval_seconds=worker_config.worker_cleanup_interval_seconds,
     )
 
     timeout_watcher = TimeoutWatcher(
         execution_registry=execution_registry,
+        job_state_transition_coordinator=job_state_transition_coordinator,
         status_publisher=status_publisher,
         worker_id=worker_id,
         job_timeout_seconds=worker_config.worker_job_timeout_seconds,

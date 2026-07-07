@@ -19,6 +19,9 @@ from mdds_worker_runtime.execution.supervised_process import (
     SupervisedExecutionResult,
     SupervisedExecutionStatus,
 )
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,10 @@ MAX_IN_PROGRESS_PROGRESS = 99
 
 DEFAULT_POLL_INTERVAL_SECONDS = 1.0
 DEFAULT_PROGRESS_INTERVAL_SECONDS = 5.0
+
+
+class OutputArtifactUploadFailed(RuntimeError):
+    """Raised when DONE finalization cannot upload output artifacts."""
 
 
 class ExecutionWatcher:
@@ -48,6 +55,7 @@ class ExecutionWatcher:
     def __init__(
         self,
         execution_registry: ExecutionRegistry,
+        job_state_transition_coordinator: JobStateTransitionCoordinator,
         output_artifact_uploader: OutputArtifactUploader,
         status_publisher: StatusPublisher,
         worker_id: str,
@@ -58,6 +66,8 @@ class ExecutionWatcher:
     ) -> None:
         if execution_registry is None:
             raise ValueError("execution_registry cannot be null.")
+        if job_state_transition_coordinator is None:
+            raise ValueError("job_state_transition_coordinator cannot be null.")
         if output_artifact_uploader is None:
             raise ValueError("output_artifact_uploader cannot be null.")
         if status_publisher is None:
@@ -74,6 +84,7 @@ class ExecutionWatcher:
             raise ValueError("clock cannot be null.")
 
         self._execution_registry = execution_registry
+        self._job_state_transition_coordinator = job_state_transition_coordinator
         self._output_artifact_uploader = output_artifact_uploader
         self._status_publisher = status_publisher
         self._worker_id = worker_id.strip()
@@ -155,16 +166,19 @@ class ExecutionWatcher:
 
             self._stop_requested.wait(self._poll_interval_seconds)
 
-    def _process_record(self, record: ExecutionRecord, now: datetime) -> None:
+    def _process_record(self, record: ExecutionRecord | None, now: datetime) -> None:
         if record is None:
             return
 
-        if self._is_terminal_claimed(record):
+        if not record.is_ready_for_execution_watchers:
+            return
+
+        if self._is_committed_terminal(record):
             logger.debug(
-                "Execution record is already terminal-claimed; skipping.",
+                "Execution record is already terminal in worker-local state; skipping.",
                 extra={
                     "component": "execution_watcher",
-                    "event": "execution_record_already_terminal_claimed",
+                    "event": "execution_record_already_terminal",
                     "jobId": record.job_id,
                     "userId": record.user_id,
                     "jobType": record.job_type,
@@ -178,22 +192,19 @@ class ExecutionWatcher:
             self._publish_in_progress_if_due(record, now)
             return
 
-        self._close_supervised_execution_resources(record)
-
         if result.status == SupervisedExecutionStatus.SUCCEEDED:
-            self._handle_succeeded(record, result, now)
+            self._handle_succeeded(record, result)
             return
 
         if result.status == SupervisedExecutionStatus.FAILED:
-            self._handle_failed(record, result, now)
+            self._handle_failed(record, result)
             return
 
-        self._handle_unknown_result_status(record, result, now)
+        self._handle_unknown_result_status(record, result)
 
-    @staticmethod
-    def _is_terminal_claimed(record: ExecutionRecord) -> bool:
-        with record.lock:
-            return record.terminal_status_claimed
+    def _is_committed_terminal(self, record: ExecutionRecord) -> bool:
+        state = self._job_state_transition_coordinator.get_state(record.job_id)
+        return state is not None and state.terminal
 
     @staticmethod
     def _try_read_execution_result(
@@ -280,6 +291,9 @@ class ExecutionWatcher:
         record: ExecutionRecord,
         now: datetime,
     ) -> None:
+        if not self._can_publish_periodic_in_progress(record):
+            return
+
         if not self._is_progress_interval_elapsed(record, now):
             return
 
@@ -288,10 +302,7 @@ class ExecutionWatcher:
 
         try:
             self._status_publisher.publish_in_progress(
-                user_id=record.user_id,
-                job_id=record.job_id,
-                job_type=record.job_type,
-                worker_id=self._worker_id,
+                workspace=record.workspace,
                 progress=progress,
                 message=message,
             )
@@ -325,6 +336,10 @@ class ExecutionWatcher:
             },
         )
 
+    def _can_publish_periodic_in_progress(self, record: ExecutionRecord) -> bool:
+        state = self._job_state_transition_coordinator.get_state(record.job_id)
+        return state is WorkerJobStatus.IN_PROGRESS
+
     def _is_progress_interval_elapsed(
         self,
         record: ExecutionRecord,
@@ -357,58 +372,58 @@ class ExecutionWatcher:
         self,
         record: ExecutionRecord,
         result: SupervisedExecutionResult,
-        now: datetime,
     ) -> None:
+        message = result.message or "Execution succeeded."
+
+        transition_result = self._job_state_transition_coordinator.transition(
+            job_id=record.job_id,
+            target_state=WorkerJobStatus.DONE,
+            operation=lambda: self._finalize_as_done(record, message),
+        )
+
+        if transition_result.committed:
+            self._forget_progress_state(record.job_id)
+            self._log_finalized_as_done(record)
+            return
+
+        if transition_result.stale:
+            self._log_stale_terminal_transition(record, WorkerJobStatus.DONE)
+            return
+
+        if isinstance(transition_result.error, OutputArtifactUploadFailed):
+            self._handle_output_upload_failed(record, transition_result.error)
+            return
+
+        self._log_terminal_transition_failed(
+            record=record,
+            attempted_status=WorkerJobStatus.DONE,
+            error=transition_result.error,
+        )
+
+    def _finalize_as_done(
+        self,
+        record: ExecutionRecord,
+        message: str,
+    ) -> None:
+        self._close_supervised_execution_resources(record)
+
         try:
             self._output_artifact_uploader.upload(record.context)
         except Exception as exc:
-            self._handle_output_upload_failed(record, exc, now)
-            return
-
-        message = result.message or "Execution succeeded."
-
-        claimed_record = self._execution_registry.try_claim_terminal(
-            job_id=record.job_id,
-            terminal_status=WorkerJobStatus.DONE,
-            message=message,
-            finished_at=now,
-        )
-
-        if claimed_record is None:
-            self._log_terminal_already_claimed(record, WorkerJobStatus.DONE)
-            return
+            raise OutputArtifactUploadFailed(
+                "Output artifact upload failed after supervised execution succeeded: "
+                f"{exc}"
+            ) from exc
 
         self._status_publisher.publish_done(
-            user_id=claimed_record.user_id,
-            job_id=claimed_record.job_id,
-            job_type=claimed_record.job_type,
-            worker_id=self._worker_id,
+            workspace=record.workspace,
             message=message,
-        )
-        self._execution_registry.mark_terminal_published(claimed_record.job_id)
-
-        self._acknowledge_and_mark_cleanup_ready(claimed_record)
-        self._forget_progress_state(claimed_record.job_id)
-
-        logger.info(
-            "Supervised execution completed successfully.",
-            extra={
-                "component": "execution_watcher",
-                "event": "supervised_execution_succeeded",
-                "jobId": claimed_record.job_id,
-                "userId": claimed_record.user_id,
-                "jobType": claimed_record.job_type,
-                "workerId": claimed_record.worker_id,
-                "status": WorkerJobStatus.DONE.value,
-                "progress": DONE_PROGRESS,
-            },
         )
 
     def _handle_failed(
         self,
         record: ExecutionRecord,
         result: SupervisedExecutionResult,
-        now: datetime,
     ) -> None:
         error_message = self._format_execution_error(result)
 
@@ -416,32 +431,23 @@ class ExecutionWatcher:
             record=record,
             message=error_message,
             event="supervised_execution_failed",
-            finished_at=now,
         )
 
     def _handle_output_upload_failed(
         self,
         record: ExecutionRecord,
         exc: Exception,
-        now: datetime,
     ) -> None:
-        message = (
-            "Output artifact upload failed after supervised execution succeeded: "
-            f"{exc}"
-        )
-
         self._finalize_as_error(
             record=record,
-            message=message,
+            message=str(exc),
             event="output_artifact_upload_failed",
-            finished_at=now,
         )
 
     def _handle_unknown_result_status(
         self,
         record: ExecutionRecord,
         result: SupervisedExecutionResult,
-        now: datetime,
     ) -> None:
         message = f"Unknown supervised execution status: {result.status}"
 
@@ -449,7 +455,6 @@ class ExecutionWatcher:
             record=record,
             message=message,
             event="unknown_supervised_execution_status",
-            finished_at=now,
         )
 
     def _finalize_as_error(
@@ -457,61 +462,38 @@ class ExecutionWatcher:
         record: ExecutionRecord,
         message: str,
         event: str,
-        finished_at: datetime,
     ) -> None:
-        claimed_record = self._execution_registry.try_claim_terminal(
+        transition_result = self._job_state_transition_coordinator.transition(
             job_id=record.job_id,
-            terminal_status=WorkerJobStatus.ERROR,
-            message=message,
-            finished_at=finished_at,
+            target_state=WorkerJobStatus.ERROR,
+            operation=lambda: self._publish_error(record, message),
         )
 
-        if claimed_record is None:
-            self._log_terminal_already_claimed(record, WorkerJobStatus.ERROR)
+        if transition_result.committed:
+            self._forget_progress_state(record.job_id)
+            self._log_finalized_as_error(record, message, event)
             return
 
+        if transition_result.stale:
+            self._log_stale_terminal_transition(record, WorkerJobStatus.ERROR)
+            return
+
+        self._log_terminal_transition_failed(
+            record=record,
+            attempted_status=WorkerJobStatus.ERROR,
+            error=transition_result.error,
+        )
+
+    def _publish_error(
+        self,
+        record: ExecutionRecord,
+        message: str,
+    ) -> None:
+        self._close_supervised_execution_resources(record)
+
         self._status_publisher.publish_error(
-            user_id=claimed_record.user_id,
-            job_id=claimed_record.job_id,
-            job_type=claimed_record.job_type,
-            worker_id=self._worker_id,
+            workspace=record.workspace,
             message=message,
-        )
-        self._execution_registry.mark_terminal_published(claimed_record.job_id)
-
-        self._acknowledge_and_mark_cleanup_ready(claimed_record)
-        self._forget_progress_state(claimed_record.job_id)
-
-        logger.info(
-            "Supervised execution finalized as ERROR.",
-            extra={
-                "component": "execution_watcher",
-                "event": event,
-                "jobId": claimed_record.job_id,
-                "userId": claimed_record.user_id,
-                "jobType": claimed_record.job_type,
-                "workerId": claimed_record.worker_id,
-                "status": WorkerJobStatus.ERROR.value,
-                "progress": ERROR_PROGRESS,
-                "errorCode": event,
-            },
-        )
-
-    def _acknowledge_and_mark_cleanup_ready(self, record: ExecutionRecord) -> None:
-        record.submitted_ack.ack()
-        self._execution_registry.mark_acknowledged(record.job_id)
-        self._execution_registry.mark_cleanup_ready(record.job_id)
-
-        logger.info(
-            "Submitted job message acknowledged and execution record marked cleanup-ready.",
-            extra={
-                "component": "execution_watcher",
-                "event": "submitted_job_acknowledged_cleanup_ready",
-                "jobId": record.job_id,
-                "userId": record.user_id,
-                "jobType": record.job_type,
-                "workerId": record.worker_id,
-            },
         )
 
     def _forget_progress_state(self, job_id: str) -> None:
@@ -526,19 +508,77 @@ class ExecutionWatcher:
         return f"{result.error_type}: {message}"
 
     @staticmethod
-    def _log_terminal_already_claimed(
+    def _log_finalized_as_done(record: ExecutionRecord) -> None:
+        logger.info(
+            "Supervised execution completed successfully.",
+            extra={
+                "component": "execution_watcher",
+                "event": "supervised_execution_succeeded",
+                "jobId": record.job_id,
+                "userId": record.user_id,
+                "jobType": record.job_type,
+                "workerId": record.worker_id,
+                "status": WorkerJobStatus.DONE.value,
+                "progress": DONE_PROGRESS,
+            },
+        )
+
+    @staticmethod
+    def _log_finalized_as_error(
+        record: ExecutionRecord,
+        message: str,
+        event: str,
+    ) -> None:
+        logger.info(
+            "Supervised execution finalized as ERROR.",
+            extra={
+                "component": "execution_watcher",
+                "event": event,
+                "jobId": record.job_id,
+                "userId": record.user_id,
+                "jobType": record.job_type,
+                "workerId": record.worker_id,
+                "status": WorkerJobStatus.ERROR.value,
+                "progress": ERROR_PROGRESS,
+                "errorCode": event,
+                "message": message,
+            },
+        )
+
+    @staticmethod
+    def _log_stale_terminal_transition(
         record: ExecutionRecord,
         attempted_status: WorkerJobStatus,
     ) -> None:
         logger.info(
-            "Terminal status was already claimed; execution watcher skips terminal publication.",
+            "Terminal transition skipped because worker-local job state is stale.",
             extra={
                 "component": "execution_watcher",
-                "event": "terminal_status_already_claimed",
+                "event": "terminal_transition_stale",
                 "jobId": record.job_id,
                 "userId": record.user_id,
                 "jobType": record.job_type,
                 "workerId": record.worker_id,
                 "status": attempted_status.value,
             },
+        )
+
+    @staticmethod
+    def _log_terminal_transition_failed(
+        record: ExecutionRecord,
+        attempted_status: WorkerJobStatus,
+        error: Exception | None,
+    ) -> None:
+        logger.error(
+            "Terminal transition failed; execution record will remain in registry.",
+            extra={
+                "component": "execution_watcher",
+                "event": "terminal_transition_failed",
+                "jobId": record.job_id,
+                "userId": record.user_id,
+                "jobType": record.job_type,
+                "workerId": record.worker_id,
+                "status": attempted_status.value,
+            },
+            exc_info=error,
         )

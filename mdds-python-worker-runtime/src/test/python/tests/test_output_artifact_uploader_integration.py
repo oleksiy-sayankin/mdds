@@ -11,7 +11,7 @@ from botocore.config import Config
 from testcontainers.minio import MinioContainer
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
-from mdds_worker_runtime.domain.manifest import ArtifactRef
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -24,6 +24,7 @@ from mdds_worker_runtime.execution.output_artifact_uploader import (
     OutputArtifactUploader,
     UploadedOutputArtifact,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 from mdds_worker_runtime.storage.s3_client import S3Storage
 from mdds_worker_runtime.execution.object_keys import file_name_from_object_key
 
@@ -150,9 +151,30 @@ def _create_context(
     job_id: str,
     outputs: dict[str, ArtifactRef],
 ) -> JobExecutionContext:
+    worker_id = "worker-123456"
     work_dir = tmp_path / str(user_id) / job_id
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
+
+    manifest = JobManifest(
+        manifest_version=1,
+        user_id=user_id,
+        job_id=job_id,
+        job_type="solving_slae",
+        inputs={},
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs=outputs,
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=input_dir,
+        output_dir=output_dir,
+        worker_id=worker_id,
+    )
 
     prepared_outputs = {
         output_slot: PreparedOutputArtifact(
@@ -164,13 +186,8 @@ def _create_context(
     }
 
     return JobExecutionContext(
-        user_id=user_id,
-        job_id=job_id,
-        job_type="solving_slae",
-        work_dir=work_dir,
-        input_dir=input_dir,
-        output_dir=output_dir,
+        workspace=workspace,
         inputs=InputArtifacts({}),
         outputs=OutputArtifacts(prepared_outputs),
-        params=JobParameters({"solvingMethod": "numpy_exact_solver"}),
+        params=JobParameters(manifest.params),
     )

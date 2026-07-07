@@ -7,12 +7,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import JobManifest, ArtifactRef
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -22,15 +23,25 @@ from mdds_worker_runtime.execution.artifacts import (
 )
 from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.execution_watcher import ExecutionWatcher
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.execution.models import (
+    ExecutionRecord,
+    WorkerJobStatus,
+    ProcessRecord,
+)
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.supervised_process import (
     SupervisedExecutionResult,
     SupervisedExecutionStatus,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
+from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 FIXED_TIME = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 WORKER_ID = "worker-1"
+JOB_ID = "job-1"
 JOB_TIMEOUT_SECONDS = 100.0
 PROGRESS_INTERVAL_SECONDS = 5.0
 
@@ -45,14 +56,17 @@ def test_execution_watcher_ignores_running_job_before_progress_interval_elapsed(
         parent_connection=_FakeParentConnection(poll_result=False),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -64,12 +78,9 @@ def test_execution_watcher_ignores_running_job_before_progress_interval_elapsed(
     status_publisher.publish_done.assert_not_called()
     status_publisher.publish_error.assert_not_called()
     output_artifact_uploader.upload.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
-    assert record.terminal_status_claimed is False
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
 
 def test_execution_watcher_publishes_in_progress_when_progress_interval_elapsed(
@@ -82,14 +93,17 @@ def test_execution_watcher_publishes_in_progress_when_progress_interval_elapsed(
         parent_connection=_FakeParentConnection(poll_result=False),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -100,17 +114,15 @@ def test_execution_watcher_publishes_in_progress_when_progress_interval_elapsed(
     status_publisher.publish_in_progress.assert_called_once()
     kwargs = status_publisher.publish_in_progress.call_args.kwargs
 
-    assert kwargs["user_id"] == 42
-    assert kwargs["job_id"] == "job-1"
-    assert kwargs["job_type"] == "SOLVING_SLAE"
-    assert kwargs["worker_id"] == WORKER_ID
+    assert kwargs["workspace"] is fixture.record.workspace
     assert kwargs["progress"] == 5
     assert "in progress" in kwargs["message"]
 
     status_publisher.publish_done.assert_not_called()
     status_publisher.publish_error.assert_not_called()
     output_artifact_uploader.upload.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
 
 def test_execution_watcher_in_progress_is_at_least_one(
@@ -126,9 +138,11 @@ def test_execution_watcher_in_progress_is_at_least_one(
     registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    coordinator = _coordinator_in_state(WorkerJobStatus.IN_PROGRESS)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -155,9 +169,11 @@ def test_execution_watcher_in_progress_is_capped_at_ninety_nine(
     registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    coordinator = _coordinator_in_state(WorkerJobStatus.IN_PROGRESS)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -184,9 +200,11 @@ def test_execution_watcher_does_not_publish_progress_twice_before_interval_elaps
     registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    coordinator = _coordinator_in_state(WorkerJobStatus.IN_PROGRESS)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -212,9 +230,11 @@ def test_execution_watcher_publishes_progress_again_after_interval_elapsed(
     registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    coordinator = _coordinator_in_state(WorkerJobStatus.IN_PROGRESS)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -237,12 +257,12 @@ def test_execution_watcher_publishes_progress_again_after_interval_elapsed(
     assert second_progress == 10
 
 
-def test_execution_watcher_success_uploads_outputs_publishes_done_acks_and_marks_cleanup_ready(
+def test_execution_watcher_success_uploads_outputs_publishes_done_and_acks(
     tmp_path: Path,
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
-    result = SupervisedExecutionResult.succeeded("job-1")
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
     fixture = _record(
         tmp_path,
         parent_connection=_FakeParentConnection(result=result),
@@ -254,6 +274,10 @@ def test_execution_watcher_success_uploads_outputs_publishes_done_acks_and_marks
     events: list[str] = []
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack_mock.ack.side_effect = lambda context: events.append("ack")
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     output_artifact_uploader.upload.side_effect = lambda context: events.append(
         "upload"
@@ -261,10 +285,11 @@ def test_execution_watcher_success_uploads_outputs_publishes_done_acks_and_marks
     status_publisher.publish_done.side_effect = lambda **_kwargs: events.append(
         "publish_done"
     )
-    fixture.submitted_ack.ack.side_effect = lambda: events.append("ack")
+    ack_mock.ack.side_effect = lambda: events.append("ack")
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -276,33 +301,23 @@ def test_execution_watcher_success_uploads_outputs_publishes_done_acks_and_marks
 
     output_artifact_uploader.upload.assert_called_once_with(record.context)
     status_publisher.publish_done.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id=WORKER_ID,
+        workspace=record.workspace,
         message="Execution succeeded.",
     )
     status_publisher.publish_error.assert_not_called()
     status_publisher.publish_in_progress.assert_not_called()
 
-    fixture.submitted_ack.ack.assert_called_once()
-
-    assert record.terminal_status_claimed is True
-    assert record.terminal_status == WorkerJobStatus.DONE
-    assert record.terminal_message == "Execution succeeded."
-    assert record.terminal_status_published is True
-    assert record.acknowledgement_done is True
-    assert record.cleanup_ready is True
-    assert record.finished_at == clock.now
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.DONE
 
 
-def test_execution_watcher_failed_result_publishes_error_acks_and_marks_cleanup_ready(
+def test_execution_watcher_failed_result_publishes_error_and_acks(
     tmp_path: Path,
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
     result = SupervisedExecutionResult(
-        job_id="job-1",
+        job_id=JOB_ID,
         status=SupervisedExecutionStatus.FAILED,
         message="execute failed",
         error_type="RuntimeError",
@@ -312,14 +327,17 @@ def test_execution_watcher_failed_result_publishes_error_acks_and_marks_cleanup_
         parent_connection=_FakeParentConnection(result=result),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -331,22 +349,12 @@ def test_execution_watcher_failed_result_publishes_error_acks_and_marks_cleanup_
     status_publisher.publish_done.assert_not_called()
     status_publisher.publish_in_progress.assert_not_called()
     status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id=WORKER_ID,
+        workspace=fixture.record.workspace,
         message="RuntimeError: execute failed",
     )
 
-    fixture.submitted_ack.ack.assert_called_once()
-
-    assert record.terminal_status_claimed is True
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_message == "RuntimeError: execute failed"
-    assert record.terminal_status_published is True
-    assert record.acknowledgement_done is True
-    assert record.cleanup_ready is True
-    assert record.finished_at == clock.now
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_output_upload_failure_publishes_error_not_done(
@@ -354,7 +362,7 @@ def test_execution_watcher_output_upload_failure_publishes_error_not_done(
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
-    result = SupervisedExecutionResult.succeeded("job-1")
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
     fixture = _record(
         tmp_path,
         parent_connection=_FakeParentConnection(result=result),
@@ -366,9 +374,13 @@ def test_execution_watcher_output_upload_failure_publishes_error_not_done(
     output_artifact_uploader = MagicMock()
     output_artifact_uploader.upload.side_effect = RuntimeError("s3 upload failed")
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -381,48 +393,38 @@ def test_execution_watcher_output_upload_failure_publishes_error_not_done(
     status_publisher.publish_error.assert_called_once()
 
     kwargs = status_publisher.publish_error.call_args.kwargs
-    assert kwargs["user_id"] == 42
-    assert kwargs["job_id"] == "job-1"
-    assert kwargs["job_type"] == "SOLVING_SLAE"
-    assert kwargs["worker_id"] == WORKER_ID
+    assert kwargs["workspace"] is fixture.record.workspace
     assert "Output artifact upload failed" in kwargs["message"]
     assert "s3 upload failed" in kwargs["message"]
 
-    fixture.submitted_ack.ack.assert_called_once()
-
-    assert record.terminal_status_claimed is True
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published is True
-    assert record.acknowledgement_done is True
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
-def test_execution_watcher_already_terminal_claimed_record_is_ignored(
+def test_execution_watcher_terminal_state_record_is_ignored(
     tmp_path: Path,
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
-    result = SupervisedExecutionResult.succeeded("job-1")
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
+    parent_connection = _FakeParentConnection(result=result)
     fixture = _record(
         tmp_path,
-        parent_connection=_FakeParentConnection(result=result),
+        parent_connection=parent_connection,
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
-    registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.ERROR,
-        message="Already claimed.",
-        finished_at=FIXED_TIME,
-    )
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack, WorkerJobStatus.ERROR)
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -430,25 +432,60 @@ def test_execution_watcher_already_terminal_claimed_record_is_ignored(
 
     watcher.poll_once()
 
+    assert parent_connection.close_count == 0
+    fixture.process.join.assert_not_called()
     output_artifact_uploader.upload.assert_not_called()
     status_publisher.publish_in_progress.assert_not_called()
     status_publisher.publish_done.assert_not_called()
     status_publisher.publish_error.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
-
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_message == "Already claimed."
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
+    ack_mock.ack.assert_not_called()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
-def test_execution_watcher_publish_done_failure_does_not_ack_or_mark_cleanup_ready(
+def test_execution_watcher_success_when_state_is_not_running(
     tmp_path: Path,
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
-    result = SupervisedExecutionResult.succeeded("job-1")
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
+    parent_connection = _FakeParentConnection(result=result)
+    fixture = _record(
+        tmp_path,
+        parent_connection=parent_connection,
+        started_at=FIXED_TIME,
+    )
+    registry.add(fixture.record)
+
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack, WorkerJobStatus.VALIDATED)
+
+    output_artifact_uploader = MagicMock()
+    status_publisher = MagicMock()
+
+    watcher = _watcher(
+        registry,
+        coordinator,
+        output_artifact_uploader,
+        status_publisher,
+        clock,
+    )
+
+    watcher.poll_once()
+
+    assert parent_connection.close_count == 0
+    output_artifact_uploader.upload.assert_not_called()
+    status_publisher.publish_done.assert_not_called()
+    ack_mock.ack.assert_not_called()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.VALIDATED
+
+
+def test_execution_watcher_publish_done_failure_does_not_ack_or_commit_done(
+    tmp_path: Path,
+) -> None:
+    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
+    registry = ExecutionRegistry()
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
     fixture = _record(
         tmp_path,
         parent_connection=_FakeParentConnection(result=result),
@@ -460,36 +497,34 @@ def test_execution_watcher_publish_done_failure_does_not_ack_or_mark_cleanup_rea
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
     status_publisher.publish_done.side_effect = RuntimeError("status queue failed")
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
     )
 
-    with pytest.raises(RuntimeError, match="status queue failed"):
-        watcher.poll_once()
+    watcher.poll_once()
 
     output_artifact_uploader.upload.assert_called_once_with(record.context)
     status_publisher.publish_done.assert_called_once()
     status_publisher.publish_error.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
-
-    assert record.terminal_status_claimed is True
-    assert record.terminal_status == WorkerJobStatus.DONE
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
+    ack_mock.ack.assert_not_called()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
 
-def test_execution_watcher_publish_error_failure_does_not_ack_or_mark_cleanup_ready(
+def test_execution_watcher_publish_error_failure_does_not_ack_or_commit_error(
     tmp_path: Path,
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
     result = SupervisedExecutionResult(
-        job_id="job-1",
+        job_id=JOB_ID,
         status=SupervisedExecutionStatus.FAILED,
         message="execute failed",
         error_type="RuntimeError",
@@ -499,30 +534,27 @@ def test_execution_watcher_publish_error_failure_does_not_ack_or_mark_cleanup_re
         parent_connection=_FakeParentConnection(result=result),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
     status_publisher.publish_error.side_effect = RuntimeError("status queue failed")
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
     )
 
-    with pytest.raises(RuntimeError, match="status queue failed"):
-        watcher.poll_once()
+    watcher.poll_once()
 
     status_publisher.publish_error.assert_called_once()
-    fixture.submitted_ack.ack.assert_not_called()
-
-    assert record.terminal_status_claimed is True
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
+    ack_mock.ack.assert_not_called()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
 
 def test_execution_watcher_unexpected_result_type_is_finalized_as_error(
@@ -535,13 +567,16 @@ def test_execution_watcher_unexpected_result_type_is_finalized_as_error(
         parent_connection=_FakeParentConnection(result={"status": "SUCCEEDED"}),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -552,13 +587,13 @@ def test_execution_watcher_unexpected_result_type_is_finalized_as_error(
     status_publisher.publish_error.assert_called_once()
     kwargs = status_publisher.publish_error.call_args.kwargs
 
-    assert kwargs["job_id"] == "job-1"
+    assert kwargs["workspace"] is fixture.record.workspace
+    assert kwargs["workspace"].job_id == JOB_ID
     assert "UnexpectedSupervisedExecutionResult" in kwargs["message"]
     assert "dict" in kwargs["message"]
 
-    fixture.submitted_ack.ack.assert_called_once()
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_mismatched_result_job_id_is_finalized_as_error(
@@ -572,13 +607,16 @@ def test_execution_watcher_mismatched_result_job_id_is_finalized_as_error(
         parent_connection=_FakeParentConnection(result=result),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -589,13 +627,13 @@ def test_execution_watcher_mismatched_result_job_id_is_finalized_as_error(
     status_publisher.publish_error.assert_called_once()
     kwargs = status_publisher.publish_error.call_args.kwargs
 
-    assert kwargs["job_id"] == "job-1"
+    assert kwargs["workspace"] is fixture.record.workspace
+    assert kwargs["workspace"].job_id == JOB_ID
     assert "UnexpectedSupervisedExecutionJobId" in kwargs["message"]
     assert "other-job" in kwargs["message"]
 
-    fixture.submitted_ack.ack.assert_called_once()
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_eof_from_parent_pipe_is_finalized_as_error(
@@ -608,13 +646,16 @@ def test_execution_watcher_eof_from_parent_pipe_is_finalized_as_error(
         parent_connection=_FakeParentConnection(recv_exception=EOFError()),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -625,21 +666,26 @@ def test_execution_watcher_eof_from_parent_pipe_is_finalized_as_error(
     status_publisher.publish_error.assert_called_once()
     kwargs = status_publisher.publish_error.call_args.kwargs
 
-    assert kwargs["job_id"] == "job-1"
+    assert kwargs["workspace"] is fixture.record.workspace
+    assert kwargs["workspace"].job_id == JOB_ID
     assert "EOFError" in kwargs["message"]
     assert "closed its result pipe" in kwargs["message"]
 
-    fixture.submitted_ack.ack.assert_called_once()
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_start_stop_are_idempotent() -> None:
     clock = _MutableClock(FIXED_TIME)
     registry = ExecutionRegistry()
 
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
+
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         MagicMock(),
         clock,
@@ -657,6 +703,11 @@ def test_execution_watcher_start_stop_are_idempotent() -> None:
     ("field_name", "bad_value", "error_message"),
     [
         ("execution_registry", None, "execution_registry cannot be null."),
+        (
+            "job_state_transition_coordinator",
+            None,
+            "job_state_transition_coordinator cannot be null.",
+        ),
         (
             "output_artifact_uploader",
             None,
@@ -691,6 +742,7 @@ def test_execution_watcher_rejects_invalid_constructor_arguments(
 ) -> None:
     kwargs = {
         "execution_registry": ExecutionRegistry(),
+        "job_state_transition_coordinator": JobStateTransitionCoordinator(),
         "output_artifact_uploader": MagicMock(),
         "status_publisher": MagicMock(),
         "worker_id": WORKER_ID,
@@ -707,8 +759,13 @@ def test_execution_watcher_rejects_invalid_constructor_arguments(
 
 def test_execution_watcher_run_loop_logs_polling_failure_and_stops() -> None:
     clock = _MutableClock(FIXED_TIME)
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
+
     watcher = _watcher(
         ExecutionRegistry(),
+        coordinator,
         MagicMock(),
         MagicMock(),
         clock,
@@ -734,9 +791,13 @@ def test_execution_watcher_ignores_none_record() -> None:
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -760,13 +821,16 @@ def test_execution_watcher_recv_os_error_is_finalized_as_error(
         parent_connection=_FakeParentConnection(recv_exception=OSError("broken pipe")),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -777,14 +841,14 @@ def test_execution_watcher_recv_os_error_is_finalized_as_error(
     status_publisher.publish_error.assert_called_once()
     kwargs = status_publisher.publish_error.call_args.kwargs
 
-    assert kwargs["job_id"] == "job-1"
+    assert kwargs["workspace"] is fixture.record.workspace
+    assert kwargs["workspace"].job_id == JOB_ID
     assert "OSError" in kwargs["message"]
     assert "Cannot read supervised execution result" in kwargs["message"]
     assert "broken pipe" in kwargs["message"]
 
-    fixture.submitted_ack.ack.assert_called_once()
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_progress_publication_failure_does_not_fail_polling(
@@ -797,17 +861,20 @@ def test_execution_watcher_progress_publication_failure_does_not_fail_polling(
         parent_connection=_FakeParentConnection(poll_result=False),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
     status_publisher.publish_in_progress.side_effect = RuntimeError(
         "status queue failed"
     )
     output_artifact_uploader = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -819,103 +886,9 @@ def test_execution_watcher_progress_publication_failure_does_not_fail_polling(
     status_publisher.publish_done.assert_not_called()
     status_publisher.publish_error.assert_not_called()
     output_artifact_uploader.upload.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
-    assert record.terminal_status_claimed is False
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
-
-
-def test_execution_watcher_success_does_not_publish_done_when_terminal_claim_fails(
-    tmp_path: Path,
-) -> None:
-    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
-    result = SupervisedExecutionResult.succeeded("job-1")
-    fixture = _record(
-        tmp_path,
-        parent_connection=_FakeParentConnection(result=result),
-        started_at=FIXED_TIME,
-    )
-    record = fixture.record
-
-    registry = MagicMock()
-    registry.snapshot.return_value = [record]
-    registry.try_claim_terminal.return_value = None
-
-    output_artifact_uploader = MagicMock()
-    status_publisher = MagicMock()
-
-    watcher = _watcher(
-        registry,
-        output_artifact_uploader,
-        status_publisher,
-        clock,
-    )
-
-    watcher.poll_once()
-
-    output_artifact_uploader.upload.assert_called_once_with(record.context)
-    registry.try_claim_terminal.assert_called_once_with(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.DONE,
-        message="Execution succeeded.",
-        finished_at=clock.now,
-    )
-    status_publisher.publish_done.assert_not_called()
-    status_publisher.publish_error.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
-    registry.mark_terminal_published.assert_not_called()
-    registry.mark_acknowledged.assert_not_called()
-    registry.mark_cleanup_ready.assert_not_called()
-
-
-def test_execution_watcher_error_is_not_published_when_terminal_claim_fails(
-    tmp_path: Path,
-) -> None:
-    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
-    result = SupervisedExecutionResult(
-        job_id="job-1",
-        status=SupervisedExecutionStatus.FAILED,
-        message="execute failed",
-        error_type="RuntimeError",
-    )
-    fixture = _record(
-        tmp_path,
-        parent_connection=_FakeParentConnection(result=result),
-        started_at=FIXED_TIME,
-    )
-    record = fixture.record
-
-    registry = MagicMock()
-    registry.snapshot.return_value = [record]
-    registry.try_claim_terminal.return_value = None
-
-    output_artifact_uploader = MagicMock()
-    status_publisher = MagicMock()
-
-    watcher = _watcher(
-        registry,
-        output_artifact_uploader,
-        status_publisher,
-        clock,
-    )
-
-    watcher.poll_once()
-
-    output_artifact_uploader.upload.assert_not_called()
-    registry.try_claim_terminal.assert_called_once_with(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.ERROR,
-        message="RuntimeError: execute failed",
-        finished_at=clock.now,
-    )
-    status_publisher.publish_done.assert_not_called()
-    status_publisher.publish_error.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
-    registry.mark_terminal_published.assert_not_called()
-    registry.mark_acknowledged.assert_not_called()
-    registry.mark_cleanup_ready.assert_not_called()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
 
 def test_execution_watcher_unknown_result_status_is_finalized_as_error(
@@ -924,7 +897,7 @@ def test_execution_watcher_unknown_result_status_is_finalized_as_error(
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
     result = SupervisedExecutionResult(
-        job_id="job-1",
+        job_id=JOB_ID,
         status="UNKNOWN",
         message="unexpected status",
         error_type=None,
@@ -934,13 +907,16 @@ def test_execution_watcher_unknown_result_status_is_finalized_as_error(
         parent_connection=_FakeParentConnection(result=result),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -951,13 +927,13 @@ def test_execution_watcher_unknown_result_status_is_finalized_as_error(
     status_publisher.publish_error.assert_called_once()
     kwargs = status_publisher.publish_error.call_args.kwargs
 
-    assert kwargs["job_id"] == "job-1"
+    assert kwargs["workspace"] is fixture.record.workspace
+    assert kwargs["workspace"].job_id == JOB_ID
     assert "Unknown supervised execution status" in kwargs["message"]
     assert "UNKNOWN" in kwargs["message"]
 
-    fixture.submitted_ack.ack.assert_called_once()
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_failed_result_without_error_type_uses_message_only(
@@ -966,7 +942,7 @@ def test_execution_watcher_failed_result_without_error_type_uses_message_only(
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
     result = SupervisedExecutionResult(
-        job_id="job-1",
+        job_id=JOB_ID,
         status=SupervisedExecutionStatus.FAILED,
         message="execute failed",
         error_type=None,
@@ -976,13 +952,16 @@ def test_execution_watcher_failed_result_without_error_type_uses_message_only(
         parent_connection=_FakeParentConnection(result=result),
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -991,17 +970,12 @@ def test_execution_watcher_failed_result_without_error_type_uses_message_only(
     watcher.poll_once()
 
     status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id=WORKER_ID,
+        workspace=fixture.record.workspace,
         message="execute failed",
     )
 
-    fixture.submitted_ack.ack.assert_called_once()
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_message == "execute failed"
-    assert record.cleanup_ready is True
+    ack_mock.ack.assert_called_once()
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_does_not_close_resources_when_no_result_is_available(
@@ -1015,11 +989,15 @@ def test_execution_watcher_does_not_close_resources_when_no_result_is_available(
         parent_connection=parent_connection,
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
+
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         MagicMock(),
         clock,
@@ -1029,11 +1007,7 @@ def test_execution_watcher_does_not_close_resources_when_no_result_is_available(
 
     assert parent_connection.close_count == 0
     fixture.process.join.assert_not_called()
-
-    assert record.terminal_status_claimed is False
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
 
 def test_execution_watcher_closes_resources_after_success_result_before_upload_and_done(
@@ -1042,7 +1016,7 @@ def test_execution_watcher_closes_resources_after_success_result_before_upload_a
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
     events: list[str] = []
-    result = SupervisedExecutionResult.succeeded("job-1")
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
     parent_connection = _FakeParentConnection(
         result=result,
         close_callback=lambda: events.append("close_parent_connection"),
@@ -1057,6 +1031,9 @@ def test_execution_watcher_closes_resources_after_success_result_before_upload_a
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     fixture.process.join.side_effect = lambda timeout: events.append(
         f"join_process:{timeout}"
@@ -1067,10 +1044,11 @@ def test_execution_watcher_closes_resources_after_success_result_before_upload_a
     status_publisher.publish_done.side_effect = lambda **_kwargs: events.append(
         "publish_done"
     )
-    fixture.submitted_ack.ack.side_effect = lambda: events.append("ack")
+    ack_mock.ack.side_effect = lambda: events.append("ack")
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -1092,12 +1070,9 @@ def test_execution_watcher_closes_resources_after_success_result_before_upload_a
     output_artifact_uploader.upload.assert_called_once_with(record.context)
     status_publisher.publish_done.assert_called_once()
     status_publisher.publish_error.assert_not_called()
-    fixture.submitted_ack.ack.assert_called_once()
+    ack_mock.ack.assert_called_once()
 
-    assert record.terminal_status == WorkerJobStatus.DONE
-    assert record.terminal_status_published is True
-    assert record.acknowledgement_done is True
-    assert record.cleanup_ready is True
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.DONE
 
 
 def test_execution_watcher_closes_resources_after_failed_result_before_error_publication(
@@ -1107,7 +1082,7 @@ def test_execution_watcher_closes_resources_after_failed_result_before_error_pub
     registry = ExecutionRegistry()
     events: list[str] = []
     result = SupervisedExecutionResult(
-        job_id="job-1",
+        job_id=JOB_ID,
         status=SupervisedExecutionStatus.FAILED,
         message="execute failed",
         error_type="RuntimeError",
@@ -1121,10 +1096,13 @@ def test_execution_watcher_closes_resources_after_failed_result_before_error_pub
         parent_connection=parent_connection,
         started_at=FIXED_TIME,
     )
-    record = fixture.record
-    registry.add(record)
+    registry.add(fixture.record)
 
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack_mock.ack.side_effect = lambda: events.append("ack")
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     fixture.process.join.side_effect = lambda timeout: events.append(
         f"join_process:{timeout}"
@@ -1132,10 +1110,10 @@ def test_execution_watcher_closes_resources_after_failed_result_before_error_pub
     status_publisher.publish_error.side_effect = lambda **_kwargs: events.append(
         "publish_error"
     )
-    fixture.submitted_ack.ack.side_effect = lambda: events.append("ack")
 
     watcher = _watcher(
         registry,
+        coordinator,
         MagicMock(),
         status_publisher,
         clock,
@@ -1154,19 +1132,13 @@ def test_execution_watcher_closes_resources_after_failed_result_before_error_pub
     fixture.process.join.assert_called_once_with(timeout=0)
 
     status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id=WORKER_ID,
+        workspace=fixture.record.workspace,
         message="RuntimeError: execute failed",
     )
     status_publisher.publish_done.assert_not_called()
-    fixture.submitted_ack.ack.assert_called_once()
+    ack_mock.ack.assert_called_once()
 
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published is True
-    assert record.acknowledgement_done is True
-    assert record.cleanup_ready is True
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.ERROR
 
 
 def test_execution_watcher_resource_close_failures_do_not_prevent_success_finalization(
@@ -1174,7 +1146,7 @@ def test_execution_watcher_resource_close_failures_do_not_prevent_success_finali
 ) -> None:
     clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
     registry = ExecutionRegistry()
-    result = SupervisedExecutionResult.succeeded("job-1")
+    result = SupervisedExecutionResult.succeeded(JOB_ID)
     parent_connection = _FakeParentConnection(
         result=result,
         close_exception=RuntimeError("close failed"),
@@ -1191,9 +1163,13 @@ def test_execution_watcher_resource_close_failures_do_not_prevent_success_finali
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
 
     watcher = _watcher(
         registry,
+        coordinator,
         output_artifact_uploader,
         status_publisher,
         clock,
@@ -1207,58 +1183,13 @@ def test_execution_watcher_resource_close_failures_do_not_prevent_success_finali
     output_artifact_uploader.upload.assert_called_once_with(record.context)
     status_publisher.publish_done.assert_called_once()
     status_publisher.publish_error.assert_not_called()
-    fixture.submitted_ack.ack.assert_called_once()
 
-    assert record.terminal_status == WorkerJobStatus.DONE
-    assert record.terminal_status_published is True
-    assert record.acknowledgement_done is True
-    assert record.cleanup_ready is True
-
-
-def test_execution_watcher_already_terminal_claimed_record_does_not_close_resources(
-    tmp_path: Path,
-) -> None:
-    clock = _MutableClock(FIXED_TIME + timedelta(seconds=10))
-    registry = ExecutionRegistry()
-    result = SupervisedExecutionResult.succeeded("job-1")
-    parent_connection = _FakeParentConnection(result=result)
-    fixture = _record(
-        tmp_path,
-        parent_connection=parent_connection,
-        started_at=FIXED_TIME,
-    )
-    record = fixture.record
-    registry.add(record)
-
-    registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.ERROR,
-        message="Already claimed.",
-        finished_at=FIXED_TIME,
-    )
-
-    watcher = _watcher(
-        registry,
-        MagicMock(),
-        MagicMock(),
-        clock,
-    )
-
-    watcher.poll_once()
-
-    assert parent_connection.close_count == 0
-    fixture.process.join.assert_not_called()
-    fixture.submitted_ack.ack.assert_not_called()
-
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_message == "Already claimed."
-    assert record.terminal_status_published is False
-    assert record.acknowledgement_done is False
-    assert record.cleanup_ready is False
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.DONE
 
 
 def _watcher(
     execution_registry: ExecutionRegistry,
+    job_state_transition_coordinator: JobStateTransitionCoordinator,
     output_artifact_uploader,
     status_publisher,
     clock: "_MutableClock",
@@ -1269,6 +1200,7 @@ def _watcher(
 ) -> ExecutionWatcher:
     return ExecutionWatcher(
         execution_registry=execution_registry,
+        job_state_transition_coordinator=job_state_transition_coordinator,
         output_artifact_uploader=output_artifact_uploader,
         status_publisher=status_publisher,
         worker_id=WORKER_ID,
@@ -1279,50 +1211,88 @@ def _watcher(
     )
 
 
+def _coordinator_in_state(
+    acknowledger: Acknowledger,
+    state: WorkerJobStatus = WorkerJobStatus.IN_PROGRESS,
+    job_id: str = JOB_ID,
+) -> JobStateTransitionCoordinator:
+    coordinator = JobStateTransitionCoordinator()
+    record = coordinator.create(job_id=job_id, submitted_ack=acknowledger)
+    with record.lock:
+        record.state = state
+    return coordinator
+
+
 def _record(
     tmp_path: Path,
     *,
-    job_id: str = "job-1",
+    job_id: str = JOB_ID,
     parent_connection: "_FakeParentConnection",
     started_at: datetime,
 ) -> "_RecordFixture":
     context = _context(tmp_path, job_id=job_id)
-    submitted_ack = MagicMock()
     process = MagicMock()
 
-    record = ExecutionRecord(
-        job_id=job_id,
-        user_id=context.user_id,
-        job_type=context.job_type,
-        worker_id=WORKER_ID,
-        manifest_object_key=f"jobs/{context.user_id}/{job_id}/manifest.json",
-        manifest=MagicMock(),
-        context=context,
+    process_record = ProcessRecord(
         process=process,
         parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
         started_at=started_at,
+    )
+
+    record = ExecutionRecord(
+        workspace=context.workspace,
+        context=context,
+        process_record=process_record,
     )
 
     return _RecordFixture(
         record=record,
-        submitted_ack=submitted_ack,
         process=process,
     )
 
 
-def _context(tmp_path: Path, *, job_id: str = "job-1") -> JobExecutionContext:
+def _context(tmp_path: Path, *, job_id: str = JOB_ID) -> JobExecutionContext:
+    worker_id = WORKER_ID
     work_dir = tmp_path / "jobs" / "42" / job_id
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
         job_id=job_id,
         job_type="SOLVING_SLAE",
+        inputs={
+            "matrix": ArtifactRef(
+                object_key=f"jobs/42/{job_id}/in/matrix.csv",
+                format=ArtifactFormat.CSV,
+            ),
+            "rhs": ArtifactRef(
+                object_key=f"jobs/42/{job_id}/in/rhs.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key=f"jobs/42/{job_id}/out/solution.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id=worker_id,
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts(
             {
                 "matrix": PreparedInputArtifact(
@@ -1346,18 +1316,13 @@ def _context(tmp_path: Path, *, job_id: str = "job-1") -> JobExecutionContext:
                 ),
             }
         ),
-        params=JobParameters(
-            {
-                "solvingMethod": "numpy_exact_solver",
-            }
-        ),
+        params=JobParameters(manifest.params),
     )
 
 
 @dataclass(frozen=True)
 class _RecordFixture:
     record: ExecutionRecord
-    submitted_ack: MagicMock
     process: MagicMock
 
 

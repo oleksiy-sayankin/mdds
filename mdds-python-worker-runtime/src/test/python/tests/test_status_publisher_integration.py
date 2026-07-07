@@ -7,15 +7,18 @@ import queue
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import pika
 import pytest
 from testcontainers.rabbitmq import RabbitMqContainer
 
+from mdds_worker_runtime.domain.manifest import JobManifest
 from mdds_worker_runtime.dto.messages import JobStatusUpdateDTO
 from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 from mdds_worker_runtime.rabbitmq.rabbitmq_queue_client import (
     RabbitMqProperties,
     RabbitMqQueueClient,
@@ -60,7 +63,7 @@ def rabbitmq_properties(rabbitmq_container) -> RabbitMqProperties:
 
 
 def test_status_publisher_publishes_status_update_to_real_rabbitmq(
-    rabbitmq_properties: RabbitMqProperties,
+    rabbitmq_properties: RabbitMqProperties, tmp_path
 ) -> None:
     queue_name = _new_queue_name("mdds-status-queue")
     handler = StatusUpdateHandler()
@@ -78,11 +81,9 @@ def test_status_publisher_publishes_status_update_to_real_rabbitmq(
             clock=lambda: FIXED_TIME,
         )
 
+        workspace = _workspace(tmp_path)
         publisher.publish_in_progress(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            worker_id="worker-1",
+            workspace=workspace,
             progress=0,
             message="Start job execution",
         )
@@ -150,4 +151,31 @@ def _connection_parameters(properties: RabbitMqProperties) -> pika.ConnectionPar
         heartbeat=60,
         blocked_connection_timeout=properties.connection_timeout_seconds,
         connection_attempts=1,
+    )
+
+
+def _workspace(
+    tmp_path: Path,
+    *,
+    user_id: int = 42,
+    job_id: str = "job-1",
+) -> JobWorkspace:
+    work_dir = tmp_path / str(user_id) / job_id
+
+    manifest = JobManifest(
+        manifest_version=1,
+        user_id=user_id,
+        job_id=job_id,
+        job_type="SOLVING_SLAE",
+        inputs={},
+        params={},
+        outputs={},
+    )
+
+    return JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=work_dir / "in",
+        output_dir=work_dir / "out",
+        worker_id="worker-1",
     )

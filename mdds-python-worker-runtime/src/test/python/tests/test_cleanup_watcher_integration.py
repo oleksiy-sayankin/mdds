@@ -10,6 +10,7 @@ import time
 from unittest.mock import MagicMock
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -22,9 +23,17 @@ from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.context_snapshot import (
     JobExecutionContextSnapshotStore,
 )
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.execution.models import (
+    ExecutionRecord,
+    WorkerJobStatus,
+    ProcessRecord,
+)
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.supervisor import CONTEXT_SNAPSHOT_FILE_NAME
+from mdds_worker_runtime.execution.workspace import JobWorkspace
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
 
 FIXED_TIME = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 WORKER_ID = "worker-1"
@@ -35,34 +44,33 @@ def test_cleanup_watcher_removes_only_cleanup_ready_records_and_local_workspaces
     tmp_path: Path,
 ) -> None:
     registry = ExecutionRegistry()
+    coordinator = JobStateTransitionCoordinator()
 
     cleanup_ready_done = _create_registered_job(
         tmp_path=tmp_path,
         registry=registry,
+        coordinator=coordinator,
         job_id="cleanup-ready-done",
-        lifecycle_state=_LifecycleState.CLEANUP_READY_DONE,
+        job_status=WorkerJobStatus.DONE,
     )
     cleanup_ready_error = _create_registered_job(
         tmp_path=tmp_path,
         registry=registry,
+        coordinator=coordinator,
         job_id="cleanup-ready-error",
-        lifecycle_state=_LifecycleState.CLEANUP_READY_ERROR,
+        job_status=WorkerJobStatus.ERROR,
     )
     running = _create_registered_job(
         tmp_path=tmp_path,
         registry=registry,
+        coordinator=coordinator,
         job_id="running-job",
-        lifecycle_state=_LifecycleState.RUNNING,
-    )
-    terminal_not_acknowledged = _create_registered_job(
-        tmp_path=tmp_path,
-        registry=registry,
-        job_id="terminal-not-acknowledged",
-        lifecycle_state=_LifecycleState.TERMINAL_PUBLISHED_NOT_ACKNOWLEDGED,
+        job_status=WorkerJobStatus.IN_PROGRESS,
     )
 
     watcher = CleanupWatcher(
         execution_registry=registry,
+        job_state_transition_coordinator=coordinator,
         worker_id=WORKER_ID,
         cleanup_interval_seconds=0.01,
     )
@@ -73,8 +81,9 @@ def test_cleanup_watcher_removes_only_cleanup_ready_records_and_local_workspaces
         _wait_until(
             lambda: _assert_cleanup_finished(
                 registry=registry,
+                coordinator=coordinator,
                 removed_jobs=[cleanup_ready_done, cleanup_ready_error],
-                preserved_jobs=[running, terminal_not_acknowledged],
+                preserved_jobs=[running],
             ),
             timeout_seconds=2.0,
             interval_seconds=0.01,
@@ -86,43 +95,45 @@ def test_cleanup_watcher_removes_only_cleanup_ready_records_and_local_workspaces
     _assert_job_workspace_removed(cleanup_ready_error)
 
     _assert_job_workspace_preserved(running)
-    _assert_job_workspace_preserved(terminal_not_acknowledged)
 
     assert registry.get(cleanup_ready_done.job_id) is None
     assert registry.get(cleanup_ready_error.job_id) is None
     assert registry.get(running.job_id) is running.record
-    assert registry.get(terminal_not_acknowledged.job_id) is (
-        terminal_not_acknowledged.record
-    )
-    assert registry.size() == 2
+
+    assert coordinator.get_state(cleanup_ready_done.job_id) is None
+    assert coordinator.get_state(cleanup_ready_error.job_id) is None
+    assert coordinator.get_state(running.job_id) is WorkerJobStatus.IN_PROGRESS
+
+    assert registry.size() == 1
 
 
 def _create_registered_job(
     *,
     tmp_path: Path,
     registry: ExecutionRegistry,
+    coordinator: JobStateTransitionCoordinator,
     job_id: str,
-    lifecycle_state: "_LifecycleState",
+    job_status: "WorkerJobStatus",
 ) -> "_JobFixture":
     context = _context(tmp_path, job_id=job_id)
     _create_production_like_workspace(context)
 
     record = ExecutionRecord(
-        job_id=job_id,
-        user_id=context.user_id,
-        job_type=context.job_type,
-        worker_id=WORKER_ID,
-        manifest_object_key=f"jobs/{context.user_id}/{job_id}/manifest.json",
-        manifest=MagicMock(),
+        workspace=context.workspace,
         context=context,
-        process=MagicMock(),
-        parent_connection=MagicMock(),
-        submitted_ack=MagicMock(),
-        started_at=FIXED_TIME,
+        process_record=ProcessRecord(
+            process=MagicMock(),
+            parent_connection=MagicMock(),
+            started_at=FIXED_TIME,
+        ),
     )
 
     registry.add(record)
-    _apply_lifecycle_state(registry, record, lifecycle_state)
+    _apply_lifecycle_state(
+        coordinator=coordinator,
+        execution_record=record,
+        job_status=job_status,
+    )
 
     return _JobFixture(
         job_id=job_id,
@@ -139,63 +150,17 @@ def _create_registered_job(
 
 
 def _apply_lifecycle_state(
-    registry: ExecutionRegistry,
-    record: ExecutionRecord,
-    lifecycle_state: "_LifecycleState",
-) -> None:
-    if lifecycle_state == _LifecycleState.RUNNING:
-        return
-
-    if lifecycle_state == _LifecycleState.CLEANUP_READY_DONE:
-        _mark_cleanup_ready(
-            registry=registry,
-            record=record,
-            status=WorkerJobStatus.DONE,
-            message="Job completed successfully.",
-        )
-        return
-
-    if lifecycle_state == _LifecycleState.CLEANUP_READY_ERROR:
-        _mark_cleanup_ready(
-            registry=registry,
-            record=record,
-            status=WorkerJobStatus.ERROR,
-            message="RuntimeError: execution failed",
-        )
-        return
-
-    if lifecycle_state == _LifecycleState.TERMINAL_PUBLISHED_NOT_ACKNOWLEDGED:
-        claimed = registry.try_claim_terminal(
-            job_id=record.job_id,
-            terminal_status=WorkerJobStatus.DONE,
-            message="Job completed successfully.",
-            finished_at=FIXED_TIME,
-        )
-        assert claimed is record
-        registry.mark_terminal_published(record.job_id)
-        return
-
-    raise AssertionError(f"Unsupported lifecycle state: {lifecycle_state}")
-
-
-def _mark_cleanup_ready(
     *,
-    registry: ExecutionRegistry,
-    record: ExecutionRecord,
-    status: WorkerJobStatus,
-    message: str,
+    coordinator: JobStateTransitionCoordinator,
+    execution_record: ExecutionRecord,
+    job_status: "WorkerJobStatus",
 ) -> None:
-    claimed = registry.try_claim_terminal(
-        job_id=record.job_id,
-        terminal_status=status,
-        message=message,
-        finished_at=FIXED_TIME,
+    record = coordinator.create(
+        execution_record.job_id,
+        MagicMock(),
     )
-    assert claimed is record
-
-    registry.mark_terminal_published(record.job_id)
-    registry.mark_acknowledged(record.job_id)
-    registry.mark_cleanup_ready(record.job_id)
+    with record.lock:
+        record.state = job_status
 
 
 def _create_production_like_workspace(context: JobExecutionContext) -> None:
@@ -259,15 +224,18 @@ def _manifest_json(context: JobExecutionContext) -> str:
 def _assert_cleanup_finished(
     *,
     registry: ExecutionRegistry,
+    coordinator: JobStateTransitionCoordinator,
     removed_jobs: list["_JobFixture"],
     preserved_jobs: list["_JobFixture"],
 ) -> None:
     for fixture in removed_jobs:
         assert registry.get(fixture.job_id) is None
+        assert coordinator.get_state(fixture.job_id) is None
         assert not fixture.work_dir.exists()
 
     for fixture in preserved_jobs:
         assert registry.get(fixture.job_id) is fixture.record
+        assert coordinator.get_state(fixture.job_id) is not None
         assert fixture.work_dir.exists()
 
     assert registry.size() == len(preserved_jobs)
@@ -328,13 +296,42 @@ def _context(tmp_path: Path, *, job_id: str) -> JobExecutionContext:
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=USER_ID,
         job_id=job_id,
         job_type="SOLVING_SLAE",
+        inputs={
+            "matrix": ArtifactRef(
+                object_key=f"jobs/{USER_ID}/{job_id}/in/matrix.csv",
+                format=ArtifactFormat.CSV,
+            ),
+            "rhs": ArtifactRef(
+                object_key=f"jobs/{USER_ID}/{job_id}/in/rhs.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key=f"jobs/{USER_ID}/{job_id}/out/solution.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id=WORKER_ID,
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts(
             {
                 "matrix": PreparedInputArtifact(
@@ -358,11 +355,7 @@ def _context(tmp_path: Path, *, job_id: str) -> JobExecutionContext:
                 ),
             }
         ),
-        params=JobParameters(
-            {
-                "solvingMethod": "numpy_exact_solver",
-            }
-        ),
+        params=JobParameters(manifest.params),
     )
 
 
@@ -378,10 +371,3 @@ class _JobFixture:
     matrix_path: Path
     rhs_path: Path
     solution_path: Path
-
-
-class _LifecycleState:
-    RUNNING = "RUNNING"
-    CLEANUP_READY_DONE = "CLEANUP_READY_DONE"
-    CLEANUP_READY_ERROR = "CLEANUP_READY_ERROR"
-    TERMINAL_PUBLISHED_NOT_ACKNOWLEDGED = "TERMINAL_PUBLISHED_NOT_ACKNOWLEDGED"

@@ -9,14 +9,12 @@ from datetime import datetime, timezone
 from multiprocessing.context import BaseContext
 from pathlib import Path
 
-from mdds_worker_runtime.domain.manifest import JobManifest
 from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.context_snapshot import (
     JobExecutionContextSnapshotStore,
 )
-from mdds_worker_runtime.execution.models import ExecutionRecord
+from mdds_worker_runtime.execution.models import ProcessRecord
 from mdds_worker_runtime.execution.supervised_process import run_job_in_child_process
-from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 CONTEXT_SNAPSHOT_FILE_NAME = "context.snapshot.json"
 
@@ -30,10 +28,6 @@ class SupervisedExecutionRequest:
     """Request to start supervised execution for one validated job."""
 
     context: JobExecutionContext
-    worker_id: str
-    manifest_object_key: str
-    manifest: JobManifest
-    submitted_ack: Acknowledger
 
 
 class ExecutionSupervisor:
@@ -41,37 +35,27 @@ class ExecutionSupervisor:
 
     def __init__(
         self,
-        jobs_root: Path,
         handler_import_path: str,
         snapshot_store: JobExecutionContextSnapshotStore | None = None,
         process_context: BaseContext | None = None,
     ) -> None:
-        if jobs_root is None:
-            raise ValueError("jobs_root cannot be null.")
         if handler_import_path is None or handler_import_path.strip() == "":
             raise ValueError("handler_import_path cannot be null or blank.")
 
-        self._jobs_root = jobs_root
         self._handler_import_path = handler_import_path.strip()
         self._snapshot_store = snapshot_store or JobExecutionContextSnapshotStore()
         self._process_context = process_context or mp.get_context("spawn")
 
-    def start(self, request: SupervisedExecutionRequest) -> ExecutionRecord:
+    def start(self, request: SupervisedExecutionRequest) -> ProcessRecord:
         if request is None:
             raise ValueError("request cannot be null.")
         if request.context is None:
             raise ValueError("request context cannot be null.")
-        if request.worker_id is None or request.worker_id.strip() == "":
-            raise ValueError("request worker_id cannot be null or blank.")
         if (
-            request.manifest_object_key is None
-            or request.manifest_object_key.strip() == ""
+            request.context.workspace.worker_id is None
+            or request.context.workspace.worker_id.strip() == ""
         ):
-            raise ValueError("request manifest_object_key cannot be null or blank.")
-        if request.manifest is None:
-            raise ValueError("request manifest cannot be null.")
-        if request.submitted_ack is None:
-            raise ValueError("request submitted_ack cannot be null.")
+            raise ValueError("request worker_id cannot be null or blank.")
 
         context = request.context
         context_snapshot_path = self._context_snapshot_path(context)
@@ -103,24 +87,12 @@ class ExecutionSupervisor:
 
         child_connection.close()
         started_at = datetime.now(timezone.utc)
-        return ExecutionRecord(
-            job_id=context.job_id,
-            user_id=context.user_id,
-            job_type=context.job_type,
-            worker_id=request.worker_id,
-            manifest_object_key=request.manifest_object_key,
-            manifest=request.manifest,
-            context=request.context,
+        return ProcessRecord(
             process=process,
             parent_connection=parent_connection,
-            submitted_ack=request.submitted_ack,
             started_at=started_at,
         )
 
-    def _context_snapshot_path(self, context: JobExecutionContext) -> Path:
-        return (
-            self._jobs_root
-            / str(context.user_id)
-            / context.job_id
-            / CONTEXT_SNAPSHOT_FILE_NAME
-        )
+    @staticmethod
+    def _context_snapshot_path(context: JobExecutionContext) -> Path:
+        return context.workspace.work_dir / CONTEXT_SNAPSHOT_FILE_NAME

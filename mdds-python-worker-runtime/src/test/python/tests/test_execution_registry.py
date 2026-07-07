@@ -3,22 +3,22 @@
 
 from __future__ import annotations
 
-import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
 from mdds_worker_runtime.domain.manifest import JobManifest
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.execution.models import ExecutionRecord
 from mdds_worker_runtime.execution.registry import (
     DuplicateExecutionRecordError,
     ExecutionRecordNotFoundError,
     ExecutionRegistry,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 
 FIXED_TIME = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-FINISHED_TIME = datetime(2026, 1, 1, 0, 1, 0, tzinfo=timezone.utc)
 
 
 def test_add_stores_record_by_record_job_id() -> None:
@@ -118,6 +118,13 @@ def test_remove_returns_none_for_missing_job() -> None:
     assert registry.remove("job-1") is None
 
 
+def test_remove_rejects_blank_job_id() -> None:
+    registry = ExecutionRegistry()
+
+    with pytest.raises(ValueError, match="job_id cannot be null or blank"):
+        registry.remove("")
+
+
 def test_remove_if_same_removes_same_record() -> None:
     registry = ExecutionRegistry()
     record = _record("job-1")
@@ -126,6 +133,7 @@ def test_remove_if_same_removes_same_record() -> None:
 
     assert registry.remove_if_same(record) is True
     assert registry.get("job-1") is None
+    assert registry.size() == 0
 
 
 def test_remove_if_same_does_not_remove_different_record_with_same_job_id() -> None:
@@ -137,6 +145,22 @@ def test_remove_if_same_does_not_remove_different_record_with_same_job_id() -> N
 
     assert registry.remove_if_same(different) is False
     assert registry.get("job-1") is registered
+    assert registry.size() == 1
+
+
+def test_remove_if_same_returns_false_for_missing_record() -> None:
+    registry = ExecutionRegistry()
+    record = _record("job-1")
+
+    assert registry.remove_if_same(record) is False
+    assert registry.size() == 0
+
+
+def test_remove_if_same_rejects_null_record() -> None:
+    registry = ExecutionRegistry()
+
+    with pytest.raises(ValueError, match="record cannot be null"):
+        registry.remove_if_same(None)
 
 
 def test_clear_returns_removed_records_and_empties_registry() -> None:
@@ -152,272 +176,46 @@ def test_clear_returns_removed_records_and_empties_registry() -> None:
     assert removed == [first, second]
     assert registry.size() == 0
     assert registry.snapshot() == []
+    assert registry.get("job-1") is None
+    assert registry.get("job-2") is None
 
 
-def test_try_claim_terminal_marks_done_and_returns_record() -> None:
-    registry = ExecutionRegistry()
-    record = _record("job-1")
-    registry.add(record)
-
-    claimed = registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.DONE,
-        message="Job completed successfully.",
-        finished_at=FINISHED_TIME,
-    )
-
-    assert claimed is record
-
-    with record.lock:
-        assert record.terminal_status_claimed is True
-        assert record.terminal_status is WorkerJobStatus.DONE
-        assert record.terminal_message == "Job completed successfully."
-        assert record.finished_at == FINISHED_TIME
-
-
-def test_try_claim_terminal_returns_none_for_missing_job() -> None:
+def test_clear_returns_empty_list_when_registry_is_empty() -> None:
     registry = ExecutionRegistry()
 
-    claimed = registry.try_claim_terminal(
-        job_id="missing-job",
-        terminal_status=WorkerJobStatus.DONE,
-        message="Job completed successfully.",
-        finished_at=FINISHED_TIME,
-    )
-
-    assert claimed is None
+    assert registry.clear() == []
+    assert registry.size() == 0
 
 
-def test_try_claim_terminal_rejects_non_terminal_status() -> None:
-    registry = ExecutionRegistry()
-    record = _record("job-1")
-    registry.add(record)
-
-    with pytest.raises(ValueError, match="not terminal"):
-        registry.try_claim_terminal(
-            job_id="job-1",
-            terminal_status=WorkerJobStatus.IN_PROGRESS,
-            message="Job is in progress.",
-            finished_at=FINISHED_TIME,
-        )
-
-    assert record.terminal_status_claimed is False
-    assert record.terminal_status is None
-
-
-def test_try_claim_terminal_wins_only_once() -> None:
-    registry = ExecutionRegistry()
-    record = _record("job-1")
-    registry.add(record)
-
-    first = registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.DONE,
-        message="Job completed successfully.",
-        finished_at=FINISHED_TIME,
-    )
-    second = registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.ERROR,
-        message="Late error.",
-        finished_at=FINISHED_TIME,
-    )
-
-    assert first is record
-    assert second is None
-
-    with record.lock:
-        assert record.terminal_status is WorkerJobStatus.DONE
-        assert record.terminal_message == "Job completed successfully."
-
-
-def test_try_claim_terminal_is_thread_safe_and_allows_single_winner() -> None:
-    registry = ExecutionRegistry()
-    record = _record("job-1")
-    registry.add(record)
-
-    barrier = threading.Barrier(4)
-    results = []
-    results_lock = threading.Lock()
-
-    def claim(status: WorkerJobStatus) -> None:
-        barrier.wait()
-        result = registry.try_claim_terminal(
-            job_id="job-1",
-            terminal_status=status,
-            message=f"Terminal status: {status.value}",
-            finished_at=FINISHED_TIME,
-        )
-        with results_lock:
-            results.append(result)
-
-    threads = [
-        threading.Thread(target=claim, args=(WorkerJobStatus.DONE,)),
-        threading.Thread(target=claim, args=(WorkerJobStatus.ERROR,)),
-        threading.Thread(target=claim, args=(WorkerJobStatus.CANCELLED,)),
-        threading.Thread(target=claim, args=(WorkerJobStatus.VALIDATION_FAILED,)),
-    ]
-
-    for thread in threads:
-        thread.start()
-
-    for thread in threads:
-        thread.join(timeout=5)
-
-    winners = [result for result in results if result is not None]
-
-    assert winners == [record]
-    assert len(results) == 4
-
-    with record.lock:
-        assert record.terminal_status_claimed is True
-        assert record.terminal_status in {
-            WorkerJobStatus.DONE,
-            WorkerJobStatus.ERROR,
-            WorkerJobStatus.CANCELLED,
-            WorkerJobStatus.VALIDATION_FAILED,
-        }
-
-
-def test_mark_terminal_published_requires_terminal_status_claimed() -> None:
-    registry = ExecutionRegistry()
-    record = _record("job-1")
-    registry.add(record)
-
-    with pytest.raises(RuntimeError, match="terminal status was not claimed"):
-        registry.mark_terminal_published("job-1")
-
-    assert record.terminal_status_published is False
-
-
-def test_mark_terminal_published_sets_flag_after_terminal_claim() -> None:
-    registry = ExecutionRegistry()
-    record = _terminal_record(registry)
-
-    registry.mark_terminal_published("job-1")
-
-    assert record.terminal_status_published is True
-
-
-def test_mark_acknowledged_requires_terminal_status_published() -> None:
-    registry = ExecutionRegistry()
-    record = _terminal_record(registry)
-
-    with pytest.raises(RuntimeError, match="before terminal status is published"):
-        registry.mark_acknowledged("job-1")
-
-    assert record.acknowledgement_done is False
-
-
-def test_mark_acknowledged_sets_flag_after_terminal_status_publication() -> None:
-    registry = ExecutionRegistry()
-    record = _terminal_record(registry)
-
-    registry.mark_terminal_published("job-1")
-    registry.mark_acknowledged("job-1")
-
-    assert record.acknowledgement_done is True
-
-
-def test_mark_cleanup_ready_requires_terminal_status_published() -> None:
-    registry = ExecutionRegistry()
-    record = _terminal_record(registry)
-
-    with pytest.raises(RuntimeError, match="before terminal status is published"):
-        registry.mark_cleanup_ready("job-1")
-
-    assert record.cleanup_ready is False
-
-
-def test_mark_cleanup_ready_requires_acknowledgement() -> None:
-    registry = ExecutionRegistry()
-    record = _terminal_record(registry)
-
-    registry.mark_terminal_published("job-1")
-
-    with pytest.raises(RuntimeError, match="before acknowledgement"):
-        registry.mark_cleanup_ready("job-1")
-
-    assert record.cleanup_ready is False
-
-
-def test_mark_cleanup_ready_sets_flag_after_terminal_publication_and_ack() -> None:
-    registry = ExecutionRegistry()
-    record = _terminal_record(registry)
-
-    registry.mark_terminal_published("job-1")
-    registry.mark_acknowledged("job-1")
-    registry.mark_cleanup_ready("job-1")
-
-    assert record.cleanup_ready is True
-
-
-def test_successful_registry_lifecycle() -> None:
-    registry = ExecutionRegistry()
-    record = _record("job-1")
-
-    registry.add(record)
-
-    assert registry.get("job-1") is record
-
-    claimed = registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.DONE,
-        message="Job completed successfully.",
-        finished_at=FINISHED_TIME,
-    )
-
-    assert claimed is record
-
-    registry.mark_terminal_published("job-1")
-    registry.mark_acknowledged("job-1")
-    registry.mark_cleanup_ready("job-1")
-
-    with record.lock:
-        assert record.terminal_status_claimed is True
-        assert record.terminal_status_published is True
-        assert record.acknowledgement_done is True
-        assert record.cleanup_ready is True
-
-
-def test_mark_methods_raise_for_missing_record() -> None:
+def test_size_returns_number_of_registered_records() -> None:
     registry = ExecutionRegistry()
 
-    with pytest.raises(ExecutionRecordNotFoundError):
-        registry.mark_terminal_published("missing-job")
+    assert registry.size() == 0
 
-    with pytest.raises(ExecutionRecordNotFoundError):
-        registry.mark_acknowledged("missing-job")
+    registry.add(_record("job-1"))
 
-    with pytest.raises(ExecutionRecordNotFoundError):
-        registry.mark_cleanup_ready("missing-job")
+    assert registry.size() == 1
 
+    registry.add(_record("job-2"))
 
-def _terminal_record(registry: ExecutionRegistry) -> ExecutionRecord:
-    record = _record("job-1")
-    registry.add(record)
-    registry.try_claim_terminal(
-        job_id="job-1",
-        terminal_status=WorkerJobStatus.DONE,
-        message="Job completed successfully.",
-        finished_at=FINISHED_TIME,
-    )
-    return record
+    assert registry.size() == 2
 
 
 def _record(job_id: str = "job-1") -> ExecutionRecord:
-    return ExecutionRecord(
-        job_id=job_id,
-        user_id=42,
-        job_type="SOLVING_SLAE",
+    manifest = _manifest(job_id)
+    work_dir = Path("jobs") / str(manifest.user_id) / manifest.job_id
+
+    workspace = JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=work_dir / "in",
+        output_dir=work_dir / "out",
         worker_id="worker-1",
-        manifest_object_key=f"jobs/42/{job_id}/manifest.json",
-        manifest=_manifest(job_id),
+    )
+
+    return ExecutionRecord(
+        workspace=workspace,
         context=MagicMock(),
-        process=MagicMock(),
-        parent_connection=MagicMock(),
-        submitted_ack=MagicMock(),
-        started_at=FIXED_TIME,
     )
 
 

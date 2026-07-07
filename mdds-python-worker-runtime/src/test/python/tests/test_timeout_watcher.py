@@ -4,17 +4,31 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
 
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.domain.manifest import JobManifest
+from mdds_worker_runtime.execution.models import (
+    ExecutionRecord,
+    WorkerJobStatus,
+    ProcessRecord,
+)
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
+from mdds_worker_runtime.execution.workspace import JobWorkspace
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
+from mdds_worker_runtime.queue.queue_client import Acknowledger
 
 FIXED_NOW = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 WORKER_ID = "worker-1"
+JOB_ID = "job-1"
 JOB_TIMEOUT_SECONDS = 10.0
+JOIN_TIMEOUT_SECONDS = 0.01
 TIMED_OUT_STARTED_AT = FIXED_NOW - timedelta(seconds=JOB_TIMEOUT_SECONDS)
 NOT_TIMED_OUT_STARTED_AT = FIXED_NOW - timedelta(seconds=JOB_TIMEOUT_SECONDS - 1)
 
@@ -23,6 +37,11 @@ NOT_TIMED_OUT_STARTED_AT = FIXED_NOW - timedelta(seconds=JOB_TIMEOUT_SECONDS - 1
     ("field_name", "bad_value", "error_message"),
     [
         ("execution_registry", None, "execution_registry cannot be null."),
+        (
+            "job_state_transition_coordinator",
+            None,
+            "job_state_transition_coordinator cannot be null.",
+        ),
         ("status_publisher", None, "status_publisher cannot be null."),
         ("worker_id", None, "worker_id cannot be null or blank."),
         ("worker_id", "", "worker_id cannot be null or blank."),
@@ -62,14 +81,15 @@ def test_timeout_watcher_rejects_invalid_constructor_arguments(
 ) -> None:
     kwargs = {
         "execution_registry": ExecutionRegistry(),
+        "job_state_transition_coordinator": JobStateTransitionCoordinator(),
         "status_publisher": MagicMock(),
         "worker_id": WORKER_ID,
         "job_timeout_seconds": JOB_TIMEOUT_SECONDS,
         "poll_interval_seconds": 0.01,
-        "terminated_process_join_timeout_seconds": 0.01,
+        "terminated_process_join_timeout_seconds": JOIN_TIMEOUT_SECONDS,
         "clock": lambda: FIXED_NOW,
+        field_name: bad_value,
     }
-    kwargs[field_name] = bad_value
 
     with pytest.raises(ValueError) as exc_info:
         TimeoutWatcher(**kwargs)
@@ -79,261 +99,249 @@ def test_timeout_watcher_rejects_invalid_constructor_arguments(
 
 def test_timeout_watcher_ignores_not_timed_out_record() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
     status_publisher = MagicMock()
     process = _FakeProcess(alive=True)
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=NOT_TIMED_OUT_STARTED_AT,
         process=process,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert not record.terminal_status_claimed
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.IN_PROGRESS
     assert process.terminate_count == 0
     assert process.join_count == 0
     status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
 
-def test_timeout_watcher_ignores_already_terminal_claimed_record() -> None:
+def test_timeout_watcher_ignores_already_terminal_worker_state() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack, WorkerJobStatus.DONE)
     status_publisher = MagicMock()
     process = _FakeProcess(alive=True)
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
-        submitted_ack=submitted_ack,
     )
 
-    claimed = registry.try_claim_terminal(
-        job_id=record.job_id,
-        terminal_status=WorkerJobStatus.DONE,
-        message="Execution already completed.",
-        finished_at=FIXED_NOW,
-    )
-    assert claimed is record
-
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.DONE
-    assert not record.terminal_status_published
-    assert not record.acknowledgement_done
-    assert not record.cleanup_ready
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.DONE
     assert process.terminate_count == 0
     assert process.join_count == 0
     status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
 
 def test_timeout_watcher_ignores_timed_out_record_when_process_is_not_alive() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
     status_publisher = MagicMock()
     process = _FakeProcess(alive=False)
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert not record.terminal_status_claimed
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.IN_PROGRESS
     assert process.terminate_count == 0
     assert process.join_count == 0
     status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
 
 def test_timeout_watcher_finalizes_timed_out_alive_process_as_error() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
     status_publisher = MagicMock()
     process = _FakeProcess(alive=True, alive_after_join=False)
     parent_connection = MagicMock()
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
         parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published
-    assert record.acknowledgement_done
-    assert record.cleanup_ready
-    assert record.finished_at == FIXED_NOW
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.ERROR
 
     assert process.terminate_count == 1
     assert process.join_count == 1
-    assert process.join_timeout == 0.01
+    assert process.join_timeout == JOIN_TIMEOUT_SECONDS
     parent_connection.close.assert_called_once()
-    status_publisher.publish_error.assert_called_once()
-    submitted_ack.ack.assert_called_once()
+    status_publisher.publish_error.assert_called_once_with(
+        workspace=record.workspace,
+        message=(
+            "Job execution exceeded runtime timeout and was terminated: "
+            f"jobId='{JOB_ID}', timeoutSeconds={JOB_TIMEOUT_SECONDS:g}."
+        ),
+    )
+    ack_mock.ack.assert_called_once()
 
 
-def test_timeout_watcher_publish_error_failure_does_not_ack_or_cleanup_ready() -> None:
+def test_timeout_watcher_publish_error_failure_does_not_ack_or_commit_error() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
     status_publisher = MagicMock()
     status_publisher.publish_error.side_effect = RuntimeError("publish failed")
 
     process = _FakeProcess(alive=True, alive_after_join=False)
     parent_connection = MagicMock()
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
         parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert not record.terminal_status_published
-    assert not record.acknowledgement_done
-    assert not record.cleanup_ready
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.IN_PROGRESS
 
     assert process.terminate_count == 1
     assert process.join_count == 1
     parent_connection.close.assert_called_once()
     status_publisher.publish_error.assert_called_once()
-    submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
 
-def test_timeout_watcher_ack_failure_keeps_record_not_cleanup_ready() -> None:
+def test_timeout_watcher_ack_failure_does_not_propagate_after_error_commit() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack_mock.ack.side_effect = RuntimeError("ack failed")
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
+
     status_publisher = MagicMock()
     process = _FakeProcess(alive=True, alive_after_join=False)
     parent_connection = MagicMock()
-    submitted_ack = MagicMock()
-    submitted_ack.ack.side_effect = RuntimeError("ack failed")
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
         parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published
-    assert not record.acknowledgement_done
-    assert not record.cleanup_ready
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.ERROR
 
     assert process.terminate_count == 1
     assert process.join_count == 1
     parent_connection.close.assert_called_once()
-    status_publisher.publish_error.assert_called_once()
-    submitted_ack.ack.assert_called_once()
+
+    status_publisher.publish_error.assert_called_once_with(
+        workspace=record.workspace,
+        message=(
+            "Job execution exceeded runtime timeout and was terminated: "
+            f"jobId='{JOB_ID}', timeoutSeconds={JOB_TIMEOUT_SECONDS:g}."
+        ),
+    )
+    ack_mock.ack.assert_called_once()
 
 
-def test_timeout_watcher_terminate_failure_does_not_publish_error_ack_or_cleanup_ready() -> (
-    None
-):
+def test_timeout_watcher_terminate_failure_does_not_publish_error_or_ack() -> None:
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
     status_publisher = MagicMock()
     process = _FakeProcess(alive=True, alive_after_join=True)
     parent_connection = MagicMock()
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
         parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert not record.terminal_status_published
-    assert not record.acknowledgement_done
-    assert not record.cleanup_ready
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.IN_PROGRESS
 
     assert process.terminate_count == 1
     assert process.join_count == 1
     parent_connection.close.assert_not_called()
     status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
+    ack_mock.ack.assert_not_called()
 
 
 def test_timeout_watcher_parent_connection_close_failure_still_finalizes_error() -> (
     None
 ):
     registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
     status_publisher = MagicMock()
     process = _FakeProcess(alive=True, alive_after_join=False)
     parent_connection = MagicMock()
     parent_connection.close.side_effect = RuntimeError("close failed")
-    submitted_ack = MagicMock()
     record = _record(
         registry,
         started_at=TIMED_OUT_STARTED_AT,
         process=process,
         parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
     )
 
-    watcher = _watcher(registry, status_publisher)
+    watcher = _watcher(registry, coordinator, status_publisher)
 
     watcher.poll_once()
 
     assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published
-    assert record.acknowledgement_done
-    assert record.cleanup_ready
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.ERROR
 
     assert process.terminate_count == 1
     assert process.join_count == 1
     parent_connection.close.assert_called_once()
     status_publisher.publish_error.assert_called_once()
-    submitted_ack.ack.assert_called_once()
+    ack_mock.ack.assert_called_once()
 
 
 def test_timeout_watcher_start_stop_are_idempotent() -> None:
     watcher = _watcher(
         ExecutionRegistry(),
+        JobStateTransitionCoordinator(),
         MagicMock(),
         poll_interval_seconds=0.01,
     )
@@ -347,6 +355,7 @@ def test_timeout_watcher_start_stop_are_idempotent() -> None:
 def test_timeout_watcher_run_loop_logs_polling_failure_and_stops() -> None:
     watcher = _watcher(
         ExecutionRegistry(),
+        JobStateTransitionCoordinator(),
         MagicMock(),
         poll_interval_seconds=0.01,
     )
@@ -363,44 +372,159 @@ def test_timeout_watcher_run_loop_logs_polling_failure_and_stops() -> None:
     poll_once_mock.assert_called_once()
 
 
+def test_timeout_watcher_ignores_none_record() -> None:
+    registry = MagicMock()
+    registry.snapshot.return_value = [None]
+    coordinator = JobStateTransitionCoordinator()
+    status_publisher = MagicMock()
+
+    watcher = _watcher(registry, coordinator, status_publisher)
+
+    watcher.poll_once()
+
+    status_publisher.publish_error.assert_not_called()
+
+
+def test_timeout_watcher_process_liveness_check_failure_does_not_finalize() -> None:
+    registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
+    status_publisher = MagicMock()
+    process = _FakeProcess(
+        alive=True,
+        is_alive_exception=RuntimeError("is_alive failed"),
+    )
+    record = _record(
+        registry,
+        started_at=TIMED_OUT_STARTED_AT,
+        process=process,
+    )
+
+    watcher = _watcher(registry, coordinator, status_publisher)
+
+    watcher.poll_once()
+
+    assert registry.get(record.job_id) is record
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.IN_PROGRESS
+
+    assert process.terminate_count == 0
+    assert process.join_count == 0
+    status_publisher.publish_error.assert_not_called()
+    ack_mock.ack.assert_not_called()
+
+
+def test_timeout_watcher_joins_but_does_not_terminate_when_process_stops_before_termination() -> (
+    None
+):
+    registry = ExecutionRegistry()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
+    coordinator = _coordinator_in_state(ack)
+    status_publisher = MagicMock()
+    process = _FakeProcess(
+        alive=True,
+        is_alive_results=[True, False, False],
+    )
+    parent_connection = MagicMock()
+    record = _record(
+        registry,
+        started_at=TIMED_OUT_STARTED_AT,
+        process=process,
+        parent_connection=parent_connection,
+    )
+
+    watcher = _watcher(registry, coordinator, status_publisher)
+
+    watcher.poll_once()
+
+    assert registry.get(record.job_id) is record
+    assert coordinator.get_state(record.job_id) is WorkerJobStatus.ERROR
+
+    assert process.terminate_count == 0
+    assert process.join_count == 1
+    assert process.join_timeout == JOIN_TIMEOUT_SECONDS
+    parent_connection.close.assert_called_once()
+    status_publisher.publish_error.assert_called_once()
+    ack_mock.ack.assert_called_once()
+
+
 def _watcher(
     execution_registry: ExecutionRegistry,
+    job_state_transition_coordinator: JobStateTransitionCoordinator,
     status_publisher: MagicMock,
     *,
     poll_interval_seconds: float = 0.01,
 ) -> TimeoutWatcher:
     return TimeoutWatcher(
         execution_registry=execution_registry,
+        job_state_transition_coordinator=job_state_transition_coordinator,
         status_publisher=status_publisher,
         worker_id=WORKER_ID,
         job_timeout_seconds=JOB_TIMEOUT_SECONDS,
         poll_interval_seconds=poll_interval_seconds,
-        terminated_process_join_timeout_seconds=0.01,
+        terminated_process_join_timeout_seconds=JOIN_TIMEOUT_SECONDS,
         clock=lambda: FIXED_NOW,
     )
+
+
+def _coordinator_in_state(
+    acknowledger: Acknowledger,
+    state: WorkerJobStatus = WorkerJobStatus.IN_PROGRESS,
+    job_id: str = JOB_ID,
+) -> JobStateTransitionCoordinator:
+    coordinator = JobStateTransitionCoordinator()
+    record = coordinator.create(job_id=job_id, submitted_ack=acknowledger)
+    with record.lock:
+        record.state = state
+    return coordinator
 
 
 def _record(
     registry: ExecutionRegistry,
     *,
-    job_id: str = "job-1",
+    job_id: str = JOB_ID,
     started_at: datetime,
-    process: _FakeProcess | None = None,
+    process: "_FakeProcess | None" = None,
     parent_connection: MagicMock | None = None,
-    submitted_ack: MagicMock | None = None,
 ) -> ExecutionRecord:
-    record = ExecutionRecord(
-        job_id=job_id,
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
+        job_id=job_id,
         job_type="SOLVING_SLAE",
+        inputs={},
+        params={},
+        outputs={},
+    )
+
+    work_dir = Path("/tmp/jobs") / str(manifest.user_id) / manifest.job_id
+
+    workspace = JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=work_dir / "in",
+        output_dir=work_dir / "out",
         worker_id=WORKER_ID,
-        manifest_object_key=f"jobs/42/{job_id}/manifest.json",
-        manifest=MagicMock(),
-        context=MagicMock(),
-        process=process or _FakeProcess(alive=True),
-        parent_connection=parent_connection or MagicMock(),
-        submitted_ack=submitted_ack or MagicMock(),
-        started_at=started_at,
+    )
+
+    context = MagicMock()
+    context.workspace = workspace
+    context.user_id = workspace.user_id
+    context.job_id = workspace.job_id
+    context.job_type = workspace.job_type
+    context.work_dir = workspace.work_dir
+    context.input_dir = workspace.input_dir
+    context.output_dir = workspace.output_dir
+
+    record = ExecutionRecord(
+        workspace=workspace,
+        context=context,
+        process_record=ProcessRecord(
+            process=process or _FakeProcess(alive=True),
+            parent_connection=parent_connection or MagicMock(),
+            started_at=started_at,
+        ),
     )
 
     registry.add(record)
@@ -453,124 +577,3 @@ class _FakeProcess:
             raise self._join_exception
 
         self._alive = self._alive_after_join
-
-
-def test_timeout_watcher_ignores_none_record() -> None:
-    registry = MagicMock()
-    registry.snapshot.return_value = [None]
-    status_publisher = MagicMock()
-
-    watcher = _watcher(registry, status_publisher)
-
-    watcher.poll_once()
-
-    registry.try_claim_terminal.assert_not_called()
-    status_publisher.publish_error.assert_not_called()
-
-
-def test_timeout_watcher_process_liveness_check_failure_does_not_finalize() -> None:
-    registry = ExecutionRegistry()
-    status_publisher = MagicMock()
-    process = _FakeProcess(
-        alive=True,
-        is_alive_exception=RuntimeError("is_alive failed"),
-    )
-    submitted_ack = MagicMock()
-    record = _record(
-        registry,
-        started_at=TIMED_OUT_STARTED_AT,
-        process=process,
-        submitted_ack=submitted_ack,
-    )
-
-    watcher = _watcher(registry, status_publisher)
-
-    watcher.poll_once()
-
-    assert registry.get(record.job_id) is record
-    assert not record.terminal_status_claimed
-    assert not record.terminal_status_published
-    assert not record.acknowledgement_done
-    assert not record.cleanup_ready
-
-    assert process.terminate_count == 0
-    assert process.join_count == 0
-    status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
-
-
-def test_timeout_watcher_skips_when_terminal_claim_is_lost_after_candidate_check() -> (
-    None
-):
-    real_registry = ExecutionRegistry()
-    process = _FakeProcess(alive=True)
-    submitted_ack = MagicMock()
-    record = _record(
-        real_registry,
-        started_at=TIMED_OUT_STARTED_AT,
-        process=process,
-        submitted_ack=submitted_ack,
-    )
-
-    registry = MagicMock()
-    registry.snapshot.return_value = [record]
-    registry.try_claim_terminal.return_value = None
-    status_publisher = MagicMock()
-
-    watcher = _watcher(registry, status_publisher)
-
-    watcher.poll_once()
-
-    registry.try_claim_terminal.assert_called_once_with(
-        job_id=record.job_id,
-        terminal_status=WorkerJobStatus.ERROR,
-        message=(
-            "Job execution exceeded runtime timeout and was terminated: "
-            f"jobId='{record.job_id}', timeoutSeconds={JOB_TIMEOUT_SECONDS:g}."
-        ),
-        finished_at=FIXED_NOW,
-    )
-
-    assert not record.terminal_status_claimed
-    assert process.terminate_count == 0
-    assert process.join_count == 0
-    status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
-
-
-def test_timeout_watcher_joins_but_does_not_terminate_when_process_stops_before_termination() -> (
-    None
-):
-    registry = ExecutionRegistry()
-    status_publisher = MagicMock()
-    process = _FakeProcess(
-        alive=True,
-        is_alive_results=[True, False, False],
-    )
-    parent_connection = MagicMock()
-    submitted_ack = MagicMock()
-    record = _record(
-        registry,
-        started_at=TIMED_OUT_STARTED_AT,
-        process=process,
-        parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
-    )
-
-    watcher = _watcher(registry, status_publisher)
-
-    watcher.poll_once()
-
-    assert registry.get(record.job_id) is record
-    assert record.terminal_status_claimed
-    assert record.terminal_status == WorkerJobStatus.ERROR
-    assert record.terminal_status_published
-    assert record.acknowledgement_done
-    assert record.cleanup_ready
-
-    assert process.terminate_count == 0
-    assert process.join_count == 1
-    assert process.join_timeout == 0.01
-    parent_connection.close.assert_called_once()
-    status_publisher.publish_error.assert_called_once()
-    submitted_ack.ack.assert_called_once()

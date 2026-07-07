@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -23,6 +24,7 @@ from mdds_worker_runtime.execution.output_artifact_uploader import (
     OutputArtifactUploader,
     UploadedOutputArtifact,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 from mdds_worker_runtime.storage.s3_client import S3Storage
 
 
@@ -383,16 +385,37 @@ def _create_context(
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
         job_id="job-1",
         job_type="SOLVING_SLAE",
+        inputs={},
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            slot: ArtifactRef(
+                object_key=artifact.object_key,
+                format=artifact.format,
+            )
+            for slot, artifact in outputs.items()
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id="worker-1",
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts({}),
         outputs=OutputArtifacts(outputs),
-        params=JobParameters({"solvingMethod": "numpy_exact_solver"}),
+        params=JobParameters(manifest.params),
     )
 
 

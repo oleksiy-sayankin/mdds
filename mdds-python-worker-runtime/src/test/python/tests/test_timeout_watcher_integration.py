@@ -6,12 +6,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import multiprocessing
+from multiprocessing import Process
 from pathlib import Path
 import threading
 import time
 from typing import Any
+from unittest.mock import MagicMock
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -20,9 +23,17 @@ from mdds_worker_runtime.execution.artifacts import (
     PreparedOutputArtifact,
 )
 from mdds_worker_runtime.execution.context import JobExecutionContext
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.execution.models import (
+    ExecutionRecord,
+    WorkerJobStatus,
+    ProcessRecord,
+)
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
+from mdds_worker_runtime.execution.workspace import JobWorkspace
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
 
 WORKER_ID = "worker-1"
 USER_ID = 42
@@ -43,6 +54,7 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
     tmp_path: Path,
 ) -> None:
     registry = ExecutionRegistry()
+    coordinator = JobStateTransitionCoordinator()
     status_publisher = _StatusPublisherSpy()
     process_context = _multiprocessing_context()
     fixtures: list[_RecordFixture] = []
@@ -53,6 +65,7 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
                 tmp_path=tmp_path,
                 process_context=process_context,
                 registry=registry,
+                coordinator=coordinator,
                 job_id=f"timed-out-job-{index}",
                 lifecycle_state=_LifecycleState.TIMED_OUT_RUNNING,
             )
@@ -64,6 +77,7 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
                 tmp_path=tmp_path,
                 process_context=process_context,
                 registry=registry,
+                coordinator=coordinator,
                 job_id=f"running-job-{index}",
                 lifecycle_state=_LifecycleState.RUNNING_NOT_TIMED_OUT,
             )
@@ -71,10 +85,11 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
 
     for index in range(CLEANUP_READY_JOB_COUNT):
         fixtures.append(
-            _start_child_process_and_register_execution(
+            _create_cleanup_ready_error_execution(
                 tmp_path=tmp_path,
                 process_context=process_context,
                 registry=registry,
+                coordinator=coordinator,
                 job_id=f"cleanup-ready-job-{index}",
                 lifecycle_state=_LifecycleState.CLEANUP_READY_ERROR,
             )
@@ -82,6 +97,7 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
 
     watcher = TimeoutWatcher(
         execution_registry=registry,
+        job_state_transition_coordinator=coordinator,
         status_publisher=status_publisher,
         worker_id=WORKER_ID,
         job_timeout_seconds=JOB_TIMEOUT_SECONDS,
@@ -96,6 +112,7 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
         _wait_until(
             lambda: _assert_timed_out_jobs_finalized(
                 fixtures=fixtures,
+                coordinator=coordinator,
                 status_publisher=status_publisher,
             ),
             timeout_seconds=2.0,
@@ -117,6 +134,7 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
 
         for fixture in fixtures:
             record = fixture.record
+            state = coordinator.get_state(record.job_id)
 
             assert registry.get(record.job_id) is record
             assert fixture.context.work_dir.exists()
@@ -125,33 +143,21 @@ def test_timeout_watcher_finalizes_only_timed_out_running_executions(
 
             if fixture.lifecycle_state == _LifecycleState.TIMED_OUT_RUNNING:
                 assert record.job_id in timed_out_job_ids
-                assert record.terminal_status_claimed is True
-                assert record.terminal_status == WorkerJobStatus.ERROR
-                assert record.terminal_status_published is True
-                assert record.acknowledgement_done is True
-                assert record.cleanup_ready is True
+                assert state is WorkerJobStatus.ERROR
                 assert fixture.submitted_ack.ack_count == 1
                 assert not fixture.process.is_alive()
 
             if fixture.lifecycle_state == _LifecycleState.RUNNING_NOT_TIMED_OUT:
                 assert record.job_id in running_job_ids
-                assert record.terminal_status_claimed is False
-                assert record.terminal_status is None
-                assert record.terminal_status_published is False
-                assert record.acknowledgement_done is False
-                assert record.cleanup_ready is False
+                assert state is WorkerJobStatus.IN_PROGRESS
                 assert fixture.submitted_ack.ack_count == 0
                 assert fixture.process.is_alive()
 
             if fixture.lifecycle_state == _LifecycleState.CLEANUP_READY_ERROR:
                 assert record.job_id in cleanup_ready_job_ids
-                assert record.terminal_status_claimed is True
-                assert record.terminal_status == WorkerJobStatus.ERROR
-                assert record.terminal_status_published is True
-                assert record.acknowledgement_done is True
-                assert record.cleanup_ready is True
+                assert state is WorkerJobStatus.ERROR
                 assert fixture.submitted_ack.ack_count == 1
-                assert fixture.process.is_alive()
+                assert not fixture.process.is_alive()
 
         assert registry.size() == len(fixtures)
 
@@ -165,6 +171,7 @@ def _start_child_process_and_register_execution(
     tmp_path: Path,
     process_context,
     registry: ExecutionRegistry,
+    coordinator: JobStateTransitionCoordinator,
     job_id: str,
     lifecycle_state: "_LifecycleState",
 ) -> "_RecordFixture":
@@ -182,23 +189,65 @@ def _start_child_process_and_register_execution(
     _create_local_workspace(context)
 
     record = ExecutionRecord(
-        job_id=job_id,
-        user_id=context.user_id,
-        job_type=context.job_type,
-        worker_id=WORKER_ID,
-        manifest_object_key=f"jobs/{context.user_id}/{job_id}/manifest.json",
-        manifest=None,
+        workspace=context.workspace,
         context=context,
-        process=process,
-        parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
-        started_at=_started_at_for(lifecycle_state),
+        process_record=ProcessRecord(
+            process=process,
+            parent_connection=parent_connection,
+            started_at=_started_at_for(lifecycle_state),
+        ),
     )
 
     registry.add(record)
     _apply_lifecycle_state(
-        registry=registry,
+        coordinator=coordinator,
+        execution_record=record,
+        submitted_ack=submitted_ack,
+        lifecycle_state=lifecycle_state,
+    )
+
+    return _RecordFixture(
         record=record,
+        submitted_ack=submitted_ack,
+        lifecycle_state=lifecycle_state,
+        context=context,
+        parent_connection=parent_connection,
+        process=process,
+    )
+
+
+def _create_cleanup_ready_error_execution(
+    *,
+    tmp_path: Path,
+    process_context,
+    registry: ExecutionRegistry,
+    coordinator: JobStateTransitionCoordinator,
+    job_id: str,
+    lifecycle_state: "_LifecycleState",
+) -> "_RecordFixture":
+    parent_connection = MagicMock()
+
+    process = MagicMock(spec=Process)
+    process.is_alive.return_value = False
+
+    submitted_ack = _SubmittedAckSpy()
+    context = _context(tmp_path, job_id=job_id)
+    _create_local_workspace(context)
+
+    record = ExecutionRecord(
+        workspace=context.workspace,
+        context=context,
+        process_record=ProcessRecord(
+            process=process,
+            parent_connection=parent_connection,
+            started_at=_started_at_for(lifecycle_state),
+        ),
+    )
+
+    registry.add(record)
+    _apply_lifecycle_state(
+        coordinator=coordinator,
+        execution_record=record,
         submitted_ack=submitted_ack,
         lifecycle_state=lifecycle_state,
     )
@@ -226,8 +275,8 @@ def _started_at_for(lifecycle_state: "_LifecycleState") -> datetime:
 
 def _apply_lifecycle_state(
     *,
-    registry: ExecutionRegistry,
-    record: ExecutionRecord,
+    coordinator: JobStateTransitionCoordinator,
+    execution_record: ExecutionRecord,
     submitted_ack: "_SubmittedAckSpy",
     lifecycle_state: "_LifecycleState",
 ) -> None:
@@ -235,21 +284,25 @@ def _apply_lifecycle_state(
         _LifecycleState.TIMED_OUT_RUNNING,
         _LifecycleState.RUNNING_NOT_TIMED_OUT,
     }:
+        record = coordinator.create(
+            execution_record.job_id,
+            submitted_ack=submitted_ack,
+        )
+        with record.lock:
+            record.state = WorkerJobStatus.IN_PROGRESS
         return
 
+    # The job is already terminal ERROR and already acknowledged.
+    # It is old enough to look timed out, but TimeoutWatcher must skip it
+    # because terminal worker-local state wins over timeout detection.
     if lifecycle_state == _LifecycleState.CLEANUP_READY_ERROR:
-        claimed = registry.try_claim_terminal(
-            job_id=record.job_id,
-            terminal_status=WorkerJobStatus.ERROR,
-            message="RuntimeError: execution already failed.",
-            finished_at=FIXED_NOW,
+        record = coordinator.create(
+            execution_record.job_id,
+            submitted_ack=submitted_ack,
         )
-        assert claimed is record
-
-        registry.mark_terminal_published(record.job_id)
+        with record.lock:
+            record.state = WorkerJobStatus.ERROR
         submitted_ack.ack()
-        registry.mark_acknowledged(record.job_id)
-        registry.mark_cleanup_ready(record.job_id)
         return
 
     raise AssertionError(f"Unsupported lifecycle state: {lifecycle_state}")
@@ -258,6 +311,7 @@ def _apply_lifecycle_state(
 def _assert_timed_out_jobs_finalized(
     *,
     fixtures: list["_RecordFixture"],
+    coordinator: JobStateTransitionCoordinator,
     status_publisher: "_StatusPublisherSpy",
 ) -> None:
     assert len(status_publisher.error_job_ids()) == TIMED_OUT_JOB_COUNT
@@ -273,11 +327,7 @@ def _assert_timed_out_jobs_finalized(
     for fixture in timed_out_fixtures:
         record = fixture.record
 
-        assert record.terminal_status_claimed is True
-        assert record.terminal_status == WorkerJobStatus.ERROR
-        assert record.terminal_status_published is True
-        assert record.acknowledgement_done is True
-        assert record.cleanup_ready is True
+        assert coordinator.get_state(record.job_id) is WorkerJobStatus.ERROR
         assert fixture.submitted_ack.ack_count == 1
         assert not fixture.process.is_alive()
 
@@ -349,13 +399,42 @@ def _context(tmp_path: Path, *, job_id: str) -> JobExecutionContext:
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=USER_ID,
         job_id=job_id,
         job_type="SOLVING_SLAE",
+        inputs={
+            "matrix": ArtifactRef(
+                object_key=f"jobs/{USER_ID}/{job_id}/in/matrix.csv",
+                format=ArtifactFormat.CSV,
+            ),
+            "rhs": ArtifactRef(
+                object_key=f"jobs/{USER_ID}/{job_id}/in/rhs.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key=f"jobs/{USER_ID}/{job_id}/out/solution.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id=WORKER_ID,
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts(
             {
                 "matrix": PreparedInputArtifact(
@@ -379,11 +458,7 @@ def _context(tmp_path: Path, *, job_id: str) -> JobExecutionContext:
                 ),
             }
         ),
-        params=JobParameters(
-            {
-                "solvingMethod": "numpy_exact_solver",
-            }
-        ),
+        params=JobParameters(manifest.params),
     )
 
 
@@ -413,19 +488,16 @@ class _StatusPublisherSpy:
 
     def publish_error(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         message: str,
     ) -> None:
         with self._lock:
             self._error.append(
                 _PublishedStatus(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_type=job_type,
-                    worker_id=worker_id,
+                    job_id=workspace.job_id,
+                    user_id=workspace.user_id,
+                    job_type=workspace.job_type,
+                    worker_id=workspace.worker_id,
                     message=message,
                 )
             )

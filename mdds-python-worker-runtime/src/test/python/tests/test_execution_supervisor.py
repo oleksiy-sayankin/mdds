@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -28,19 +29,17 @@ from mdds_worker_runtime.execution.supervisor import (
     ExecutionSupervisorStartError,
     SupervisedExecutionRequest,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 
 
 def test_execution_supervisor_saves_snapshot_starts_process_and_returns_record(
     tmp_path,
 ) -> None:
     context = _create_context(tmp_path)
-    manifest = MagicMock()
-    submitted_ack = MagicMock()
     snapshot_store = MagicMock(spec=JobExecutionContextSnapshotStore)
     process_context = _FakeProcessContext()
 
     supervisor = ExecutionSupervisor(
-        jobs_root=tmp_path / "jobs",
         handler_import_path="tests.fixtures.job_handlers:WritingExecuteJobHandler",
         snapshot_store=snapshot_store,
         process_context=process_context,
@@ -48,10 +47,6 @@ def test_execution_supervisor_saves_snapshot_starts_process_and_returns_record(
 
     request = SupervisedExecutionRequest(
         context=context,
-        worker_id="worker-1",
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
     )
 
     record = supervisor.start(request)
@@ -74,24 +69,14 @@ def test_execution_supervisor_saves_snapshot_starts_process_and_returns_record(
     assert process_context.process.started is True
     assert process_context.child_connection.closed is True
 
-    assert record.job_id == "job-1"
-    assert record.user_id == 42
-    assert record.job_type == "SOLVING_SLAE"
-    assert record.worker_id == "worker-1"
-    assert record.manifest_object_key == "jobs/42/job-1/manifest.json"
-    assert record.manifest is manifest
     assert record.process is process_context.process
     assert record.parent_connection is process_context.parent_connection
-    assert record.submitted_ack is submitted_ack
     assert record.started_at.tzinfo == timezone.utc
     assert record.finished_at is None
-    assert record.terminal_status is None
-    assert record.acknowledgement_done is False
 
 
 def test_execution_supervisor_rejects_null_request(tmp_path) -> None:
     supervisor = ExecutionSupervisor(
-        jobs_root=tmp_path / "jobs",
         handler_import_path="tests.fixtures.job_handlers:WritingExecuteJobHandler",
         process_context=_FakeProcessContext(),
     )
@@ -104,15 +89,12 @@ def test_execution_supervisor_closes_connections_when_process_start_fails(
     tmp_path,
 ) -> None:
     context = _create_context(tmp_path)
-    manifest = MagicMock()
-    submitted_ack = MagicMock()
     snapshot_store = MagicMock(spec=JobExecutionContextSnapshotStore)
     process_context = _FakeProcessContext(
         process=_FakeProcess(start_error=RuntimeError("boom")),
     )
 
     supervisor = ExecutionSupervisor(
-        jobs_root=tmp_path / "jobs",
         handler_import_path="tests.fixtures.job_handlers:WritingExecuteJobHandler",
         snapshot_store=snapshot_store,
         process_context=process_context,
@@ -120,10 +102,6 @@ def test_execution_supervisor_closes_connections_when_process_start_fails(
 
     request = SupervisedExecutionRequest(
         context=context,
-        worker_id="worker-1",
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
     )
 
     with pytest.raises(
@@ -185,13 +163,38 @@ def _create_context(tmp_path) -> JobExecutionContext:
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
         job_id="job-1",
         job_type="SOLVING_SLAE",
+        inputs={
+            "matrix": ArtifactRef(
+                object_key="jobs/42/job-1/in/matrix.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key="jobs/42/job-1/out/solution.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id="worker-1",
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts(
             {
                 "matrix": PreparedInputArtifact(
@@ -210,17 +213,12 @@ def _create_context(tmp_path) -> JobExecutionContext:
                 ),
             }
         ),
-        params=JobParameters(
-            {
-                "solvingMethod": "numpy_exact_solver",
-            }
-        ),
+        params=JobParameters(manifest.params),
     )
 
 
 def _create_supervisor(tmp_path) -> ExecutionSupervisor:
     return ExecutionSupervisor(
-        jobs_root=tmp_path / "jobs",
         handler_import_path="tests.fixtures.job_handlers:WritingExecuteJobHandler",
         process_context=_FakeProcessContext(),
     )
@@ -229,20 +227,7 @@ def _create_supervisor(tmp_path) -> ExecutionSupervisor:
 def _create_request(tmp_path) -> SupervisedExecutionRequest:
     return SupervisedExecutionRequest(
         context=_create_context(tmp_path),
-        worker_id="worker-1",
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=MagicMock(),
-        submitted_ack=MagicMock(),
     )
-
-
-def test_execution_supervisor_rejects_null_jobs_root() -> None:
-    with pytest.raises(ValueError, match="jobs_root cannot be null."):
-        ExecutionSupervisor(
-            jobs_root=None,  # type: ignore[arg-type]
-            handler_import_path="tests.fixtures.job_handlers:WritingExecuteJobHandler",
-            process_context=_FakeProcessContext(),
-        )
 
 
 @pytest.mark.parametrize("handler_import_path", [None, "", " "])
@@ -255,7 +240,6 @@ def test_execution_supervisor_rejects_null_or_blank_handler_import_path(
         match="handler_import_path cannot be null or blank.",
     ):
         ExecutionSupervisor(
-            jobs_root=tmp_path / "jobs",
             handler_import_path=handler_import_path,  # type: ignore[arg-type]
             process_context=_FakeProcessContext(),
         )
@@ -272,59 +256,12 @@ def test_execution_supervisor_rejects_null_request_context(tmp_path) -> None:
         supervisor.start(request)
 
 
-@pytest.mark.parametrize("worker_id", [None, "", " "])
-def test_execution_supervisor_rejects_null_or_blank_request_worker_id(
-    worker_id,
-    tmp_path,
-) -> None:
+def test_execution_supervisor_rejects_null_context(tmp_path) -> None:
     supervisor = _create_supervisor(tmp_path)
     request = replace(
         _create_request(tmp_path),
-        worker_id=worker_id,  # type: ignore[arg-type]
+        context=None,  # type: ignore[arg-type]
     )
 
-    with pytest.raises(
-        ValueError,
-        match="request worker_id cannot be null or blank.",
-    ):
-        supervisor.start(request)
-
-
-@pytest.mark.parametrize("manifest_object_key", [None, "", " "])
-def test_execution_supervisor_rejects_null_or_blank_manifest_object_key(
-    manifest_object_key,
-    tmp_path,
-) -> None:
-    supervisor = _create_supervisor(tmp_path)
-    request = replace(
-        _create_request(tmp_path),
-        manifest_object_key=manifest_object_key,  # type: ignore[arg-type]
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="request manifest_object_key cannot be null or blank.",
-    ):
-        supervisor.start(request)
-
-
-def test_execution_supervisor_rejects_null_manifest(tmp_path) -> None:
-    supervisor = _create_supervisor(tmp_path)
-    request = replace(
-        _create_request(tmp_path),
-        manifest=None,  # type: ignore[arg-type]
-    )
-
-    with pytest.raises(ValueError, match="request manifest cannot be null."):
-        supervisor.start(request)
-
-
-def test_execution_supervisor_rejects_null_submitted_ack(tmp_path) -> None:
-    supervisor = _create_supervisor(tmp_path)
-    request = replace(
-        _create_request(tmp_path),
-        submitted_ack=None,  # type: ignore[arg-type]
-    )
-
-    with pytest.raises(ValueError, match="request submitted_ack cannot be null."):
+    with pytest.raises(ValueError, match="context cannot be null."):
         supervisor.start(request)

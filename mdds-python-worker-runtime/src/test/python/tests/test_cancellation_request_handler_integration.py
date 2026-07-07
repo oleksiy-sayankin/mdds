@@ -7,16 +7,25 @@ from datetime import datetime, timezone
 import multiprocessing
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
+from mdds_worker_runtime.domain.manifest import JobManifest
 from mdds_worker_runtime.dto.messages import CancelJobDTO, JobStatusUpdateDTO
 from mdds_worker_runtime.execution.cancel_consumer import CancelConsumer
 from mdds_worker_runtime.execution.cancellation import CancellationRequestHandler
-from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
+from mdds_worker_runtime.execution.models import (
+    ExecutionRecord,
+    WorkerJobStatus,
+    ProcessRecord,
+)
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
-from mdds_worker_runtime.queue.queue_client import QueueMessage
+from mdds_worker_runtime.execution.workspace import JobWorkspace
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
+from mdds_worker_runtime.queue.queue_client import QueueMessage, Acknowledger
 
 WORKER_ID = "worker-1"
 USER_ID = 42
@@ -37,6 +46,8 @@ def test_cancel_consumer_cancels_only_target_running_execution(
         clock=lambda: FIXED_NOW,
     )
 
+    coordinator = JobStateTransitionCoordinator()
+
     cancellation_request_handler = CancellationRequestHandler(
         execution_registry=registry,
         status_publisher=status_publisher,
@@ -46,6 +57,7 @@ def test_cancel_consumer_cancels_only_target_running_execution(
     )
 
     cancel_consumer = CancelConsumer(
+        job_state_transition_coordinator=coordinator,
         cancellation_request_handler=cancellation_request_handler,
         worker_id=WORKER_ID,
     )
@@ -72,18 +84,27 @@ def test_cancel_consumer_cancels_only_target_running_execution(
         workspace=cancelled_workspace,
         process=cancelled_process,
         parent_connection=cancelled_parent_connection,
-        submitted_ack=cancelled_ack,
     )
     other_record = _record(
         job_id=OTHER_JOB_ID,
         workspace=other_workspace,
         process=other_process,
         parent_connection=other_parent_connection,
-        submitted_ack=other_ack,
     )
 
     registry.add(cancelled_record)
     registry.add(other_record)
+
+    _seed_in_progress_state(
+        coordinator,
+        CANCELLED_JOB_ID,
+        cancelled_ack,
+    )
+    _seed_in_progress_state(
+        coordinator,
+        OTHER_JOB_ID,
+        other_ack,
+    )
 
     cancellation_message_ack = _CancellationMessageAckSpy()
 
@@ -103,19 +124,8 @@ def test_cancel_consumer_cancels_only_target_running_execution(
         assert registry.get(CANCELLED_JOB_ID) is cancelled_record
         assert registry.get(OTHER_JOB_ID) is other_record
 
-        assert cancelled_record.terminal_status_claimed is True
-        assert cancelled_record.terminal_status == WorkerJobStatus.CANCELLED
-        assert cancelled_record.terminal_message is not None
-        assert cancelled_record.finished_at == FIXED_NOW
-        assert cancelled_record.terminal_status_published is True
-        assert cancelled_record.acknowledgement_done is True
-        assert cancelled_record.cleanup_ready is True
-
-        assert other_record.terminal_status_claimed is False
-        assert other_record.terminal_status is None
-        assert other_record.terminal_status_published is False
-        assert other_record.acknowledgement_done is False
-        assert other_record.cleanup_ready is False
+        assert coordinator.get_state(CANCELLED_JOB_ID) is WorkerJobStatus.CANCELLED
+        assert coordinator.get_state(OTHER_JOB_ID) is WorkerJobStatus.IN_PROGRESS
 
         assert cancelled_ack.ack_count == 1
         assert other_ack.ack_count == 0
@@ -150,32 +160,62 @@ def test_cancel_consumer_cancels_only_target_running_execution(
         _close_safely(other_parent_connection)
 
 
+def _seed_in_progress_state(
+    job_state_transition_coordinator: JobStateTransitionCoordinator,
+    job_id: str,
+    submitted_ack: "_SubmittedAckSpy",
+) -> None:
+    record = job_state_transition_coordinator.create(
+        job_id=job_id,
+        submitted_ack=cast(Acknowledger, submitted_ack),
+    )
+
+    with record.lock:
+        record.state = WorkerJobStatus.IN_PROGRESS
+
+
 def _record(
     *,
     job_id: str,
     workspace: Path,
     process: multiprocessing.Process,
     parent_connection: Any,
-    submitted_ack: "_SubmittedAckSpy",
 ) -> ExecutionRecord:
+    manifest = JobManifest(
+        manifest_version=1,
+        user_id=USER_ID,
+        job_id=job_id,
+        job_type=JOB_TYPE,
+        inputs={},
+        params={},
+        outputs={},
+    )
+
+    job_workspace = JobWorkspace(
+        manifest=manifest,
+        work_dir=workspace,
+        input_dir=workspace / "in",
+        output_dir=workspace / "out",
+        worker_id=WORKER_ID,
+    )
+
     context = MagicMock()
-    context.work_dir = workspace
-    context.user_id = USER_ID
-    context.job_id = job_id
-    context.job_type = JOB_TYPE
+    context.workspace = job_workspace
+    context.work_dir = job_workspace.work_dir
+    context.input_dir = job_workspace.input_dir
+    context.output_dir = job_workspace.output_dir
+    context.user_id = job_workspace.user_id
+    context.job_id = job_workspace.job_id
+    context.job_type = job_workspace.job_type
 
     return ExecutionRecord(
-        job_id=job_id,
-        user_id=USER_ID,
-        job_type=JOB_TYPE,
-        worker_id=WORKER_ID,
-        manifest_object_key=f"jobs/{USER_ID}/{job_id}/manifest.json",
-        manifest=MagicMock(),
+        workspace=job_workspace,
         context=context,
-        process=process,
-        parent_connection=parent_connection,
-        submitted_ack=submitted_ack,
-        started_at=FIXED_NOW,
+        process_record=ProcessRecord(
+            process=process,
+            parent_connection=parent_connection,
+            started_at=FIXED_NOW,
+        ),
     )
 
 

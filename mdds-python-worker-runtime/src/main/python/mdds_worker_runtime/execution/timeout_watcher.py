@@ -11,6 +11,9 @@ import threading
 from mdds_worker_runtime.execution.models import ExecutionRecord, WorkerJobStatus
 from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,7 @@ class TimeoutWatcher:
     def __init__(
         self,
         execution_registry: ExecutionRegistry,
+        job_state_transition_coordinator: JobStateTransitionCoordinator,
         status_publisher: StatusPublisher,
         worker_id: str,
         job_timeout_seconds: float,
@@ -45,6 +49,8 @@ class TimeoutWatcher:
     ) -> None:
         if execution_registry is None:
             raise ValueError("execution_registry cannot be null.")
+        if job_state_transition_coordinator is None:
+            raise ValueError("job_state_transition_coordinator cannot be null.")
         if status_publisher is None:
             raise ValueError("status_publisher cannot be null.")
         if worker_id is None or worker_id.strip() == "":
@@ -61,6 +67,7 @@ class TimeoutWatcher:
             raise ValueError("clock cannot be null.")
 
         self._execution_registry = execution_registry
+        self._job_state_transition_coordinator = job_state_transition_coordinator
         self._status_publisher = status_publisher
         self._worker_id = worker_id.strip()
         self._job_timeout_seconds = job_timeout_seconds
@@ -129,13 +136,39 @@ class TimeoutWatcher:
         if record is None:
             return
 
+        if not record.is_ready_for_execution_watchers:
+            return
+
         if not self._is_timeout_candidate(record, now):
             return
 
-        try:
-            self._finalize_timed_out_execution(record, now)
-        except Exception:
-            logger.exception(
+        result = self._job_state_transition_coordinator.transition(
+            job_id=record.job_id,
+            target_state=WorkerJobStatus.ERROR,
+            operation=lambda: self._finalize_timed_out_execution(record),
+        )
+
+        if result.stale:
+            logger.info(
+                "Timed-out execution finalization skipped because job state is stale.",
+                extra={
+                    "component": "timeout_watcher",
+                    "event": "timed_out_execution_finalization_stale",
+                    "jobId": record.job_id,
+                    "userId": record.user_id,
+                    "jobType": record.job_type,
+                    "workerId": record.worker_id,
+                    "currentState": (
+                        result.current_state.value
+                        if result.current_state is not None
+                        else None
+                    ),
+                },
+            )
+            return
+
+        if result.failed:
+            logger.error(
                 "Timed-out execution finalization failed; record will remain in registry.",
                 extra={
                     "component": "timeout_watcher",
@@ -145,25 +178,11 @@ class TimeoutWatcher:
                     "jobType": record.job_type,
                     "workerId": record.worker_id,
                 },
+                exc_info=result.error,
             )
 
     def _is_timeout_candidate(self, record: ExecutionRecord, now: datetime) -> bool:
-        with record.lock:
-            if record.terminal_status_claimed:
-                logger.debug(
-                    "Execution record is already terminal-claimed; timeout watcher skips it.",
-                    extra={
-                        "component": "timeout_watcher",
-                        "event": "execution_record_already_terminal_claimed",
-                        "jobId": record.job_id,
-                        "userId": record.user_id,
-                        "jobType": record.job_type,
-                        "workerId": record.worker_id,
-                    },
-                )
-                return False
-
-            started_at = record.started_at
+        started_at = record.started_at
 
         elapsed_seconds = (now - started_at).total_seconds()
         if elapsed_seconds < self._job_timeout_seconds:
@@ -206,44 +225,26 @@ class TimeoutWatcher:
     def _finalize_timed_out_execution(
         self,
         record: ExecutionRecord,
-        now: datetime,
     ) -> None:
         message = self._timeout_message(record)
 
-        claimed_record = self._execution_registry.try_claim_terminal(
-            job_id=record.job_id,
-            terminal_status=WorkerJobStatus.ERROR,
-            message=message,
-            finished_at=now,
-        )
-
-        if claimed_record is None:
-            self._log_terminal_already_claimed(record)
-            return
-
-        self._terminate_supervised_process(claimed_record)
-        self._close_supervised_execution_resources(claimed_record)
+        self._terminate_supervised_process(record)
+        self._close_supervised_execution_resources(record)
 
         self._status_publisher.publish_error(
-            user_id=claimed_record.user_id,
-            job_id=claimed_record.job_id,
-            job_type=claimed_record.job_type,
-            worker_id=self._worker_id,
+            workspace=record.workspace,
             message=message,
         )
-        self._execution_registry.mark_terminal_published(claimed_record.job_id)
-
-        self._acknowledge_and_mark_cleanup_ready(claimed_record)
 
         logger.info(
             "Timed-out execution finalized as ERROR.",
             extra={
                 "component": "timeout_watcher",
                 "event": "timed_out_execution_finalized_as_error",
-                "jobId": claimed_record.job_id,
-                "userId": claimed_record.user_id,
-                "jobType": claimed_record.job_type,
-                "workerId": claimed_record.worker_id,
+                "jobId": record.job_id,
+                "userId": record.user_id,
+                "jobType": record.job_type,
+                "workerId": record.worker_id,
                 "status": WorkerJobStatus.ERROR.value,
                 "errorCode": "execution_timeout",
             },
@@ -316,42 +317,10 @@ class TimeoutWatcher:
                 },
             )
 
-    def _acknowledge_and_mark_cleanup_ready(self, record: ExecutionRecord) -> None:
-        record.submitted_ack.ack()
-        self._execution_registry.mark_acknowledged(record.job_id)
-        self._execution_registry.mark_cleanup_ready(record.job_id)
-
-        logger.info(
-            "Timed-out submitted job message acknowledged and execution record marked cleanup-ready.",
-            extra={
-                "component": "timeout_watcher",
-                "event": "timed_out_job_acknowledged_cleanup_ready",
-                "jobId": record.job_id,
-                "userId": record.user_id,
-                "jobType": record.job_type,
-                "workerId": record.worker_id,
-            },
-        )
-
     def _timeout_message(self, record: ExecutionRecord) -> str:
         return (
             "Job execution exceeded runtime timeout and was terminated: "
             f"jobId='{record.job_id}', timeoutSeconds={self._job_timeout_seconds:g}."
-        )
-
-    @staticmethod
-    def _log_terminal_already_claimed(record: ExecutionRecord) -> None:
-        logger.info(
-            "Terminal status was already claimed; timeout watcher skips timeout finalization.",
-            extra={
-                "component": "timeout_watcher",
-                "event": "terminal_status_already_claimed",
-                "jobId": record.job_id,
-                "userId": record.user_id,
-                "jobType": record.job_type,
-                "workerId": record.worker_id,
-                "status": WorkerJobStatus.ERROR.value,
-            },
         )
 
     def _run_loop(self) -> None:

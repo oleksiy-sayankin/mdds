@@ -8,6 +8,7 @@ import json
 import pytest
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import JobManifest, ArtifactRef
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -22,6 +23,7 @@ from mdds_worker_runtime.execution.context_snapshot import (
     JobExecutionContextSnapshotError,
     JobExecutionContextSnapshotStore,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 
 
 def test_context_snapshot_store_saves_and_loads_context(tmp_path) -> None:
@@ -102,17 +104,47 @@ def test_context_snapshot_store_rejects_unsupported_version(tmp_path) -> None:
 
 
 def _create_context(tmp_path) -> JobExecutionContext:
+    worker_id = "worker-123456"
     work_dir = tmp_path / "jobs" / "42" / "job-1"
     input_dir = work_dir / "in"
     output_dir = work_dir / "out"
 
-    return JobExecutionContext(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
         job_id="job-1",
         job_type="SOLVING_SLAE",
+        inputs={
+            "matrix": ArtifactRef(
+                object_key="jobs/42/job-1/in/matrix.csv",
+                format=ArtifactFormat.CSV,
+            ),
+            "rhs": ArtifactRef(
+                object_key="jobs/42/job-1/in/rhs.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key="jobs/42/job-1/out/solution.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
         work_dir=work_dir,
         input_dir=input_dir,
         output_dir=output_dir,
+        worker_id=worker_id,
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
         inputs=InputArtifacts(
             {
                 "matrix": PreparedInputArtifact(

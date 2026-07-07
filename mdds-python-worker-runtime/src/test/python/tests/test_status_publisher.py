@@ -4,21 +4,24 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from mdds_worker_runtime.domain.manifest import JobManifest
 from mdds_worker_runtime.dto.messages import JobStatusUpdateDTO
 from mdds_worker_runtime.execution.models import WorkerJobStatus
 from mdds_worker_runtime.execution.status_publisher import (
     StatusPublisher,
     _format_event_time,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace, JobWorkspaceFactory
 from mdds_worker_runtime.queue.queue_client import QueueMessage
 from tests.test_execution_models import FIXED_TIME
 
 
-def test_status_publisher_publishes_in_progress_status_message() -> None:
+def test_status_publisher_publishes_in_progress_status_message(tmp_path) -> None:
     queue_client = MagicMock()
 
     publisher = StatusPublisher(
@@ -26,12 +29,9 @@ def test_status_publisher_publishes_in_progress_status_message() -> None:
         queue_client=queue_client,
         clock=lambda: FIXED_TIME,
     )
-
+    workspace = _workspace(tmp_path)
     publisher.publish_in_progress(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
+        workspace=workspace,
         progress=0,
         message="Start job execution",
     )
@@ -56,7 +56,7 @@ def test_status_publisher_publishes_in_progress_status_message() -> None:
     assert payload.event_time == payload.eventTime
 
 
-def test_status_publisher_trims_worker_status_queue_name() -> None:
+def test_status_publisher_trims_worker_status_queue_name(tmp_path) -> None:
     queue_client = MagicMock()
 
     publisher = StatusPublisher(
@@ -65,11 +65,9 @@ def test_status_publisher_trims_worker_status_queue_name() -> None:
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
     publisher.publish_in_progress(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
+        workspace=workspace,
         progress=0,
         message="Start job execution",
     )
@@ -111,7 +109,7 @@ def test_format_event_time_formats_utc_datetime_as_rfc3339_zulu() -> None:
 
 
 @pytest.mark.parametrize("job_id", [None, "", " "])
-def test_status_publisher_rejects_null_or_blank_job_id(job_id) -> None:
+def test_status_publisher_rejects_null_or_blank_job_id(job_id, tmp_path) -> None:
     publisher = StatusPublisher(
         worker_status_queue_name="mdds_status_queue",
         queue_client=MagicMock(),
@@ -119,37 +117,33 @@ def test_status_publisher_rejects_null_or_blank_job_id(job_id) -> None:
     )
 
     with pytest.raises(ValueError, match="job_id cannot be null or blank."):
+        workspace = _workspace(tmp_path, job_id=job_id)
         publisher.publish_in_progress(
-            user_id=42,
-            job_id=job_id,
-            job_type="SOLVING_SLAE",
-            worker_id="worker-1",
+            workspace=workspace,
             progress=0,
             message="Start job execution",
         )
 
 
 @pytest.mark.parametrize("job_type", [None, "", " "])
-def test_status_publisher_rejects_null_or_blank_job_type(job_type) -> None:
+def test_status_publisher_rejects_null_or_blank_job_type(job_type, tmp_path) -> None:
     publisher = StatusPublisher(
         worker_status_queue_name="mdds_status_queue",
         queue_client=MagicMock(),
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path, job_type=job_type)
     with pytest.raises(ValueError, match="job_type cannot be null or blank."):
         publisher.publish_in_progress(
-            user_id=42,
-            job_id="job-1",
-            job_type=job_type,
-            worker_id="worker-1",
+            workspace=workspace,
             progress=0,
             message="Start job execution",
         )
 
 
 @pytest.mark.parametrize("worker_id", [None, "", " "])
-def test_status_publisher_rejects_null_or_blank_worker_id(worker_id) -> None:
+def test_status_publisher_rejects_null_or_blank_worker_id(worker_id, tmp_path) -> None:
     publisher = StatusPublisher(
         worker_status_queue_name="mdds_status_queue",
         queue_client=MagicMock(),
@@ -157,55 +151,49 @@ def test_status_publisher_rejects_null_or_blank_worker_id(worker_id) -> None:
     )
 
     with pytest.raises(ValueError, match="worker_id cannot be null or blank."):
+        workspace = _workspace(tmp_path, worker_id=worker_id)
         publisher.publish_in_progress(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            worker_id=worker_id,
+            workspace=workspace,
             progress=0,
             message="Start job execution",
         )
 
 
 @pytest.mark.parametrize("progress", [-1, 101])
-def test_status_publisher_rejects_progress_out_of_range(progress) -> None:
+def test_status_publisher_rejects_progress_out_of_range(progress, tmp_path) -> None:
     publisher = StatusPublisher(
         worker_status_queue_name="mdds_status_queue",
         queue_client=MagicMock(),
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
     with pytest.raises(ValueError, match="progress must be between 0 and 100."):
         publisher.publish_in_progress(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            worker_id="worker-1",
+            workspace=workspace,
             progress=progress,
             message="Start job execution",
         )
 
 
 @pytest.mark.parametrize("message", [None, "", " "])
-def test_status_publisher_rejects_null_or_blank_message(message) -> None:
+def test_status_publisher_rejects_null_or_blank_message(message, tmp_path) -> None:
     publisher = StatusPublisher(
         worker_status_queue_name="mdds_status_queue",
         queue_client=MagicMock(),
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
     with pytest.raises(ValueError, match="message cannot be null or blank."):
         publisher.publish_in_progress(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            worker_id="worker-1",
+            workspace=workspace,
             progress=0,
             message=message,
         )
 
 
-def test_status_publisher_publishes_done_status_message() -> None:
+def test_status_publisher_publishes_done_status_message(tmp_path) -> None:
     queue_client = MagicMock()
 
     publisher = StatusPublisher(
@@ -214,11 +202,9 @@ def test_status_publisher_publishes_done_status_message() -> None:
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
     publisher.publish_done(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
+        workspace=workspace,
         message="Job completed successfully",
     )
 
@@ -242,7 +228,9 @@ def test_status_publisher_publishes_done_status_message() -> None:
     assert payload.event_time == payload.eventTime
 
 
-def test_status_publisher_publishes_done_status_message_with_default_message() -> None:
+def test_status_publisher_publishes_done_status_message_with_default_message(
+    tmp_path,
+) -> None:
     queue_client = MagicMock()
 
     publisher = StatusPublisher(
@@ -251,12 +239,8 @@ def test_status_publisher_publishes_done_status_message_with_default_message() -
         clock=lambda: FIXED_TIME,
     )
 
-    publisher.publish_done(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-    )
+    workspace = _workspace(tmp_path)
+    publisher.publish_done(workspace=workspace)
 
     queue_client.publish.assert_called_once()
     queue_name, published_message = queue_client.publish.call_args.args
@@ -275,7 +259,7 @@ def test_status_publisher_publishes_done_status_message_with_default_message() -
     assert payload.eventTime == "2026-01-01T00:00:00Z"
 
 
-def test_status_publisher_publishes_error_status_message() -> None:
+def test_status_publisher_publishes_error_status_message(tmp_path) -> None:
     queue_client = MagicMock()
 
     publisher = StatusPublisher(
@@ -284,11 +268,10 @@ def test_status_publisher_publishes_error_status_message() -> None:
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
+
     publisher.publish_error(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
+        workspace=workspace,
         message="Supervised execution failed",
     )
 
@@ -313,24 +296,25 @@ def test_status_publisher_publishes_error_status_message() -> None:
 
 
 @pytest.mark.parametrize("message", [None, "", " "])
-def test_status_publisher_publish_error_rejects_null_or_blank_message(message) -> None:
+def test_status_publisher_publish_error_rejects_null_or_blank_message(
+    message, tmp_path
+) -> None:
     publisher = StatusPublisher(
         worker_status_queue_name="mdds_status_queue",
         queue_client=MagicMock(),
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
+
     with pytest.raises(ValueError, match="message cannot be null or blank."):
         publisher.publish_error(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            worker_id="worker-1",
+            workspace=workspace,
             message=message,
         )
 
 
-def test_status_publisher_publishes_cancelled_status_message() -> None:
+def test_status_publisher_publishes_cancelled_status_message(tmp_path) -> None:
     queue_client = MagicMock()
 
     publisher = StatusPublisher(
@@ -339,11 +323,10 @@ def test_status_publisher_publishes_cancelled_status_message() -> None:
         clock=lambda: FIXED_TIME,
     )
 
+    workspace = _workspace(tmp_path)
+
     publisher.publish_cancelled(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
+        workspace=workspace,
         message="Job cancellation requested and applied",
     )
 
@@ -367,38 +350,23 @@ def test_status_publisher_publishes_cancelled_status_message() -> None:
     assert payload.event_time == payload.eventTime
 
 
-def test_status_publisher_publishes_validation_failed_status_message() -> None:
-    queue_client = MagicMock()
-
-    publisher = StatusPublisher(
-        worker_status_queue_name="mdds_status_queue",
-        queue_client=queue_client,
-        clock=lambda: FIXED_TIME,
+def _workspace(
+    tmp_path: Path,
+    *,
+    job_type: str = "SOLVING_SLAE",
+    user_id: int = 42,
+    job_id: str = "job-1",
+    worker_id: str = "worker-1",
+) -> JobWorkspace:
+    manifest = JobManifest(
+        manifest_version=1,
+        user_id=user_id,
+        job_id=job_id,
+        job_type=job_type,
+        inputs={},
+        params={},
+        outputs={},
     )
 
-    publisher.publish_validation_failed(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Invalid matrix format.",
-    )
-
-    queue_client.publish.assert_called_once()
-    queue_name, published_message = queue_client.publish.call_args.args
-
-    assert queue_name == "mdds_status_queue"
-    assert isinstance(published_message, QueueMessage)
-
-    payload = published_message.payload
-
-    assert isinstance(payload, JobStatusUpdateDTO)
-    assert payload.jobId == "job-1"
-    assert payload.job_id == "job-1"
-    assert payload.workerId == "worker-1"
-    assert payload.worker_id == "worker-1"
-    assert payload.status == WorkerJobStatus.VALIDATION_FAILED.value
-    assert payload.progress == 0
-    assert payload.message == "Invalid matrix format."
-    assert payload.eventTime == "2026-01-01T00:00:00Z"
-    assert payload.event_time == payload.eventTime
+    factory = JobWorkspaceFactory(jobs_root=tmp_path, worker_id=worker_id)
+    return factory.create(manifest=manifest)

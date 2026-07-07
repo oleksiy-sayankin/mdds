@@ -3,274 +3,176 @@
 
 from __future__ import annotations
 
-import logging
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
+from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.job_preparation_handler import (
     JobPreparationHandler,
     PreparedJob,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 
 
 def test_job_preparation_handler_returns_prepared_job_when_preparation_succeeds() -> (
     None
 ):
     fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
+    workspace = _workspace()
 
-    result = fixture.handler.prepare_or_handle_failure(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
+    result = fixture.handler.prepare(
+        workspace=workspace,
     )
 
     assert isinstance(result, PreparedJob)
     assert result.context is fixture.context
     assert result.handler is fixture.job_handler
 
-    fixture.input_artifact_preparer.prepare.assert_called_once_with(
-        42,
-        "job-1",
-        manifest.inputs,
-    )
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
+
     fixture.context_factory.create.assert_called_once_with(
-        manifest,
-        fixture.prepared_job_inputs,
+        workspace=workspace,
+        prepared_job_inputs=fixture.prepared_job_inputs,
     )
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
     fixture.job_handler_loader.load.assert_called_once_with()
 
-    fixture.status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
-    fixture.workspace_cleaner.cleanup_job_workspace.assert_not_called()
 
-
-def test_job_preparation_handler_handles_input_preparation_failure_as_error() -> None:
+def test_job_preparation_handler_propagates_input_preparation_failure() -> None:
     fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
-    events: list[str] = []
+    workspace = _workspace()
 
     fixture.input_artifact_preparer.prepare.side_effect = RuntimeError(
         "Cannot download input artifact."
     )
-    fixture.status_publisher.publish_error.side_effect = (
-        lambda **_kwargs: events.append("publish_error")
-    )
 
-    def ack_side_effect() -> None:
-        assert events == ["publish_error"]
-        events.append("ack")
+    with pytest.raises(RuntimeError, match="Cannot download input artifact."):
+        fixture.handler.prepare(
+            workspace=workspace,
+        )
 
-    submitted_ack.ack.side_effect = ack_side_effect
-
-    result = fixture.handler.prepare_or_handle_failure(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
-    )
-
-    assert result is None
-    assert events == ["publish_error", "ack"]
-
-    fixture.status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Cannot download input artifact.",
-    )
-    submitted_ack.ack.assert_called_once_with()
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
 
     fixture.context_factory.create.assert_not_called()
+    fixture.execution_registry.attach_context.assert_not_called()
     fixture.job_handler_loader.load.assert_not_called()
 
 
-def test_job_preparation_handler_handles_context_creation_failure_as_error() -> None:
+def test_job_preparation_handler_propagates_context_creation_failure() -> None:
     fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
-    events: list[str] = []
+    workspace = _workspace()
 
     fixture.context_factory.create.side_effect = RuntimeError(
         "Cannot save context snapshot."
     )
-    fixture.status_publisher.publish_error.side_effect = (
-        lambda **_kwargs: events.append("publish_error")
-    )
 
-    def ack_side_effect() -> None:
-        assert events == ["publish_error"]
-        events.append("ack")
+    with pytest.raises(RuntimeError, match="Cannot save context snapshot."):
+        fixture.handler.prepare(
+            workspace=workspace,
+        )
 
-    submitted_ack.ack.side_effect = ack_side_effect
-
-    result = fixture.handler.prepare_or_handle_failure(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
-    )
-
-    assert result is None
-    assert events == ["publish_error", "ack"]
-
-    fixture.input_artifact_preparer.prepare.assert_called_once_with(
-        42,
-        "job-1",
-        manifest.inputs,
-    )
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
     fixture.context_factory.create.assert_called_once_with(
-        manifest,
-        fixture.prepared_job_inputs,
+        workspace=workspace,
+        prepared_job_inputs=fixture.prepared_job_inputs,
     )
+
+    fixture.execution_registry.attach_context.assert_not_called()
     fixture.job_handler_loader.load.assert_not_called()
 
-    fixture.status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Cannot save context snapshot.",
-    )
-    submitted_ack.ack.assert_called_once_with()
 
-
-def test_job_preparation_handler_handles_handler_loading_failure_as_error() -> None:
+def test_job_preparation_handler_propagates_context_attach_failure() -> None:
     fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
-    events: list[str] = []
+    workspace = _workspace()
+
+    fixture.execution_registry.attach_context.side_effect = RuntimeError(
+        "Cannot attach context."
+    )
+
+    with pytest.raises(RuntimeError, match="Cannot attach context."):
+        fixture.handler.prepare(
+            workspace=workspace,
+        )
+
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
+    fixture.context_factory.create.assert_called_once_with(
+        workspace=workspace,
+        prepared_job_inputs=fixture.prepared_job_inputs,
+    )
+    fixture.execution_registry.attach_context.assert_called_once_with(
+        job_id="job-1",
+        context=fixture.context,
+    )
+
+    fixture.job_handler_loader.load.assert_not_called()
+
+
+def test_job_preparation_handler_propagates_handler_loading_failure() -> None:
+    fixture = _fixture()
+    workspace = _workspace()
 
     fixture.job_handler_loader.load.side_effect = RuntimeError(
         "Cannot load job handler."
     )
-    fixture.status_publisher.publish_error.side_effect = (
-        lambda **_kwargs: events.append("publish_error")
-    )
 
-    def ack_side_effect() -> None:
-        assert events == ["publish_error"]
-        events.append("ack")
+    with pytest.raises(RuntimeError, match="Cannot load job handler."):
+        fixture.handler.prepare(
+            workspace=workspace,
+        )
 
-    submitted_ack.ack.side_effect = ack_side_effect
-
-    result = fixture.handler.prepare_or_handle_failure(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
-    )
-
-    assert result is None
-    assert events == ["publish_error", "ack"]
-
-    fixture.input_artifact_preparer.prepare.assert_called_once_with(
-        42,
-        "job-1",
-        manifest.inputs,
-    )
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
     fixture.context_factory.create.assert_called_once_with(
-        manifest,
-        fixture.prepared_job_inputs,
+        workspace=workspace,
+        prepared_job_inputs=fixture.prepared_job_inputs,
+    )
+    fixture.execution_registry.attach_context.assert_called_once_with(
+        job_id="job-1",
+        context=fixture.context,
     )
     fixture.job_handler_loader.load.assert_called_once_with()
 
-    fixture.status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Cannot load job handler.",
-    )
-    submitted_ack.ack.assert_called_once_with()
-
 
 @pytest.mark.parametrize("error_message", ["", "   "])
-def test_job_preparation_handler_uses_fallback_message_when_error_message_is_blank(
+def test_job_preparation_handler_propagates_blank_input_preparation_error(
     error_message: str,
 ) -> None:
     fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
+    workspace = _workspace()
 
     fixture.input_artifact_preparer.prepare.side_effect = RuntimeError(error_message)
 
-    result = fixture.handler.prepare_or_handle_failure(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=submitted_ack,
-    )
-
-    assert result is None
-
-    fixture.status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Worker-side job preparation failed.",
-    )
-    submitted_ack.ack.assert_called_once_with()
-
-    fixture.context_factory.create.assert_not_called()
-    fixture.job_handler_loader.load.assert_not_called()
-
-
-def test_job_preparation_handler_does_not_ack_when_error_publication_fails() -> None:
-    fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
-
-    fixture.input_artifact_preparer.prepare.side_effect = RuntimeError(
-        "Cannot download input artifact."
-    )
-    fixture.status_publisher.publish_error.side_effect = RuntimeError(
-        "status publish failed"
-    )
-
-    with pytest.raises(RuntimeError, match="status publish failed"):
-        fixture.handler.prepare_or_handle_failure(
-            manifest_object_key="jobs/42/job-1/manifest.json",
-            manifest=manifest,
-            submitted_ack=submitted_ack,
+    with pytest.raises(RuntimeError):
+        fixture.handler.prepare(
+            workspace=workspace,
         )
 
-    fixture.status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Cannot download input artifact.",
-    )
-    submitted_ack.ack.assert_not_called()
+    fixture.input_artifact_preparer.prepare.assert_called_once_with(workspace)
 
     fixture.context_factory.create.assert_not_called()
+    fixture.execution_registry.attach_context.assert_not_called()
     fixture.job_handler_loader.load.assert_not_called()
 
 
 def test_job_preparation_handler_does_not_catch_base_exception() -> None:
     fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
+    workspace = _workspace()
 
     fixture.input_artifact_preparer.prepare.side_effect = SystemExit(
         "shutdown requested"
     )
 
     with pytest.raises(SystemExit, match="shutdown requested"):
-        fixture.handler.prepare_or_handle_failure(
-            manifest_object_key="jobs/42/job-1/manifest.json",
-            manifest=manifest,
-            submitted_ack=submitted_ack,
+        fixture.handler.prepare(
+            workspace=workspace,
         )
 
-    fixture.status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
-
     fixture.context_factory.create.assert_not_called()
+    fixture.execution_registry.attach_context.assert_not_called()
     fixture.job_handler_loader.load.assert_not_called()
 
 
@@ -278,17 +180,25 @@ def test_job_preparation_handler_does_not_catch_base_exception() -> None:
     ("field_name", "field_value", "error_message"),
     [
         (
+            "execution_registry",
+            None,
+            "execution_registry cannot be null.",
+        ),
+        (
             "input_artifact_preparer",
             None,
             "input_artifact_preparer cannot be null.",
         ),
-        ("context_factory", None, "context_factory cannot be null."),
-        ("job_handler_loader", None, "job_handler_loader cannot be null."),
-        ("status_publisher", None, "status_publisher cannot be null."),
-        ("workspace_cleaner", None, "workspace_cleaner cannot be null."),
-        ("worker_id", None, "worker_id cannot be null or blank."),
-        ("worker_id", "", "worker_id cannot be null or blank."),
-        ("worker_id", " ", "worker_id cannot be null or blank."),
+        (
+            "context_factory",
+            None,
+            "context_factory cannot be null.",
+        ),
+        (
+            "job_handler_loader",
+            None,
+            "job_handler_loader cannot be null.",
+        ),
     ],
 )
 def test_job_preparation_handler_rejects_invalid_constructor_arguments(
@@ -303,113 +213,25 @@ def test_job_preparation_handler_rejects_invalid_constructor_arguments(
         JobPreparationHandler(**kwargs)
 
 
-@pytest.mark.parametrize(
-    ("field_name", "field_value", "error_message"),
-    [
-        (
-            "manifest_object_key",
-            None,
-            "manifest_object_key cannot be null or blank.",
-        ),
-        (
-            "manifest_object_key",
-            "",
-            "manifest_object_key cannot be null or blank.",
-        ),
-        (
-            "manifest_object_key",
-            " ",
-            "manifest_object_key cannot be null or blank.",
-        ),
-        ("manifest", None, "manifest cannot be null."),
-        ("submitted_ack", None, "submitted_ack cannot be null."),
-    ],
-)
-def test_prepare_or_handle_failure_rejects_invalid_arguments_without_publishing_error(
-    field_name: str,
-    field_value: Any,
-    error_message: str,
-) -> None:
+def test_prepare_rejects_null_workspace() -> None:
     fixture = _fixture()
-    submitted_ack = MagicMock(name="submitted_ack")
 
-    kwargs: dict[str, Any] = {
-        "manifest_object_key": "jobs/42/job-1/manifest.json",
-        "manifest": _manifest(),
-        "submitted_ack": submitted_ack,
-        field_name: field_value,
-    }
-
-    with pytest.raises(ValueError, match=error_message):
-        fixture.handler.prepare_or_handle_failure(**kwargs)
-
-    fixture.status_publisher.publish_error.assert_not_called()
-    submitted_ack.ack.assert_not_called()
+    with pytest.raises(ValueError, match="workspace cannot be null."):
+        fixture.handler.prepare(
+            workspace=cast(JobWorkspace, cast(object, None)),
+        )
 
     fixture.input_artifact_preparer.prepare.assert_not_called()
     fixture.context_factory.create.assert_not_called()
+    fixture.execution_registry.attach_context.assert_not_called()
     fixture.job_handler_loader.load.assert_not_called()
 
 
-def test_job_preparation_handler_logs_and_suppresses_workspace_cleanup_failure(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    fixture = _fixture()
-    manifest = _manifest()
-    submitted_ack = MagicMock(name="submitted_ack")
-
-    fixture.input_artifact_preparer.prepare.side_effect = RuntimeError(
-        "Cannot download input artifact."
-    )
-    fixture.workspace_cleaner.cleanup_job_workspace.side_effect = RuntimeError(
-        "cleanup failed"
-    )
-
-    with caplog.at_level(
-        logging.ERROR,
-        logger="mdds_worker_runtime.execution.job_preparation_handler",
-    ):
-        result = fixture.handler.prepare_or_handle_failure(
-            manifest_object_key="jobs/42/job-1/manifest.json",
-            manifest=manifest,
-            submitted_ack=submitted_ack,
-        )
-
-    assert result is None
-
-    fixture.status_publisher.publish_error.assert_called_once_with(
-        user_id=42,
-        job_id="job-1",
-        job_type="SOLVING_SLAE",
-        worker_id="worker-1",
-        message="Cannot download input artifact.",
-    )
-    submitted_ack.ack.assert_called_once_with()
-    fixture.workspace_cleaner.cleanup_job_workspace.assert_called_once_with(
-        42,
-        "job-1",
-    )
-
-    cleanup_failure_records = [
-        record
-        for record in caplog.records
-        if getattr(record, "event", None) == "job_preparation_workspace_cleanup_failed"
-    ]
-
-    assert len(cleanup_failure_records) == 1
-    assert cleanup_failure_records[0].exc_info is not None
-    assert (
-        cleanup_failure_records[0].message
-        == "Failed to cleanup local job workspace after preparation failure."
-    )
-
-
 def _fixture() -> SimpleNamespace:
+    execution_registry = MagicMock(name="execution_registry")
     input_artifact_preparer = MagicMock(name="input_artifact_preparer")
     context_factory = MagicMock(name="context_factory")
     job_handler_loader = MagicMock(name="job_handler_loader")
-    status_publisher = MagicMock(name="status_publisher")
-    workspace_cleaner = MagicMock(name="workspace_cleaner")
 
     prepared_job_inputs = MagicMock(name="prepared_job_inputs")
     context = MagicMock(name="context")
@@ -420,21 +242,18 @@ def _fixture() -> SimpleNamespace:
     job_handler_loader.load.return_value = job_handler
 
     handler = JobPreparationHandler(
+        execution_registry=execution_registry,
         input_artifact_preparer=input_artifact_preparer,
         context_factory=context_factory,
         job_handler_loader=job_handler_loader,
-        status_publisher=status_publisher,
-        workspace_cleaner=workspace_cleaner,
-        worker_id="worker-1",
     )
 
     return SimpleNamespace(
         handler=handler,
+        execution_registry=execution_registry,
         input_artifact_preparer=input_artifact_preparer,
         context_factory=context_factory,
         job_handler_loader=job_handler_loader,
-        status_publisher=status_publisher,
-        workspace_cleaner=workspace_cleaner,
         prepared_job_inputs=prepared_job_inputs,
         context=context,
         job_handler=job_handler,
@@ -443,19 +262,38 @@ def _fixture() -> SimpleNamespace:
 
 def _constructor_kwargs() -> dict[str, Any]:
     return {
+        "execution_registry": MagicMock(name="execution_registry"),
         "input_artifact_preparer": MagicMock(name="input_artifact_preparer"),
         "context_factory": MagicMock(name="context_factory"),
         "job_handler_loader": MagicMock(name="job_handler_loader"),
-        "status_publisher": MagicMock(name="status_publisher"),
-        "workspace_cleaner": MagicMock(name="workspace_cleaner"),
-        "worker_id": "worker-1",
     }
 
 
-def _manifest() -> MagicMock:
-    manifest = MagicMock(name="manifest")
-    manifest.user_id = 42
-    manifest.job_id = "job-1"
-    manifest.job_type = "SOLVING_SLAE"
-    manifest.inputs = {"number_a": MagicMock(name="number_a_ref")}
-    return manifest
+def _workspace() -> JobWorkspace:
+    manifest = _manifest()
+    work_dir = Path("/tmp/jobs/42/job-1")
+
+    return JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=work_dir / "in",
+        output_dir=work_dir / "out",
+        worker_id="worker-1",
+    )
+
+
+def _manifest() -> JobManifest:
+    return JobManifest(
+        manifest_version=1,
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        inputs={
+            "number_a": ArtifactRef(
+                object_key="jobs/42/job-1/in/number_a.csv",
+                format=ArtifactFormat.CSV,
+            ),
+        },
+        params={},
+        outputs={},
+    )

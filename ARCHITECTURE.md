@@ -406,7 +406,7 @@ For each job message the runtime:
 1. extracts `manifestObjectKey`;
 2. loads `manifest.json` from object storage;
 3. validates manifest schema;
-4. once `jobId`, `userId`, and `jobType` are known, creates or resolves the
+4. once `jobId`, `userId`, and `jobType` are known, creates the
    per-job worker-local state in the job state transition coordinator;
 5. downloads declared input artifacts and creates `JobExecutionContext` as a
    coordinator-owned transition from `SUBMITTED` to `INPUTS_PREPARED`;
@@ -847,7 +847,6 @@ Each record contains at least:
 * supervised process handle;
 * start time;
 * optional end time;
-* original submitted job message delivery/acknowledgement handle;
 * parent-side IPC connection used to receive process result/status;
 * references to local runtime resources required for supervised execution.
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import JobManifest, ArtifactRef
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifacts,
     JobParameters,
@@ -17,6 +18,7 @@ from mdds_worker_runtime.execution.artifacts import (
     PreparedOutputArtifact,
 )
 from mdds_worker_runtime.execution.context import JobExecutionContext
+from mdds_worker_runtime.execution.models import JobWorkspace
 
 SNAPSHOT_VERSION = 1
 
@@ -89,6 +91,7 @@ class JobExecutionContextSnapshot:
     """
 
     snapshot_version: int
+    manifest_version: int
     user_id: int
     job_id: str
     job_type: str
@@ -98,20 +101,24 @@ class JobExecutionContextSnapshot:
     inputs: Mapping[str, ArtifactSnapshot]
     outputs: Mapping[str, ArtifactSnapshot]
     params: Mapping[str, Any]
+    worker_id: str
 
     @staticmethod
     def from_context(context: JobExecutionContext) -> "JobExecutionContextSnapshot":
         if context is None:
             raise ValueError("context cannot be null.")
 
+        manifest = context.workspace.manifest
+
         return JobExecutionContextSnapshot(
             snapshot_version=SNAPSHOT_VERSION,
-            user_id=context.user_id,
-            job_id=context.job_id,
-            job_type=context.job_type,
-            work_dir=str(context.work_dir),
-            input_dir=str(context.input_dir),
-            output_dir=str(context.output_dir),
+            manifest_version=manifest.manifest_version,
+            user_id=manifest.user_id,
+            job_id=manifest.job_id,
+            job_type=manifest.job_type,
+            work_dir=str(context.workspace.work_dir),
+            input_dir=str(context.workspace.input_dir),
+            output_dir=str(context.workspace.output_dir),
             inputs={
                 slot: ArtifactSnapshot.from_input_artifact(artifact)
                 for slot, artifact in context.inputs._artifacts.items()
@@ -121,6 +128,7 @@ class JobExecutionContextSnapshot:
                 for slot, artifact in context.outputs._artifacts.items()
             },
             params=dict(context.params._params),
+            worker_id=context.workspace.worker_id,
         )
 
     @staticmethod
@@ -134,6 +142,7 @@ class JobExecutionContextSnapshot:
 
         return JobExecutionContextSnapshot(
             snapshot_version=snapshot_version,
+            manifest_version=int(data["manifestVersion"]),
             user_id=int(data["userId"]),
             job_id=str(data["jobId"]),
             job_type=str(data["jobType"]),
@@ -149,11 +158,13 @@ class JobExecutionContextSnapshot:
                 for slot, artifact in data["outputs"].items()
             },
             params=dict(data["params"]),
+            worker_id=data["workerId"],
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "snapshotVersion": self.snapshot_version,
+            "manifestVersion": self.manifest_version,
             "userId": self.user_id,
             "jobId": self.job_id,
             "jobType": self.job_type,
@@ -167,16 +178,42 @@ class JobExecutionContextSnapshot:
                 slot: artifact.to_dict() for slot, artifact in self.outputs.items()
             },
             "params": dict(self.params),
+            "workerId": self.worker_id,
         }
 
     def to_context(self) -> JobExecutionContext:
-        return JobExecutionContext(
+        manifest = JobManifest(
+            manifest_version=self.manifest_version,
             user_id=self.user_id,
             job_id=self.job_id,
             job_type=self.job_type,
+            inputs={
+                slot: ArtifactRef(
+                    object_key=artifact.object_key,
+                    format=ArtifactFormat(artifact.format),
+                )
+                for slot, artifact in self.inputs.items()
+            },
+            params=dict(self.params),
+            outputs={
+                slot: ArtifactRef(
+                    object_key=artifact.object_key,
+                    format=ArtifactFormat(artifact.format),
+                )
+                for slot, artifact in self.outputs.items()
+            },
+        )
+
+        workspace = JobWorkspace(
+            manifest=manifest,
             work_dir=Path(self.work_dir),
             input_dir=Path(self.input_dir),
             output_dir=Path(self.output_dir),
+            worker_id=self.worker_id,
+        )
+
+        return JobExecutionContext(
+            workspace=workspace,
             inputs=InputArtifacts(
                 {
                     slot: artifact.to_prepared_input_artifact()

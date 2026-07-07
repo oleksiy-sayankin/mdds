@@ -7,6 +7,10 @@ import logging
 
 from mdds_worker_runtime.dto.messages import CancelJobDTO
 from mdds_worker_runtime.execution.cancellation import CancellationRequestHandler
+from mdds_worker_runtime.execution.models import WorkerJobStatus
+from mdds_worker_runtime.job_state import (
+    JobStateTransitionCoordinator,
+)
 from mdds_worker_runtime.queue.queue_client import (
     Acknowledger,
     MessageHandler,
@@ -19,31 +23,31 @@ logger = logging.getLogger(__name__)
 class CancelConsumer(MessageHandler[CancelJobDTO]):
     """Consumes worker-specific job cancellation messages.
 
-    CancelConsumer belongs to the Worker Runtime control plane.
+    CancelConsumer owns the cancellation-message state-machine flow:
 
-    Its responsibility is intentionally narrow:
+    - request the worker-local ``IN_PROGRESS`` -> ``CANCELLED`` transition;
+    - acknowledge the cancellation message after the transition is committed or
+      determined stale for this Worker.
 
-    - read cancellation messages from the worker cancellation queue;
-    - validate that jobId is present;
-    - pass the accepted request to an internal cancellation handler;
-    - acknowledge the cancellation message after local acceptance.
-
-    It does not terminate supervised processes, does not publish CANCELLED,
-    does not acknowledge the original submitted job message, and does not mark
-    execution records cleanup-ready. Those actions belong to the cancellation
-    execution flow.
+    The Worker must not publish public ``CANCEL_REQUESTED`` status because that
+    public state is controlled by the Web Server. The Worker tries to finalize it as
+    terminal ``CANCELLED``.
     """
 
     def __init__(
         self,
+        job_state_transition_coordinator: JobStateTransitionCoordinator,
         cancellation_request_handler: CancellationRequestHandler,
         worker_id: str,
     ) -> None:
+        if job_state_transition_coordinator is None:
+            raise ValueError("job_state_transition_coordinator cannot be null.")
         if cancellation_request_handler is None:
             raise ValueError("cancellation_request_handler cannot be null.")
         if worker_id is None or worker_id.strip() == "":
             raise ValueError("worker_id cannot be null or blank.")
 
+        self._job_state_transition_coordinator = job_state_transition_coordinator
         self._cancellation_request_handler = cancellation_request_handler
         self._worker_id = worker_id.strip()
 
@@ -52,14 +56,12 @@ class CancelConsumer(MessageHandler[CancelJobDTO]):
         message: QueueMessage[CancelJobDTO],
         ack: Acknowledger,
     ) -> None:
-        """Handle one cancellation message.
+        """Handle one worker-specific cancellation message.
 
-        The cancellation message is acknowledged only after the runtime accepts
-        it for local processing.
-
-        If validation or delegation fails, the exception is intentionally allowed
-        to propagate to the queue client. The queue client owns the generic
-        handler-error nack policy.
+        The Worker attempts the local terminal cancellation transition first. If the
+        transition commits or is stale, the cancellation message is acknowledged. If
+        the transition operation fails, the exception is allowed to propagate so the
+        queue client can apply its generic message failure policy.
         """
         if ack is None:
             raise ValueError("ack cannot be null.")
@@ -76,14 +78,23 @@ class CancelConsumer(MessageHandler[CancelJobDTO]):
             },
         )
 
-        self._cancellation_request_handler.request_cancellation(job_id)
+        result = self._job_state_transition_coordinator.transition(
+            job_id=job_id,
+            target_state=WorkerJobStatus.CANCELLED,
+            operation=lambda: self._cancellation_request_handler.finalize_cancellation(
+                job_id=job_id
+            ),
+        )
+        if result.failed:
+            raise result.error
+
         ack.ack()
 
         logger.info(
-            "Cancellation message accepted and acknowledged.",
+            "Cancellation message done and acknowledged.",
             extra={
                 "component": "cancel_consumer",
-                "event": "cancellation_message_accepted",
+                "event": "cancellation_message_done",
                 "jobId": job_id,
                 "workerId": self._worker_id,
             },

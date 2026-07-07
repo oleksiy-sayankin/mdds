@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime
 
+from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.models import (
     ExecutionRecord,
-    WorkerJobStatus,
+    ProcessRecord,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class ExecutionRegistry:
         and cleanup_ready is true, then closes resources and removes the record with
         registry.remove_if_same(record).
 
-    The same terminal lifecycle is used for ERROR, CANCELLED, and VALIDATION_FAILED,
+    The same terminal lifecycle is used for ERROR, CANCELLED,
     but this module does not decide when those statuses should happen. It only
     provides thread-safe state transitions and guards their ordering.
     """
@@ -107,6 +107,47 @@ class ExecutionRegistry:
                 "workerId": record.worker_id,
             },
         )
+
+    def attach_context(
+        self,
+        *,
+        job_id: str,
+        context: JobExecutionContext,
+    ) -> ExecutionRecord:
+        if context is None:
+            raise ValueError("context cannot be null.")
+
+        with self._lock:
+            record = self.require(job_id)
+
+            if record.context is not None:
+                raise ValueError(f"Context for job '{job_id}' is already attached.")
+
+            record.context = context
+            return record
+
+    def attach_process_record(
+        self,
+        *,
+        job_id: str,
+        process_record: ProcessRecord,
+    ) -> ExecutionRecord:
+        if process_record is None:
+            raise ValueError("process_record cannot be null.")
+
+        with self._lock:
+            record = self.require(job_id)
+
+            if record.context is None:
+                raise ValueError(
+                    f"Cannot attach process before context for job '{job_id}'."
+                )
+
+            if record.process_record is not None:
+                raise ValueError(f"Process for job '{job_id}' is already attached.")
+
+            record.process_record = process_record
+            return record
 
     def get(self, job_id: str) -> ExecutionRecord | None:
         """Return execution record by job id, or None."""
@@ -196,134 +237,6 @@ class ExecutionRegistry:
             self._records.clear()
 
         return records
-
-    def try_claim_terminal(
-        self,
-        job_id: str,
-        terminal_status: WorkerJobStatus,
-        message: str | None,
-        finished_at: datetime,
-    ) -> ExecutionRecord | None:
-        """Try to claim terminal status for a job.
-
-        Returns the record if this caller won the terminal race.
-        Returns None if terminal status was already claimed or record is absent.
-        """
-        if terminal_status not in {
-            WorkerJobStatus.DONE,
-            WorkerJobStatus.ERROR,
-            WorkerJobStatus.CANCELLED,
-            WorkerJobStatus.VALIDATION_FAILED,
-        }:
-            raise ValueError(f"Status '{terminal_status}' is not terminal.")
-
-        record = self.get(job_id)
-        if record is None:
-            return None
-
-        with record.lock:
-            if record.terminal_status_claimed:
-                return None
-
-            record.terminal_status_claimed = True
-            record.terminal_status = terminal_status
-            record.terminal_message = message
-            record.finished_at = finished_at
-
-        logger.info(
-            "Terminal status claimed.",
-            extra={
-                "component": "execution_registry",
-                "event": "terminal_status_claimed",
-                "jobId": record.job_id,
-                "jobType": record.job_type,
-                "workerId": record.worker_id,
-                "status": terminal_status.value,
-            },
-        )
-
-        return record
-
-    def mark_terminal_published(self, job_id: str) -> None:
-        """Mark that the selected terminal status was published.
-
-        This method must be called only after try_claim_terminal(...) succeeds and
-        the caller successfully publishes the terminal status to the status queue.
-
-        For WorkerJobStatus.DONE, the caller must first persist all declared output
-        artifacts to object storage according to the job manifest. DONE must not be
-        published until the output artifacts are durable and available for download.
-
-        It intentionally does not publish statuses and does not write artifacts by
-        itself. Output persistence belongs to the execution watcher / output
-        committer. Status publication belongs to the status publisher.
-
-        This flag is required before acknowledging the original submitted queue
-        message. The ordering protects the system from losing the final job state:
-        a job message must not be acknowledged before its terminal status is
-        successfully published. For DONE, it also protects users from seeing DONE
-        before output artifacts are available in object storage.
-        """
-        record = self.require(job_id)
-
-        with record.lock:
-            if not record.terminal_status_claimed:
-                raise RuntimeError(
-                    f"Cannot mark terminal status as published for job '{job_id}': "
-                    "terminal status was not claimed."
-                )
-
-            record.terminal_status_published = True
-
-    def mark_acknowledged(self, job_id: str) -> None:
-        """Mark that the original submitted queue message was acknowledged.
-
-        This method must be called only after terminal status publication succeeds
-        and after the caller acknowledges the original submitted queue message.
-
-        The registry does not call ack() itself. The acknowledgement handle is stored
-        in ExecutionRecord, but the caller controls the exact queue-side operation.
-
-        The ordering is important: acknowledgement before terminal status publication
-        could make the job disappear from the queue while the orchestrator never
-        receives DONE, ERROR, CANCELLED, or VALIDATION_FAILED.
-        """
-        record = self.require(job_id)
-
-        with record.lock:
-            if not record.terminal_status_published:
-                raise RuntimeError(
-                    f"Cannot mark job '{job_id}' as acknowledged before terminal status is published."
-                )
-
-            record.acknowledgement_done = True
-
-    def mark_cleanup_ready(self, job_id: str) -> None:
-        """Mark execution record as ready for cleanup.
-
-        This method must be called after all terminal side effects are complete:
-        terminal status was published and the original submitted queue message was
-        acknowledged.
-
-        The method does not remove the record and does not close process resources.
-        Cleanup watcher owns that responsibility. The watcher should read
-        registry.snapshot(), select records that satisfy cleanup conditions, close
-        process/pipe resources, and remove the record using remove_if_same(record).
-        """
-        record = self.require(job_id)
-
-        with record.lock:
-            if not record.terminal_status_published:
-                raise RuntimeError(
-                    f"Cannot mark job '{job_id}' as cleanup-ready before terminal status is published."
-                )
-
-            if not record.acknowledgement_done:
-                raise RuntimeError(
-                    f"Cannot mark job '{job_id}' as cleanup-ready before acknowledgement."
-                )
-
-            record.cleanup_ready = True
 
     @staticmethod
     def _validate_record(record: ExecutionRecord) -> None:

@@ -7,8 +7,8 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
-from mdds_worker_runtime.domain.manifest import ArtifactRef
 from mdds_worker_runtime.execution.object_keys import file_name_from_object_key
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 from mdds_worker_runtime.storage.s3_client import S3Storage
 
 
@@ -34,47 +34,40 @@ class PreparedOutputArtifact:
 class PreparedJobInputs:
     """Runtime-internal result of preparing all input artifacts for one job."""
 
-    user_id: int
-    job_id: str
-    input_dir: Path
     inputs: Mapping[str, PreparedInputArtifact]
 
 
 class InputArtifactPreparer:
     """Downloads declared input artifacts into local worker job workspace."""
 
-    def __init__(self, storage: S3Storage, jobs_root: Path) -> None:
+    def __init__(
+        self,
+        storage: S3Storage,
+    ) -> None:
         if storage is None:
             raise ValueError("storage cannot be null.")
-        if jobs_root is None:
-            raise ValueError("jobs_root cannot be null.")
 
         self._storage = storage
-        self._jobs_root = jobs_root
 
     def prepare(
         self,
-        user_id: int,
-        job_id: str,
-        inputs: Mapping[str, ArtifactRef],
+        workspace: JobWorkspace,
     ) -> PreparedJobInputs:
-        if inputs is None:
-            raise ValueError("inputs cannot be null.")
-        self._validate_path_segment("job_id", job_id)
-        input_dir = self._jobs_root / str(user_id) / job_id / "in"
-        input_dir.mkdir(parents=True, exist_ok=True)
+        if workspace is None:
+            raise ValueError("workspace cannot be null.")
+        workspace.input_dir.mkdir(parents=True, exist_ok=True)
 
         prepared_inputs: dict[str, PreparedInputArtifact] = {}
         used_local_paths: set[Path] = set()
 
-        for input_slot, artifact_ref in inputs.items():
+        for input_slot, artifact_ref in workspace.manifest.inputs.items():
             self._validate_slot_name("input_slot", input_slot)
             if artifact_ref is None:
                 raise ValueError(
                     f"Input artifact ref for slot '{input_slot}' cannot be null."
                 )
             file_name = file_name_from_object_key(artifact_ref.object_key)
-            local_path = input_dir / file_name
+            local_path = workspace.input_dir / file_name
             if local_path in used_local_paths:
                 raise ValueError(f"Duplicate local input artifact path: {local_path}")
             used_local_paths.add(local_path)
@@ -87,9 +80,6 @@ class InputArtifactPreparer:
             )
 
         return PreparedJobInputs(
-            user_id=user_id,
-            job_id=job_id,
-            input_dir=input_dir,
             inputs=prepared_inputs,
         )
 

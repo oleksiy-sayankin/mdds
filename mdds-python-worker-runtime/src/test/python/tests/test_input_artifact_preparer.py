@@ -1,5 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
+
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from typing import cast
@@ -8,18 +9,21 @@ from unittest.mock import MagicMock
 import pytest
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
-from mdds_worker_runtime.domain.manifest import ArtifactRef
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     InputArtifactPreparer,
     PreparedInputArtifact,
     PreparedJobInputs,
 )
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 from mdds_worker_runtime.storage.s3_client import S3Storage
+
+WORKER_ID = "worker-1"
 
 
 def artifact_ref(object_key: str | None) -> ArtifactRef:
     return ArtifactRef(
-        object_key=object_key,
+        object_key=cast(str, object_key),
         format=ArtifactFormat.CSV,
     )
 
@@ -28,25 +32,19 @@ def test_prepare_downloads_input_artifacts_to_local_job_workspace(
     tmp_path: Path,
 ) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
 
     inputs = {
         "matrix": artifact_ref("jobs/42/job-1/in/matrix.csv"),
         "rhs": artifact_ref("jobs/42/job-1/in/rhs.csv"),
     }
+    workspace = _workspace(tmp_path, inputs=inputs)
 
-    prepared = preparer.prepare(
-        user_id=42,
-        job_id="job-1",
-        inputs=inputs,
-    )
+    prepared = preparer.prepare(workspace)
 
     expected_input_dir = tmp_path / "42" / "job-1" / "in"
 
     assert prepared == PreparedJobInputs(
-        user_id=42,
-        job_id="job-1",
-        input_dir=expected_input_dir,
         inputs={
             "matrix": PreparedInputArtifact(
                 object_key="jobs/42/job-1/in/matrix.csv",
@@ -77,17 +75,18 @@ def test_prepare_uses_file_name_from_s3_object_key_basename(
     tmp_path: Path,
 ) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
 
-    prepared = preparer.prepare(
-        user_id=42,
-        job_id="job-1",
+    workspace = _workspace(
+        tmp_path,
         inputs={
             "matrix": artifact_ref(
                 "jobs/42/job-1/in/nested/matrix.csv",
             ),
         },
     )
+
+    prepared = preparer.prepare(workspace)
 
     expected_local_path = tmp_path / "42" / "job-1" / "in" / "matrix.csv"
 
@@ -98,55 +97,16 @@ def test_prepare_uses_file_name_from_s3_object_key_basename(
     )
 
 
-def test_input_artifact_preparer_rejects_null_storage(tmp_path: Path) -> None:
+def test_input_artifact_preparer_rejects_null_storage() -> None:
     with pytest.raises(ValueError, match="storage cannot be null"):
-        InputArtifactPreparer(None, tmp_path)
+        InputArtifactPreparer(cast(S3Storage, None))
 
 
-def test_input_artifact_preparer_rejects_null_jobs_root() -> None:
-    with pytest.raises(ValueError, match="jobs_root cannot be null"):
-        InputArtifactPreparer(MagicMock(spec=S3Storage), None)
+def test_prepare_rejects_null_workspace() -> None:
+    preparer = InputArtifactPreparer(MagicMock(spec=S3Storage))
 
-
-def test_prepare_rejects_null_inputs(tmp_path: Path) -> None:
-    preparer = InputArtifactPreparer(MagicMock(spec=S3Storage), tmp_path)
-
-    with pytest.raises(ValueError, match="inputs cannot be null"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs=None,
-        )
-
-
-@pytest.mark.parametrize(
-    "job_id",
-    [
-        None,
-        "",
-        "   ",
-        ".",
-        "..",
-        "../evil",
-        "evil/job",
-        r"evil\job",
-    ],
-)
-def test_prepare_rejects_unsafe_job_id(
-    tmp_path: Path,
-    job_id: str | None,
-) -> None:
-    storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
-
-    with pytest.raises(ValueError, match="job_id"):
-        preparer.prepare(
-            user_id=42,
-            job_id=job_id,
-            inputs={},
-        )
-
-    storage.download_file.assert_not_called()
+    with pytest.raises(ValueError, match="workspace cannot be null"):
+        preparer.prepare(cast(JobWorkspace, None))
 
 
 @pytest.mark.parametrize(
@@ -166,23 +126,24 @@ def test_prepare_rejects_invalid_input_slot(
     input_slot: str,
 ) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
+
+    workspace = _workspace(
+        tmp_path,
+        inputs={
+            input_slot: artifact_ref("jobs/42/job-1/in/matrix.csv"),
+        },
+    )
 
     with pytest.raises(ValueError, match="input_slot"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs={
-                input_slot: artifact_ref("jobs/42/job-1/in/matrix.csv"),
-            },
-        )
+        preparer.prepare(workspace)
 
     storage.download_file.assert_not_called()
 
 
 def test_prepare_rejects_null_input_slot(tmp_path: Path) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
 
     inputs = cast(
         dict[str, ArtifactRef],
@@ -193,13 +154,10 @@ def test_prepare_rejects_null_input_slot(tmp_path: Path) -> None:
             },
         ),
     )
+    workspace = _workspace(tmp_path, inputs=inputs)
 
     with pytest.raises(ValueError, match="input_slot"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs=inputs,
-        )
+        preparer.prepare(workspace)
 
     storage.download_file.assert_not_called()
 
@@ -217,32 +175,34 @@ def test_prepare_rejects_null_or_blank_object_key(
     object_key: str | None,
 ) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
+
+    workspace = _workspace(
+        tmp_path,
+        inputs={
+            "matrix": artifact_ref(object_key),
+        },
+    )
 
     with pytest.raises(ValueError, match="object_key cannot be null or blank"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs={
-                "matrix": artifact_ref(object_key),
-            },
-        )
+        preparer.prepare(workspace)
 
     storage.download_file.assert_not_called()
 
 
 def test_prepare_rejects_object_key_without_file_name(tmp_path: Path) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
+
+    workspace = _workspace(
+        tmp_path,
+        inputs={
+            "matrix": artifact_ref("jobs/42/job-1/in/"),
+        },
+    )
 
     with pytest.raises(ValueError, match="Object key has no file name"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs={
-                "matrix": artifact_ref("jobs/42/job-1/in/"),
-            },
-        )
+        preparer.prepare(workspace)
 
     storage.download_file.assert_not_called()
 
@@ -259,16 +219,17 @@ def test_prepare_rejects_object_key_with_invalid_file_name(
     object_key: str,
 ) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
+
+    workspace = _workspace(
+        tmp_path,
+        inputs={
+            "matrix": artifact_ref(object_key),
+        },
+    )
 
     with pytest.raises(ValueError, match="Object key has no valid file name"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs={
-                "matrix": artifact_ref(object_key),
-            },
-        )
+        preparer.prepare(workspace)
 
     storage.download_file.assert_not_called()
 
@@ -277,21 +238,22 @@ def test_prepare_rejects_duplicate_local_input_artifact_path(
     tmp_path: Path,
 ) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
+
+    workspace = _workspace(
+        tmp_path,
+        inputs={
+            "matrix": artifact_ref(
+                "jobs/42/job-1/in/a/matrix.csv",
+            ),
+            "rhs": artifact_ref(
+                "jobs/42/job-1/in/b/matrix.csv",
+            ),
+        },
+    )
 
     with pytest.raises(ValueError, match="Duplicate local input artifact path"):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs={
-                "matrix": artifact_ref(
-                    "jobs/42/job-1/in/a/matrix.csv",
-                ),
-                "rhs": artifact_ref(
-                    "jobs/42/job-1/in/b/matrix.csv",
-                ),
-            },
-        )
+        preparer.prepare(workspace)
 
     expected_first_local_path = tmp_path / "42" / "job-1" / "in" / "matrix.csv"
 
@@ -314,9 +276,6 @@ def test_prepared_input_artifact_is_immutable() -> None:
 
 def test_prepared_job_inputs_is_immutable() -> None:
     prepared = PreparedJobInputs(
-        user_id=42,
-        job_id="job-1",
-        input_dir=Path("/tmp/in"),
         inputs={},
     )
 
@@ -326,21 +285,46 @@ def test_prepared_job_inputs_is_immutable() -> None:
 
 def test_prepare_rejects_null_artifact_ref(tmp_path: Path) -> None:
     storage = MagicMock(spec=S3Storage)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
 
     inputs = cast(
         dict[str, ArtifactRef],
         cast(object, {"matrix": None}),
     )
+    workspace = _workspace(tmp_path, inputs=inputs)
 
     with pytest.raises(
         ValueError,
         match="Input artifact ref for slot 'matrix' cannot be null",
     ):
-        preparer.prepare(
-            user_id=42,
-            job_id="job-1",
-            inputs=inputs,
-        )
+        preparer.prepare(workspace)
 
     storage.download_file.assert_not_called()
+
+
+def _workspace(
+    tmp_path: Path,
+    *,
+    inputs: dict[str, ArtifactRef],
+    user_id: int = 42,
+    job_id: str = "job-1",
+) -> JobWorkspace:
+    work_dir = tmp_path / str(user_id) / job_id
+
+    manifest = JobManifest(
+        manifest_version=1,
+        user_id=user_id,
+        job_id=job_id,
+        job_type="SOLVING_SLAE",
+        inputs=inputs,
+        params={},
+        outputs={},
+    )
+
+    return JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=work_dir / "in",
+        output_dir=work_dir / "out",
+        worker_id=WORKER_ID,
+    )

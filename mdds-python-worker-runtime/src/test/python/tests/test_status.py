@@ -4,7 +4,6 @@ from mdds_worker_runtime.execution.models import WorkerJobStatus
 
 
 def test_worker_status_values_match_wire_contract() -> None:
-    assert WorkerJobStatus.VALIDATION_FAILED.value == "VALIDATION_FAILED"
     assert WorkerJobStatus.IN_PROGRESS.value == "IN_PROGRESS"
     assert WorkerJobStatus.DONE.value == "DONE"
     assert WorkerJobStatus.ERROR.value == "ERROR"
@@ -15,5 +14,3 @@ def test_worker_status_does_not_include_web_server_owned_statuses() -> None:
     status_values = {status.value for status in WorkerJobStatus}
 
     assert "DRAFT" not in status_values
-    assert "SUBMITTED" not in status_values
-    assert "CANCEL_REQUESTED" not in status_values

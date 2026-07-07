@@ -234,153 +234,6 @@ def test_worker_runtime_processes_two_numbers_sum_happy_path(
     _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
 
 
-def test_worker_runtime_publishes_validation_failed_when_handler_validation_fails(
-    rabbitmq_properties: RabbitMqProperties,
-    s3_client_and_endpoint,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    s3_client, s3_endpoint = s3_client_and_endpoint
-
-    test_id = str(uuid4())
-    job_id = f"job-{test_id}"
-
-    job_queue_name = f"test.job.two_numbers_sum.validation_failed.{test_id}"
-    status_queue_name = f"test.status.two_numbers_sum.validation_failed.{test_id}"
-    cancel_queue_name = f"test.cancel.two_numbers_sum.validation_failed.{test_id}"
-
-    manifest_key = f"jobs/{USER_ID}/{job_id}/manifest.json"
-    number_a_key = f"jobs/{USER_ID}/{job_id}/in/number_a.csv"
-    number_b_key = f"jobs/{USER_ID}/{job_id}/in/number_b.csv"
-    sum_key = f"jobs/{USER_ID}/{job_id}/out/sum.csv"
-
-    job_workspace = tmp_path / "jobs" / str(USER_ID) / job_id
-
-    _declare_queue(rabbitmq_properties, job_queue_name)
-    _declare_queue(rabbitmq_properties, status_queue_name)
-    _declare_queue(rabbitmq_properties, cancel_queue_name)
-
-    _put_json(
-        s3_client=s3_client,
-        bucket=S3_BUCKET,
-        key=manifest_key,
-        value=_manifest(
-            job_id=job_id,
-            number_a_key=number_a_key,
-            number_b_key=number_b_key,
-            sum_key=sum_key,
-        ),
-    )
-    _put_bytes(
-        s3_client=s3_client,
-        bucket=S3_BUCKET,
-        key=number_a_key,
-        body=NUMBER_A_VALUE.encode("utf-8"),
-    )
-    _put_bytes(
-        s3_client=s3_client,
-        bucket=S3_BUCKET,
-        key=number_b_key,
-        body=INVALID_NUMBER_B_VALUE.encode("utf-8"),
-    )
-
-    _configure_worker_runtime_environment(
-        monkeypatch=monkeypatch,
-        rabbitmq_properties=rabbitmq_properties,
-        s3_endpoint=s3_endpoint,
-        jobs_root=tmp_path,
-        job_queue_name=job_queue_name,
-        status_queue_name=status_queue_name,
-        cancel_queue_name=cancel_queue_name,
-    )
-
-    status_handler = StatusCollectingHandler()
-    runtime = None
-
-    with RabbitMqQueueClient(rabbitmq_properties, prefetch_count=1) as status_client:
-        status_subscription = status_client.subscribe(
-            status_queue_name,
-            JobStatusUpdateDTO,
-            status_handler,
-        )
-
-        try:
-            runtime = worker_main.build_worker_runtime_from_environment()
-            runtime.start()
-
-            with RabbitMqQueueClient(rabbitmq_properties) as publisher_client:
-                publisher_client.publish(
-                    job_queue_name,
-                    QueueMessage(
-                        payload=JobMessageDTO(
-                            manifestObjectKey=manifest_key,
-                        ),
-                    ),
-                )
-
-            validation_failed_status = _wait_for_status(
-                status_handler=status_handler,
-                job_id=job_id,
-                expected_status=WorkerJobStatus.VALIDATION_FAILED,
-            )
-            statuses = _drain_statuses(status_handler)
-
-            assert validation_failed_status.jobId == job_id
-            assert validation_failed_status.job_id == job_id
-            assert validation_failed_status.workerId == WORKER_ID
-            assert validation_failed_status.worker_id == WORKER_ID
-            assert (
-                validation_failed_status.status
-                == WorkerJobStatus.VALIDATION_FAILED.value
-            )
-
-            assert (
-                _index_of_status(
-                    statuses,
-                    WorkerJobStatus.IN_PROGRESS.value,
-                    job_id,
-                )
-                is None
-            )
-            assert (
-                _index_of_status(
-                    statuses,
-                    WorkerJobStatus.DONE.value,
-                    job_id,
-                )
-                is None
-            )
-            assert (
-                _index_of_status(
-                    statuses,
-                    WorkerJobStatus.ERROR.value,
-                    job_id,
-                )
-                is None
-            )
-
-            assert not _object_exists(
-                s3_client=s3_client,
-                bucket=S3_BUCKET,
-                key=sum_key,
-            )
-
-            _wait_until(lambda: not job_workspace.exists())
-            _wait_for_ack_to_be_processed()
-
-        finally:
-            if runtime is not None:
-                runtime.stop()
-
-            status_subscription.close()
-
-    assert _basic_get(rabbitmq_properties, job_queue_name) is None
-
-    _delete_queue_if_exists(rabbitmq_properties, job_queue_name)
-    _delete_queue_if_exists(rabbitmq_properties, status_queue_name)
-    _delete_queue_if_exists(rabbitmq_properties, cancel_queue_name)
-
-
 def test_worker_runtime_publishes_error_when_handler_validation_raises_unexpected_error(
     rabbitmq_properties: RabbitMqProperties,
     s3_client_and_endpoint,
@@ -484,14 +337,6 @@ def test_worker_runtime_publishes_error_when_handler_validation_raises_unexpecte
             assert error_status.status == WorkerJobStatus.ERROR.value
             assert UNEXPECTED_VALIDATION_ERROR_STATUS_MESSAGE in error_status.message
 
-            assert (
-                _index_of_status(
-                    statuses,
-                    WorkerJobStatus.VALIDATION_FAILED.value,
-                    job_id,
-                )
-                is None
-            )
             assert (
                 _index_of_status(
                     statuses,
@@ -652,14 +497,6 @@ def test_worker_runtime_publishes_error_when_handler_execution_fails(
                 _index_of_status(
                     statuses,
                     WorkerJobStatus.DONE.value,
-                    job_id,
-                )
-                is None
-            )
-            assert (
-                _index_of_status(
-                    statuses,
-                    WorkerJobStatus.VALIDATION_FAILED.value,
                     job_id,
                 )
                 is None

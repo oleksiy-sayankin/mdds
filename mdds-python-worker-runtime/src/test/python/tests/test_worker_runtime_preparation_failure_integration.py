@@ -244,14 +244,6 @@ def test_worker_runtime_publishes_error_and_cleans_workspace_when_input_artifact
                 assert (
                     _index_of_status(
                         statuses,
-                        WorkerJobStatus.VALIDATION_FAILED.value,
-                        job_id,
-                    )
-                    is None
-                )
-                assert (
-                    _index_of_status(
-                        statuses,
                         WorkerJobStatus.CANCELLED.value,
                         job_id,
                     )

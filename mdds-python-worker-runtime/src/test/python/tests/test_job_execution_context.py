@@ -6,6 +6,7 @@ from typing import cast, Any
 import pytest
 
 from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
+from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import (
     PreparedInputArtifact,
     PreparedOutputArtifact,
@@ -14,6 +15,7 @@ from mdds_worker_runtime.execution.artifacts import (
     JobParameters,
 )
 from mdds_worker_runtime.execution.context import JobExecutionContext
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 
 
 def test_context_returns_input_artifact() -> None:
@@ -139,16 +141,49 @@ def _create_context(
     outputs: dict[str, PreparedOutputArtifact] | None = None,
     params: dict[str, object] | None = None,
 ) -> JobExecutionContext:
-    return JobExecutionContext(
+    work_dir = Path("/tmp/mdds/jobs/42/job-1")
+    input_dir = work_dir / "in"
+    output_dir = work_dir / "out"
+
+    resolved_inputs = inputs or {}
+    resolved_outputs = outputs or {}
+    resolved_params = params or {}
+
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=42,
         job_id="job-1",
         job_type="SOLVING_SLAE",
-        work_dir=Path("/tmp/mdds/jobs/42/job-1"),
-        input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
-        output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
-        inputs=InputArtifacts(inputs or {}),
-        outputs=OutputArtifacts(outputs or {}),
-        params=JobParameters(params or {}),
+        inputs={
+            slot: ArtifactRef(
+                object_key=artifact.object_key,
+                format=artifact.format,
+            )
+            for slot, artifact in resolved_inputs.items()
+        },
+        params=resolved_params,
+        outputs={
+            slot: ArtifactRef(
+                object_key=artifact.object_key,
+                format=artifact.format,
+            )
+            for slot, artifact in resolved_outputs.items()
+        },
+    )
+
+    workspace = JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=input_dir,
+        output_dir=output_dir,
+        worker_id="worker-1",
+    )
+
+    return JobExecutionContext(
+        workspace=workspace,
+        inputs=InputArtifacts(resolved_inputs),
+        outputs=OutputArtifacts(resolved_outputs),
+        params=JobParameters(resolved_params),
     )
 
 
@@ -179,12 +214,7 @@ def test_input_artifacts_reads_bytes(tmp_path: Path) -> None:
 def test_context_rejects_null_inputs() -> None:
     with pytest.raises(ValueError, match="inputs cannot be null."):
         JobExecutionContext(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            work_dir=Path("/tmp/mdds/jobs/42/job-1"),
-            input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
-            output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
+            workspace=_workspace(),
             inputs=cast(Any, None),
             outputs=OutputArtifacts({}),
             params=JobParameters({}),
@@ -194,12 +224,7 @@ def test_context_rejects_null_inputs() -> None:
 def test_context_rejects_null_outputs() -> None:
     with pytest.raises(ValueError, match="outputs cannot be null."):
         JobExecutionContext(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            work_dir=Path("/tmp/mdds/jobs/42/job-1"),
-            input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
-            output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
+            workspace=_workspace(),
             inputs=InputArtifacts({}),
             outputs=cast(Any, None),
             params=JobParameters({}),
@@ -209,13 +234,30 @@ def test_context_rejects_null_outputs() -> None:
 def test_context_rejects_null_params() -> None:
     with pytest.raises(ValueError, match="params cannot be null."):
         JobExecutionContext(
-            user_id=42,
-            job_id="job-1",
-            job_type="SOLVING_SLAE",
-            work_dir=Path("/tmp/mdds/jobs/42/job-1"),
-            input_dir=Path("/tmp/mdds/jobs/42/job-1/in"),
-            output_dir=Path("/tmp/mdds/jobs/42/job-1/out"),
+            workspace=_workspace(),
             inputs=InputArtifacts({}),
             outputs=OutputArtifacts({}),
             params=cast(Any, None),
         )
+
+
+def _workspace() -> JobWorkspace:
+    work_dir = Path("/tmp/mdds/jobs/42/job-1")
+
+    manifest = JobManifest(
+        manifest_version=1,
+        user_id=42,
+        job_id="job-1",
+        job_type="SOLVING_SLAE",
+        inputs={},
+        params={},
+        outputs={},
+    )
+
+    return JobWorkspace(
+        manifest=manifest,
+        work_dir=work_dir,
+        input_dir=work_dir / "in",
+        output_dir=work_dir / "out",
+        worker_id="worker-1",
+    )

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,7 +14,9 @@ from mdds_worker_runtime.execution.job_preparation_handler import (
     JobPreparationHandler,
     PreparedJob,
 )
-from mdds_worker_runtime.queue.queue_client import QueueMessage
+from mdds_worker_runtime.execution.validation_handler import ValidationFailed
+from mdds_worker_runtime.job_state import JobStateTransitionCoordinator
+from mdds_worker_runtime.queue.queue_client import QueueMessage, Acknowledger
 
 
 def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_starts_execution() -> (
@@ -33,7 +36,16 @@ def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_s
     input_artifact_preparer = MagicMock()
     input_artifact_preparer.prepare.return_value = prepared_job_inputs
 
+    workspace = _workspace(manifest)
+
+    job_workspace_factory = MagicMock()
+    job_workspace_factory.create.return_value = workspace
+
     context = MagicMock()
+    context.user_id = 42
+    context.job_id = "job-1"
+    context.job_type = "SOLVING_SLAE"
+    context.workspace = workspace
 
     job_execution_context_factory = MagicMock()
     job_execution_context_factory.create.return_value = context
@@ -44,7 +56,7 @@ def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_s
     job_handler_loader.load.return_value = job_handler
 
     validation_handler = MagicMock()
-    validation_handler.validate_or_handle_failure.return_value = True
+    validation_handler.validate.return_value = True
 
     execution_record = MagicMock()
 
@@ -53,27 +65,28 @@ def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_s
 
     execution_registry = MagicMock()
     status_publisher = MagicMock()
-    workspace_cleaner = MagicMock()
     preparation_handler = JobPreparationHandler(
+        execution_registry,
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
-        status_publisher,
-        workspace_cleaner,
-        "test-worker-id",
     )
+
+    job_state_transition_coordinator = JobStateTransitionCoordinator()
 
     consumer = JobConsumer(
         manifest_loader,
+        job_workspace_factory,
+        job_state_transition_coordinator,
         preparation_handler,
         validation_handler,
         execution_supervisor,
         execution_registry,
         status_publisher,
-        "test-worker-id",
     )
 
-    ack = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
     message = QueueMessage(
         payload=JobMessageDTO(
             manifestObjectKey="jobs/42/job-1/manifest.json",
@@ -83,31 +96,26 @@ def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_s
     consumer.handle(message, ack)
 
     manifest_loader.load.assert_called_once_with("jobs/42/job-1/manifest.json")
-    input_artifact_preparer.prepare.assert_called_once_with(
-        42,
-        "job-1",
-        manifest.inputs,
-    )
+    job_workspace_factory.create.assert_called_once_with(manifest)
+
+    input_artifact_preparer.prepare.assert_called_once_with(workspace)
+
     job_execution_context_factory.create.assert_called_once_with(
-        manifest,
-        prepared_job_inputs,
+        workspace=workspace,
+        prepared_job_inputs=prepared_job_inputs,
     )
+
     job_handler_loader.load.assert_called_once_with()
 
-    validation_handler.validate_or_handle_failure.assert_called_once_with(
+    validation_handler.validate.assert_called_once_with(
         handler=job_handler,
         context=context,
-        manifest=manifest,
-        submitted_ack=ack,
     )
 
     job_handler.validate.assert_not_called()
 
     status_publisher.publish_in_progress.assert_called_once_with(
-        42,
-        "job-1",
-        "SOLVING_SLAE",
-        "test-worker-id",
+        workspace,
         0,
         "Start job execution",
     )
@@ -116,30 +124,27 @@ def test_job_consumer_loads_manifest_prepares_context_delegates_validation_and_s
     supervised_execution_request = execution_supervisor.start.call_args.args[0]
 
     assert supervised_execution_request.context is context
-    assert supervised_execution_request.worker_id == "test-worker-id"
-    assert (
-        supervised_execution_request.manifest_object_key
-        == "jobs/42/job-1/manifest.json"
+
+    execution_registry.attach_context.assert_called_once_with(
+        job_id="job-1",
+        context=context,
     )
-    assert supervised_execution_request.manifest is manifest
-    assert supervised_execution_request.submitted_ack is ack
 
-    execution_registry.add.assert_called_once_with(execution_record)
-
-    ack.ack.assert_not_called()
-    ack.nack.assert_not_called()
+    ack_mock.ack.assert_not_called()
+    ack_mock.nack.assert_not_called()
 
 
 def test_job_consumer_rejects_null_manifest_loader() -> None:
     with pytest.raises(ValueError, match="manifest_loader cannot be null"):
         JobConsumer(
             None,
-            None,
             MagicMock(),
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "test-worker-id",
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
         )
 
 
@@ -148,11 +153,12 @@ def test_job_consumer_rejects_null_validation_handler() -> None:
         JobConsumer(
             MagicMock(),
             MagicMock(),
+            MagicMock(),
+            MagicMock(),
             None,
             MagicMock(),
             MagicMock(),
             MagicMock(),
-            "test-worker-id",
         )
 
 
@@ -163,9 +169,10 @@ def test_job_consumer_rejects_null_execution_registry() -> None:
             MagicMock(),
             MagicMock(),
             MagicMock(),
+            MagicMock(),
+            MagicMock(),
             None,
             MagicMock(),
-            "test-worker-id",
         )
 
 
@@ -177,8 +184,9 @@ def test_job_consumer_rejects_null_status_publisher() -> None:
             MagicMock(),
             MagicMock(),
             MagicMock(),
+            MagicMock(),
+            MagicMock(),
             None,
-            "test-worker-id",
         )
 
 
@@ -192,12 +200,22 @@ def test_job_consumer_delegates_validation_and_continues_happy_path() -> None:
     manifest_loader = MagicMock()
     manifest_loader.load.return_value = manifest
 
+    job_workspace_factory = MagicMock()
+    workspace = _workspace(manifest)
+    job_workspace_factory.create.return_value = workspace
+
+    job_state_transition_coordinator = JobStateTransitionCoordinator()
+
     prepared_job_inputs = MagicMock()
 
     input_artifact_preparer = MagicMock()
     input_artifact_preparer.prepare.return_value = prepared_job_inputs
 
     context = MagicMock()
+    context.user_id = 42
+    context.job_id = "job-1"
+    context.job_type = "SOLVING_SLAE"
+    context.workspace = workspace
 
     job_execution_context_factory = MagicMock()
     job_execution_context_factory.create.return_value = context
@@ -208,7 +226,7 @@ def test_job_consumer_delegates_validation_and_continues_happy_path() -> None:
     job_handler_loader.load.return_value = job_handler
 
     validation_handler = MagicMock()
-    validation_handler.validate_or_handle_failure.return_value = True
+    validation_handler.validate.return_value = True
 
     execution_record = MagicMock()
 
@@ -217,28 +235,27 @@ def test_job_consumer_delegates_validation_and_continues_happy_path() -> None:
 
     execution_registry = MagicMock()
     status_publisher = MagicMock()
-    workspace_cleaner = MagicMock()
 
     preparation_handler = JobPreparationHandler(
+        execution_registry,
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
-        status_publisher,
-        workspace_cleaner,
-        "test-worker-id",
     )
 
     consumer = JobConsumer(
         manifest_loader,
+        job_workspace_factory,
+        job_state_transition_coordinator,
         preparation_handler,
         validation_handler,
         execution_supervisor,
         execution_registry,
         status_publisher,
-        "test-worker-id",
     )
 
-    ack = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
     message = QueueMessage(
         payload=JobMessageDTO(
             manifestObjectKey="jobs/42/job-1/manifest.json",
@@ -249,33 +266,26 @@ def test_job_consumer_delegates_validation_and_continues_happy_path() -> None:
 
     manifest_loader.load.assert_called_once_with("jobs/42/job-1/manifest.json")
 
-    input_artifact_preparer.prepare.assert_called_once_with(
-        42,
-        "job-1",
-        manifest.inputs,
-    )
+    job_workspace_factory.create.assert_called_once_with(manifest)
+
+    input_artifact_preparer.prepare.assert_called_once_with(workspace)
 
     job_execution_context_factory.create.assert_called_once_with(
-        manifest,
-        prepared_job_inputs,
+        workspace=workspace,
+        prepared_job_inputs=prepared_job_inputs,
     )
 
     job_handler_loader.load.assert_called_once_with()
 
-    validation_handler.validate_or_handle_failure.assert_called_once_with(
+    validation_handler.validate.assert_called_once_with(
         handler=job_handler,
         context=context,
-        manifest=manifest,
-        submitted_ack=ack,
     )
 
     job_handler.validate.assert_not_called()
 
     status_publisher.publish_in_progress.assert_called_once_with(
-        42,
-        "job-1",
-        "SOLVING_SLAE",
-        "test-worker-id",
+        workspace,
         0,
         "Start job execution",
     )
@@ -285,18 +295,15 @@ def test_job_consumer_delegates_validation_and_continues_happy_path() -> None:
     supervised_execution_request = execution_supervisor.start.call_args.args[0]
 
     assert supervised_execution_request.context is context
-    assert supervised_execution_request.worker_id == "test-worker-id"
-    assert (
-        supervised_execution_request.manifest_object_key
-        == "jobs/42/job-1/manifest.json"
+
+    execution_registry.attach_context.assert_called_once_with(
+        job_id="job-1",
+        context=context,
     )
-    assert supervised_execution_request.manifest is manifest
-    assert supervised_execution_request.submitted_ack is ack
+    execution_registry.replace.assert_not_called()
 
-    execution_registry.add.assert_called_once_with(execution_record)
-
-    ack.ack.assert_not_called()
-    ack.nack.assert_not_called()
+    ack_mock.ack.assert_not_called()
+    ack_mock.nack.assert_not_called()
 
 
 def test_job_consumer_returns_early_when_validation_handler_handles_failure() -> None:
@@ -308,7 +315,9 @@ def test_job_consumer_returns_early_when_validation_handler_handles_failure() ->
 
     manifest_loader = MagicMock()
     manifest_loader.load.return_value = manifest
+    job_workspace_factory = MagicMock()
 
+    job_state_transition_coordinator = JobStateTransitionCoordinator()
     input_artifact_preparer = MagicMock()
     job_execution_context_factory = MagicMock()
 
@@ -318,33 +327,41 @@ def test_job_consumer_returns_early_when_validation_handler_handles_failure() ->
     job_handler_loader.load.return_value = job_handler
 
     validation_handler = MagicMock()
-    validation_handler.validate_or_handle_failure.return_value = False
+    validation_handler.validate.side_effect = ValidationFailed()
 
     execution_supervisor = MagicMock()
     execution_registry = MagicMock()
     status_publisher = MagicMock()
-    workspace_cleaner = MagicMock()
+
+    workspace = _workspace(manifest)
+    job_workspace_factory.create.return_value = workspace
+
+    prepared_job_inputs = MagicMock()
+    input_artifact_preparer.prepare.return_value = prepared_job_inputs
+
+    context = MagicMock()
+    job_execution_context_factory.create.return_value = context
 
     preparation_handler = JobPreparationHandler(
+        execution_registry,
         input_artifact_preparer,
         job_execution_context_factory,
         job_handler_loader,
-        status_publisher,
-        workspace_cleaner,
-        "test-worker-id",
     )
 
     consumer = JobConsumer(
         manifest_loader,
+        job_workspace_factory,
+        job_state_transition_coordinator,
         preparation_handler,
         validation_handler,
         execution_supervisor,
         execution_registry,
         status_publisher,
-        "test-worker-id",
     )
 
-    ack = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
     message = QueueMessage(
         payload=JobMessageDTO(
             manifestObjectKey="jobs/42/job-1/manifest.json",
@@ -353,21 +370,19 @@ def test_job_consumer_returns_early_when_validation_handler_handles_failure() ->
 
     consumer.handle(message, ack)
 
-    validation_handler.validate_or_handle_failure.assert_called_once_with(
+    validation_handler.validate.assert_called_once_with(
         handler=job_handler,
         context=job_execution_context_factory.create.return_value,
-        manifest=manifest,
-        submitted_ack=ack,
     )
 
     status_publisher.publish_in_progress.assert_not_called()
     execution_supervisor.start.assert_not_called()
-    execution_registry.add.assert_not_called()
+    execution_registry.replace.assert_not_called()
 
     job_handler.validate.assert_not_called()
 
-    ack.ack.assert_not_called()
-    ack.nack.assert_not_called()
+    ack_mock.ack.assert_called_once()
+    ack_mock.nack.assert_not_called()
 
 
 def test_job_consumer_returns_early_when_job_preparation_handler_handles_failure() -> (
@@ -381,8 +396,14 @@ def test_job_consumer_returns_early_when_job_preparation_handler_handles_failure
     manifest_loader = MagicMock()
     manifest_loader.load.return_value = manifest
 
+    job_workspace_factory = MagicMock()
+    workspace = _workspace(manifest)
+    job_workspace_factory.create.return_value = workspace
+
+    job_state_transition_coordinator = JobStateTransitionCoordinator()
+
     preparation_handler = MagicMock(spec=JobPreparationHandler)
-    preparation_handler.prepare_or_handle_failure.return_value = None
+    preparation_handler.prepare.side_effect = RuntimeError()
 
     validation_handler = MagicMock()
     execution_supervisor = MagicMock()
@@ -391,15 +412,17 @@ def test_job_consumer_returns_early_when_job_preparation_handler_handles_failure
 
     consumer = JobConsumer(
         manifest_loader,
+        job_workspace_factory,
+        job_state_transition_coordinator,
         preparation_handler,
         validation_handler,
         execution_supervisor,
         execution_registry,
         status_publisher,
-        "test-worker-id",
     )
 
-    ack = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
     message = QueueMessage(
         payload=JobMessageDTO(
             manifestObjectKey="jobs/42/job-1/manifest.json",
@@ -410,23 +433,26 @@ def test_job_consumer_returns_early_when_job_preparation_handler_handles_failure
 
     manifest_loader.load.assert_called_once_with("jobs/42/job-1/manifest.json")
 
-    preparation_handler.prepare_or_handle_failure.assert_called_once_with(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=ack,
+    manifest_loader.load.assert_called_once_with("jobs/42/job-1/manifest.json")
+    job_workspace_factory.create.assert_called_once_with(manifest)
+
+    preparation_handler.prepare.assert_called_once_with(
+        workspace=workspace,
     )
 
-    validation_handler.validate_or_handle_failure.assert_not_called()
+    validation_handler.validate.assert_not_called()
 
     status_publisher.publish_in_progress.assert_not_called()
     execution_supervisor.start.assert_not_called()
-    execution_registry.add.assert_not_called()
+    execution_registry.add.assert_called_once()
 
-    ack.ack.assert_not_called()
-    ack.nack.assert_not_called()
+    ack_mock.ack.assert_called_once()
+    ack_mock.nack.assert_not_called()
 
 
-def test_job_consumer_registers_execution_before_publishing_in_progress() -> None:
+def test_job_consumer_registers_local_job_then_replaces_with_supervised_execution_before_publishing_in_progress() -> (
+    None
+):
     events: list[str] = []
 
     manifest = MagicMock()
@@ -437,17 +463,26 @@ def test_job_consumer_registers_execution_before_publishing_in_progress() -> Non
     manifest_loader = MagicMock()
     manifest_loader.load.return_value = manifest
 
+    job_workspace_factory = MagicMock()
+    workspace = _workspace(manifest)
+    job_workspace_factory.create.return_value = workspace
+
+    job_state_transition_coordinator = JobStateTransitionCoordinator()
     context = MagicMock()
+    context.user_id = 42
+    context.job_id = "job-1"
+    context.job_type = "SOLVING_SLAE"
+    context.workspace = workspace
     job_handler = MagicMock()
 
     preparation_handler = MagicMock(spec=JobPreparationHandler)
-    preparation_handler.prepare_or_handle_failure.return_value = PreparedJob(
+    preparation_handler.prepare.return_value = PreparedJob(
         context=context,
         handler=job_handler,
     )
 
     validation_handler = MagicMock()
-    validation_handler.validate_or_handle_failure.return_value = True
+    validation_handler.validate.return_value = True
 
     execution_record = MagicMock()
 
@@ -461,11 +496,17 @@ def test_job_consumer_registers_execution_before_publishing_in_progress() -> Non
 
     execution_registry = MagicMock()
 
-    def register_execution(record):
-        assert record is execution_record
-        events.append("register")
+    def add_initial_record(record):
+        assert record.workspace is workspace
+        assert record.job_id == "job-1"
+        assert record.user_id == 42
+        assert record.job_type == "SOLVING_SLAE"
+        assert record.worker_id == "test-worker-id"
+        assert record.context is None
+        assert record.process_record is None
+        events.append("add_initial_record")
 
-    execution_registry.add.side_effect = register_execution
+    execution_registry.add.side_effect = add_initial_record
 
     status_publisher = MagicMock()
 
@@ -476,15 +517,17 @@ def test_job_consumer_registers_execution_before_publishing_in_progress() -> Non
 
     consumer = JobConsumer(
         manifest_loader,
+        job_workspace_factory,
+        job_state_transition_coordinator,
         preparation_handler,
         validation_handler,
         execution_supervisor,
         execution_registry,
         status_publisher,
-        "test-worker-id",
     )
 
-    ack = MagicMock()
+    ack_mock = MagicMock(spec=Acknowledger)
+    ack = cast(Acknowledger, cast(object, ack_mock))
     message = QueueMessage(
         payload=JobMessageDTO(
             manifestObjectKey="jobs/42/job-1/manifest.json",
@@ -494,35 +537,38 @@ def test_job_consumer_registers_execution_before_publishing_in_progress() -> Non
     consumer.handle(message, ack)
 
     assert events == [
+        "add_initial_record",
         "start",
-        "register",
         "publish_in_progress",
     ]
 
-    preparation_handler.prepare_or_handle_failure.assert_called_once_with(
-        manifest_object_key="jobs/42/job-1/manifest.json",
-        manifest=manifest,
-        submitted_ack=ack,
+    preparation_handler.prepare.assert_called_once_with(
+        workspace=workspace,
     )
 
-    validation_handler.validate_or_handle_failure.assert_called_once_with(
+    validation_handler.validate.assert_called_once_with(
         handler=job_handler,
         context=context,
-        manifest=manifest,
-        submitted_ack=ack,
     )
 
+    execution_supervisor.start.assert_called_once()
+    execution_registry.add.assert_called_once()
+
     status_publisher.publish_in_progress.assert_called_once_with(
-        42,
-        "job-1",
-        "SOLVING_SLAE",
-        "test-worker-id",
+        workspace,
         0,
         "Start job execution",
     )
 
-    execution_supervisor.start.assert_called_once()
-    execution_registry.add.assert_called_once_with(execution_record)
+    ack_mock.ack.assert_not_called()
+    ack_mock.nack.assert_not_called()
 
-    ack.ack.assert_not_called()
-    ack.nack.assert_not_called()
+
+def _workspace(manifest: MagicMock) -> MagicMock:
+    workspace = MagicMock(name="workspace")
+    workspace.manifest = manifest
+    workspace.user_id = manifest.user_id
+    workspace.job_id = manifest.job_id
+    workspace.job_type = manifest.job_type
+    workspace.worker_id = "test-worker-id"
+    return workspace

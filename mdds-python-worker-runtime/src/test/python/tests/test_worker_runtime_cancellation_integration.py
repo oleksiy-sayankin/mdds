@@ -326,14 +326,6 @@ def test_worker_runtime_publishes_cancelled_when_running_job_is_cancelled(
                     )
                     is None
                 )
-                assert (
-                    _index_of_status(
-                        statuses,
-                        WorkerJobStatus.VALIDATION_FAILED.value,
-                        job_id,
-                    )
-                    is None
-                )
 
                 assert not _object_exists(
                     s3_client=s3_client,
@@ -525,14 +517,6 @@ def test_worker_runtime_does_not_publish_duplicate_terminal_status_for_duplicate
                     )
                     is None
                 )
-                assert (
-                    _index_of_status(
-                        statuses,
-                        WorkerJobStatus.VALIDATION_FAILED.value,
-                        job_id,
-                    )
-                    is None
-                )
 
                 assert not _object_exists(
                     s3_client=s3_client,
@@ -716,14 +700,6 @@ def test_worker_runtime_ignores_cancellation_message_after_done(
                     _index_of_status(
                         statuses_after_stale_cancel,
                         WorkerJobStatus.ERROR.value,
-                        job_id,
-                    )
-                    is None
-                )
-                assert (
-                    _index_of_status(
-                        statuses_after_stale_cancel,
-                        WorkerJobStatus.VALIDATION_FAILED.value,
                         job_id,
                     )
                     is None
@@ -917,14 +893,6 @@ def test_worker_runtime_accepts_cancel_published_immediately_after_in_progress(
                     _index_of_status(
                         statuses,
                         WorkerJobStatus.ERROR.value,
-                        job_id,
-                    )
-                    is None
-                )
-                assert (
-                    _index_of_status(
-                        statuses,
-                        WorkerJobStatus.VALIDATION_FAILED.value,
                         job_id,
                     )
                     is None
@@ -1298,7 +1266,6 @@ def _terminal_statuses_for_job(
         WorkerJobStatus.DONE.value,
         WorkerJobStatus.ERROR.value,
         WorkerJobStatus.CANCELLED.value,
-        WorkerJobStatus.VALIDATION_FAILED.value,
     }
 
     return [

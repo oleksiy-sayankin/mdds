@@ -9,13 +9,20 @@ import logging
 
 from mdds_worker_runtime.dto.messages import JobStatusUpdateDTO
 from mdds_worker_runtime.execution.models import WorkerJobStatus
+from mdds_worker_runtime.execution.workspace import JobWorkspace
 from mdds_worker_runtime.queue.queue_client import QueueClient, QueueMessage
 
 logger = logging.getLogger(__name__)
 
 
 class StatusPublisher:
-    """Publishes worker status update messages to the worker status queue."""
+    """Publishes worker status update messages to the worker status queue.
+
+    This class is only a transport-level helper. It does not decide lifecycle
+    transitions, terminal ownership, message acknowledgement, or retry policy.
+    Those decisions belong to the Worker Runtime job state transition
+    coordinator and its callers.
+    """
 
     def __init__(
         self,
@@ -32,20 +39,40 @@ class StatusPublisher:
         self._queue_client = queue_client
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
+    def publish_inputs_prepared(
+        self,
+        workspace: JobWorkspace,
+        message: str = "Worker prepared job inputs.",
+    ) -> None:
+        """Publish public INPUTS_PREPARED status for a prepared job."""
+        self._publish(
+            workspace=workspace,
+            status=WorkerJobStatus.INPUTS_PREPARED,
+            progress=0,
+            message=message,
+        )
+
+    def publish_validated(
+        self,
+        workspace: JobWorkspace,
+        message: str = "Worker-side semantic validation completed.",
+    ) -> None:
+        """Publish public VALIDATED status after semantic validation succeeds."""
+        self._publish(
+            workspace=workspace,
+            status=WorkerJobStatus.VALIDATED,
+            progress=0,
+            message=message,
+        )
+
     def publish_in_progress(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         progress: int,
         message: str,
     ) -> None:
         self._publish(
-            user_id=user_id,
-            job_id=job_id,
-            job_type=job_type,
-            worker_id=worker_id,
+            workspace=workspace,
             status=WorkerJobStatus.IN_PROGRESS,
             progress=progress,
             message=message,
@@ -53,17 +80,11 @@ class StatusPublisher:
 
     def publish_done(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         message: str = "Job completed successfully.",
     ) -> None:
         self._publish(
-            user_id=user_id,
-            job_id=job_id,
-            job_type=job_type,
-            worker_id=worker_id,
+            workspace=workspace,
             status=WorkerJobStatus.DONE,
             progress=100,
             message=message,
@@ -71,17 +92,11 @@ class StatusPublisher:
 
     def publish_error(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         message: str,
     ) -> None:
         self._publish(
-            user_id=user_id,
-            job_id=job_id,
-            job_type=job_type,
-            worker_id=worker_id,
+            workspace=workspace,
             status=WorkerJobStatus.ERROR,
             progress=100,
             message=message,
@@ -89,60 +104,31 @@ class StatusPublisher:
 
     def publish_cancelled(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         message: str,
     ) -> None:
         self._publish(
-            user_id=user_id,
-            job_id=job_id,
-            job_type=job_type,
-            worker_id=worker_id,
+            workspace=workspace,
             status=WorkerJobStatus.CANCELLED,
             progress=100,
             message=message,
         )
 
-    def publish_validation_failed(
-        self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
-        message: str,
-    ) -> None:
-        self._publish(
-            user_id=user_id,
-            job_id=job_id,
-            job_type=job_type,
-            worker_id=worker_id,
-            status=WorkerJobStatus.VALIDATION_FAILED,
-            progress=0,
-            message=message,
-        )
-
     def _publish(
         self,
-        user_id: int,
-        job_id: str,
-        job_type: str,
-        worker_id: str,
+        workspace: JobWorkspace,
         status: WorkerJobStatus,
         progress: int,
         message: str,
     ) -> None:
         _validate_required_fields(
-            job_id=job_id,
-            job_type=job_type,
-            worker_id=worker_id,
+            workspace=workspace,
             progress=progress,
             message=message,
         )
         status_update_dto = JobStatusUpdateDTO(
-            jobId=job_id.strip(),
-            workerId=worker_id.strip(),
+            jobId=workspace.job_id.strip(),
+            workerId=workspace.worker_id.strip(),
             status=status.value,
             progress=progress,
             message=message.strip(),
@@ -159,9 +145,9 @@ class StatusPublisher:
             extra={
                 "component": "status_publisher",
                 "event": "status_update_publishing_completed",
-                "jobId": job_id,
-                "userId": user_id,
-                "jobType": job_type,
+                "jobId": workspace.job_id,
+                "userId": workspace.user_id,
+                "jobType": workspace.job_type,
                 "status": status.value,
                 "progress": progress,
                 "statusQueueName": self._worker_status_queue_name,
@@ -177,12 +163,13 @@ def _format_event_time(event_time: datetime) -> str:
 
 
 def _validate_required_fields(
-    job_id: str,
-    job_type: str,
-    worker_id: str,
+    workspace: JobWorkspace,
     progress: int,
     message: str,
 ) -> None:
+    job_id = workspace.job_id
+    job_type = workspace.job_type
+    worker_id = workspace.worker_id
     if job_id is None or job_id.strip() == "":
         raise ValueError("job_id cannot be null or blank.")
     if job_type is None or job_type.strip() == "":

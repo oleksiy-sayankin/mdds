@@ -1,8 +1,6 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 
 import boto3
 import pytest
@@ -13,6 +11,7 @@ from mdds_worker_runtime.domain.artifact_format import ArtifactFormat
 from mdds_worker_runtime.domain.manifest import ArtifactRef, JobManifest
 from mdds_worker_runtime.execution.artifacts import InputArtifactPreparer
 from mdds_worker_runtime.execution.context import JobExecutionContextFactory
+from mdds_worker_runtime.execution.workspace import JobWorkspaceFactory
 from mdds_worker_runtime.storage.s3_client import S3Storage
 
 TEST_RESOURCES_DIR = Path(__file__).resolve().parents[2] / "resources"
@@ -101,11 +100,13 @@ def test_prepare_input_artifacts_downloads_files_from_s3_to_local_job_workspace(
     )
 
     storage = S3Storage(s3_client, bucket)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
 
-    prepared = preparer.prepare(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=user_id,
         job_id=job_id,
+        job_type="solving_slae",
         inputs={
             "matrix": ArtifactRef(
                 object_key=matrix_key,
@@ -116,15 +117,20 @@ def test_prepare_input_artifacts_downloads_files_from_s3_to_local_job_workspace(
                 format=ArtifactFormat.CSV,
             ),
         },
+        params={},
+        outputs={},
     )
+
+    workspace = JobWorkspaceFactory(
+        jobs_root=tmp_path,
+        worker_id="test-worker",
+    ).create(manifest)
+
+    prepared = preparer.prepare(workspace)
 
     expected_input_dir = tmp_path / str(user_id) / job_id / "in"
     expected_matrix_path = expected_input_dir / "matrix.csv"
     expected_rhs_path = expected_input_dir / "rhs.csv"
-
-    assert prepared.user_id == user_id
-    assert prepared.job_id == job_id
-    assert prepared.input_dir == expected_input_dir
 
     assert prepared.inputs["matrix"].object_key == matrix_key
     assert prepared.inputs["matrix"].local_path == expected_matrix_path
@@ -171,11 +177,13 @@ def test_prepared_inputs_are_available_through_job_execution_context_api(
     )
 
     storage = S3Storage(s3_client, bucket)
-    preparer = InputArtifactPreparer(storage, tmp_path)
+    preparer = InputArtifactPreparer(storage)
 
-    prepared = preparer.prepare(
+    manifest = JobManifest(
+        manifest_version=1,
         user_id=user_id,
         job_id=job_id,
+        job_type="solving_slae",
         inputs={
             "matrix": ArtifactRef(
                 object_key=matrix_key,
@@ -186,41 +194,26 @@ def test_prepared_inputs_are_available_through_job_execution_context_api(
                 format=ArtifactFormat.CSV,
             ),
         },
+        params={
+            "solvingMethod": "numpy_exact_solver",
+        },
+        outputs={
+            "solution": ArtifactRef(
+                object_key=solution_key,
+                format=ArtifactFormat.CSV,
+            ),
+        },
     )
 
-    manifest = cast(
-        JobManifest,
-        cast(
-            object,
-            SimpleNamespace(
-                user_id=user_id,
-                job_id=job_id,
-                job_type="solving_slae",
-                inputs={
-                    "matrix": ArtifactRef(
-                        object_key=matrix_key,
-                        format=ArtifactFormat.CSV,
-                    ),
-                    "rhs": ArtifactRef(
-                        object_key=rhs_key,
-                        format=ArtifactFormat.CSV,
-                    ),
-                },
-                params={
-                    "solvingMethod": "numpy_exact_solver",
-                },
-                outputs={
-                    "solution": ArtifactRef(
-                        object_key=solution_key,
-                        format=ArtifactFormat.CSV,
-                    ),
-                },
-            ),
-        ),
-    )
+    workspace = JobWorkspaceFactory(
+        jobs_root=tmp_path,
+        worker_id="test-worker",
+    ).create(manifest)
+
+    prepared = preparer.prepare(workspace)
 
     context = JobExecutionContextFactory(tmp_path).create(
-        manifest=manifest,
+        workspace=workspace,
         prepared_job_inputs=prepared,
     )
 
