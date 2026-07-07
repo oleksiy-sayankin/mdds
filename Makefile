@@ -168,6 +168,23 @@ push_python_base_docker_image:
 
 
 #
+# Build Docker image for Python Worker Runtime. Requires an existing Python base image and a built Worker Runtime package.
+#
+build_python_worker_runtime_docker_image:
+	$(call log_info,"Building Python Worker Runtime Docker image...")
+	docker buildx build -f deployment/python-worker-runtime/Dockerfile --progress=plain --tag $(USER_NAME)/python-worker-runtime:$(PROJECT_VERSION) .
+	$(call log_done,"Building Python Worker Runtime Docker image completed.")
+
+
+#
+# Push Docker image for Python Worker Runtime
+#
+push_python_worker_runtime_docker_image:
+	$(call log_info,"Pushing Docker image for Python Worker Runtime...")
+	docker push $(USER_NAME)/python-worker-runtime:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Docker image for Python Worker Runtime.")
+
+#
 # Build Developer container Docker image
 #
 build_dev_container_docker_image:
@@ -415,20 +432,20 @@ build_and_push_observability_images: \
 #
 # Build main images. Here we do not build base Java and Python docker images since they are rarely changed.
 #
-build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image
+build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_worker_runtime build_python_worker_runtime_docker_image
 
 
 #
 # Build main Docker images without formatting or auto-fixing sources.
 # Intended for CI and reproducible builds.
 #
-build_main_images_ci: build_jars_ci build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image
+build_main_images_ci: build_jars_ci build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_worker_runtime build_python_worker_runtime_docker_image
 
 
 #
 # Push main images.
 #
-push_main_images: push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image
+push_main_images: push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image push_python_worker_runtime_docker_image
 
 #
 # Build and push main images.
