@@ -21,6 +21,8 @@ MDDS_PYTHON_WORKER_RUNTIME := mdds-python-worker-runtime
 PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_PYTHON_WORKER_RUNTIME)
 PYTHON_MAIN := $(PYTHON_ROOT)/src/main/python
 PYTHON_TEST := $(PYTHON_ROOT)/src/test/python
+PYTHON_WORKER_RUNTIME_PACKAGE_DIR := $(MDDS_PYTHON_WORKER_RUNTIME)
+PYTHON_WORKER_RUNTIME_DIST_DIR := $(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)/target/dist
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT := src
 JS_ROOT := src
@@ -714,6 +716,24 @@ install_js_dependencies: \
 		$(ROOT_NODE_MODULES_LOCK) \
 		$(WEB_CLIENT_NODE_MODULES_LOCK)
 
+#
+# Build Python Worker Runtime wheel package
+#
+package_python_worker_runtime:
+	$(call log_info,"Building Python Worker Runtime wheel package...")
+	@rm -rf \
+	  "$(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)/build" \
+	  "$(PYTHON_WORKER_RUNTIME_DIST_DIR)" \
+	  "$(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)"/src/main/python/*.egg-info
+	@cd "$(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)" && \
+	  python -m build \
+	    --wheel \
+	    --outdir "target/dist"
+	@test -n "$$(find "$(PYTHON_WORKER_RUNTIME_DIST_DIR)" -maxdepth 1 -name '*.whl' -print -quit)"
+	$(call log_done,"Python Worker Runtime wheel package was built successfully.")
+	$(call log_info,"Built artifacts:")
+	@ls -lh "$(PYTHON_WORKER_RUNTIME_DIST_DIR)"/*.whl
+
 
 #
 # Build jars without formatting or auto-fixing sources.
@@ -845,6 +865,7 @@ check_license:
 		-not -path "./*target/*" \
 		-not -path "*/$(PYTHON_GENERATED_SOURCES)/*" \
 		-not -path "*$(WEB_APP_DIR)/*" \
+		-not -path "*.egg-info/*" \
 		-not -name "*.csv" \
 		-not -name "*.log" \
 		-not -name "*.ico" \
