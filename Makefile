@@ -5,6 +5,8 @@ PYTHON_ENV_HOME := ~/.venvs
 PYTHON_BIN ?= python3.12
 PYTHON_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
 NODE_MODULES := node_modules
+BUILD := build
+TARGET := target
 ROOT_PACKAGE_JSON := package.json
 ROOT_PACKAGE_LOCK := package-lock.json
 ROOT_NODE_MODULES_LOCK := $(NODE_MODULES)/.package-lock.json
@@ -17,12 +19,21 @@ PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
 PROJECT_VERSION := 0.1.0
-MDDS_PYTHON_WORKER_RUNTIME := mdds-python-worker-runtime
-PYTHON_ROOT := $(PROJECT_ROOT)/$(MDDS_PYTHON_WORKER_RUNTIME)
-PYTHON_MAIN := $(PYTHON_ROOT)/src/main/python
-PYTHON_TEST := $(PYTHON_ROOT)/src/test/python
-PYTHON_WORKER_RUNTIME_PACKAGE_DIR := $(MDDS_PYTHON_WORKER_RUNTIME)
-PYTHON_WORKER_RUNTIME_DIST_DIR := $(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)/target/dist
+
+MDDS_WORKER_RUNTIME := mdds-python-worker-runtime
+WORKER_RUNTIME_ROOT := $(PROJECT_ROOT)/$(MDDS_WORKER_RUNTIME)
+WORKER_RUNTIME_MAIN := $(WORKER_RUNTIME_ROOT)/src/main/python
+WORKER_RUNTIME_TEST := $(WORKER_RUNTIME_ROOT)/src/test/python
+WORKER_RUNTIME_PACKAGE := $(MDDS_WORKER_RUNTIME)
+WORKER_RUNTIME_DIST := $(WORKER_RUNTIME_PACKAGE)/target/dist
+
+MDDS_WORKER_SLAE := mdds-python-worker-solving-slae
+WORKER_SLAE_ROOT := $(PROJECT_ROOT)/mdds-worker-examples/$(MDDS_WORKER_SLAE)
+WORKER_SLAE_MAIN := $(WORKER_SLAE_ROOT)/src/main/python
+WORKER_SLAE_TEST := $(WORKER_SLAE_ROOT)/src/test/python
+WORKER_SLAE_PACKAGE := $(WORKER_SLAE_ROOT)
+WORKER_SLAE_DIST := $(WORKER_SLAE_ROOT)/target/dist
+
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT := src
 JS_ROOT := src
@@ -470,6 +481,21 @@ build_and_copy_web_client_ci: install_js_dependencies
 	cd $(MDDS_WEB_CLIENT) && npm run build
 	$(call log_done,"Building web-client for CI completed.")
 
+#
+# Reformat all Python code
+#
+reformat_python: reformat_worker_runtime reformat_worker_slae
+
+#
+# Check code style for all Python code
+#
+check_python_code_style: check_worker_runtime_code_style check_worker_slae_code_style
+
+#
+# Test all Python code
+#
+test_python_coverage: test_worker_runtime_coverage test_worker_slae_coverage
+
 
 #
 # Reformat web client files
@@ -481,14 +507,25 @@ reformat_ts: install_js_dependencies
 	$(call log_done,"Reformatting web client sources completed.")
 
 #
-# Check python code style
+# Check worker runtime code style
 #
-check_python_code_style:
-	$(call log_info,"Checking python code style...")
-	pycodestyle $(PYTHON_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
-	ruff check $(PYTHON_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(PYTHON_MAIN):$(PYTHON_TEST):$$PYTHONPATH pylint $(PYTHON_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
-	$(call log_done,"Checking python code style completed.")
+check_worker_runtime_code_style:
+	$(call log_info,"Checking worker runtime code style...")
+	pycodestyle $(WORKER_RUNTIME_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	ruff check $(WORKER_RUNTIME_ROOT) --fix --force-exclude --respect-gitignore
+	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	$(call log_done,"Checking worker runtime code style completed.")
+
+
+#
+# Check worker slae code style
+#
+check_worker_slae_code_style:
+	$(call log_info,"Checking worker slae style...")
+	pycodestyle $(WORKER_SLAE_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	ruff check $(WORKER_SLAE_ROOT) --fix --force-exclude --respect-gitignore
+	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	$(call log_done,"Checking worker slae style completed.")
 
 #
 # Check JavaScript code style
@@ -504,12 +541,21 @@ check_js_code_style: install_js_dependencies
 	$(call log_done,"Checking JavaScript code style completed.")
 
 #
-# Reformat Python code
+# Reformat worker runtime code
 #
-reformat_python:
-	$(call log_info,"Reformating python sources...")
-	black $(PYTHON_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(PYTHON_GENERATED_SOURCES))/' --verbose
-	$(call log_done,"Reformating python sources completed.")
+reformat_worker_runtime:
+	$(call log_info,"Reformating worker runtime sources...")
+	black $(WORKER_RUNTIME_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
+	$(call log_done,"Reformating worker runtime sources completed.")
+
+
+#
+# Reformat worker slae code
+#
+reformat_worker_slae:
+	$(call log_info,"Reformating worker slae sources...")
+	black $(WORKER_SLAE_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
+	$(call log_done,"Reformating worker slae sources completed.")
 
 #
 # Check bash code style
@@ -532,23 +578,38 @@ reformat_bash:
 #
 test_python:
 	$(call log_info,"Running Python unit tests...")
-	PYTHONPATH=$(PYTHON_MAIN):$(PYTHON_TEST):$$PYTHONPATH pytest -v $(PYTHON_TEST)
+	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pytest -v $(WORKER_RUNTIME_TEST)
 	$(call log_done,"Python tests completed.")
 
 
 #
-# Run Python tests with coverage
+# Run worker runtime tests with coverage
 #
-test_python_coverage:
-	$(call log_info,"Running Python tests with coverage...")
-	cd $(MDDS_PYTHON_WORKER_RUNTIME) && \
+test_worker_runtime_coverage:
+	$(call log_info,"Running worker runtime tests with coverage...")
+	cd $(WORKER_RUNTIME_ROOT) && \
 	  PYTHONPATH=src/main/python:src/test/python:$$PYTHONPATH \
 	  python -m pytest src/test/python \
 	    --cov=src/main/python/mdds_worker_runtime \
 	    --cov-branch \
 	    --cov-report=term-missing \
 	    --cov-report=xml:target/python-coverage.xml
-	$(call log_done,"Python tests with coverage completed.")
+	$(call log_done,"Worker runtime tests with coverage completed.")
+
+
+#
+# Run SLAE Python worker tests with coverage
+#
+test_worker_slae_coverage:
+	$(call log_info,"Running SLAE Python worker tests with coverage...")
+	cd $(WORKER_SLAE_ROOT) && \
+	  PYTHONPATH=$(abspath $(WORKER_RUNTIME_ROOT)/src/main/python):src/main/python:src/test/python:$$PYTHONPATH \
+	  python -m pytest src/test/python \
+	    --cov=mdds_python_worker_solving_slae \
+	    --cov-branch \
+	    --cov-report=term-missing \
+	    --cov-report=xml:target/python-coverage.xml
+	$(call log_done,"SLAE Python worker tests with coverage completed.")
 
 
 test_java_coverage:
@@ -646,7 +707,7 @@ ensure_sonar_token: wait_for_sonarqube
 #
 sonar_scan: ensure_sonar_token
 	$(call log_info,"Running SonarQube analysis...")
-	$(call log_info,"Python coverage report expected at $(MDDS_PYTHON_WORKER_RUNTIME)/target/python-coverage.xml")
+	$(call log_info,"Python coverage report expected at $(MDDS_WORKER_RUNTIME)/target/python-coverage.xml")
 	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
 	mvn clean verify sonar:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
@@ -734,22 +795,48 @@ install_js_dependencies: \
 		$(WEB_CLIENT_NODE_MODULES_LOCK)
 
 #
+# Package all Python workers
+#
+package_python_workers: package_python_worker_runtime package_python_worker_slae
+
+
+#
 # Build Python Worker Runtime wheel package
 #
 package_python_worker_runtime:
 	$(call log_info,"Building Python Worker Runtime wheel package...")
 	@rm -rf \
-	  "$(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)/build" \
-	  "$(PYTHON_WORKER_RUNTIME_DIST_DIR)" \
-	  "$(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)"/src/main/python/*.egg-info
-	@cd "$(PYTHON_WORKER_RUNTIME_PACKAGE_DIR)" && \
+	  "$(WORKER_RUNTIME_PACKAGE)/build" \
+	  "$(WORKER_RUNTIME_DIST)" \
+	  "$(WORKER_RUNTIME_PACKAGE)"/src/main/python/*.egg-info
+	@cd "$(WORKER_RUNTIME_PACKAGE)" && \
 	  python -m build \
 	    --wheel \
 	    --outdir "target/dist"
-	@test -n "$$(find "$(PYTHON_WORKER_RUNTIME_DIST_DIR)" -maxdepth 1 -name '*.whl' -print -quit)"
+	@test -n "$$(find "$(WORKER_RUNTIME_DIST)" -maxdepth 1 -name '*.whl' -print -quit)"
 	$(call log_done,"Python Worker Runtime wheel package was built successfully.")
 	$(call log_info,"Built artifacts:")
-	@ls -lh "$(PYTHON_WORKER_RUNTIME_DIST_DIR)"/*.whl
+	@ls -lh "$(WORKER_RUNTIME_DIST)"/*.whl
+
+
+#
+# Build Python Worker SLAE wheel package
+#
+package_python_worker_slae:
+	$(call log_info,"Building Python Worker SLAE wheel package...")
+	@rm -rf \
+	  "$(WORKER_SLAE_PACKAGE)/build" \
+	  "$(WORKER_SLAE_DIST)" \
+	  "$(WORKER_SLAE_PACKAGE)"/src/main/python/*.egg-info
+	@cd "$(WORKER_SLAE_PACKAGE)" && \
+	  python -m build \
+	    --wheel \
+	    --outdir "target/dist"
+	@test -n "$$(find "$(WORKER_SLAE_DIST)" -maxdepth 1 -name '*.whl' -print -quit)"
+	$(call log_done,"Python Worker SLAE wheel package was built successfully.")
+	$(call log_info,"Built artifacts:")
+	@ls -lh "$(WORKER_SLAE_DIST)"/*.whl
+
 
 
 #

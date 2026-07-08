@@ -22,6 +22,7 @@
     <module>mdds-grpc-client</module>
     <module>mdds-logging</module>
     <module>mdds-python-worker-runtime</module>
+    <module>mdds-worker-examples</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
