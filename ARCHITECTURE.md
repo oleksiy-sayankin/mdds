@@ -27,7 +27,6 @@ Refer to the LICENSE file in the root directory for full license details.
     * [Worker environment variables](#worker-environment-variables)
     * [Job cancellation](#job-cancellation)
     * [Job handler contract](#job-handler-contract)
-      * [Job handler validation method contract](#job-handler-validation-method-contract)
       * [Job handler data access pattern](#job-handler-data-access-pattern)
     * [Local execution registry](#local-execution-registry)
     * [Worker job state transition coordination](#worker-job-state-transition-coordination)
@@ -100,8 +99,8 @@ The Web Server is responsible for:
 - creating jobs and assigning job identifiers;
 - issuing pre-signed upload URLs for input artifacts;
 - validating whether a job is ready for submission. This is structural validation and means whether all required input
-  slots and required parameters are present and parameter values conform to their declared types. Detailed semantic verification is performed
-  by Worker;
+  slots and required parameters are present and parameter values conform to their declared types.
+  Detailed semantic verification is performed by the Worker handler during execution;
 - generating the job manifest;
 - publishing jobs to the execution queue;
 - exposing job status to clients;
@@ -125,12 +124,8 @@ The Worker is responsible for:
 - reading `manifest.json` from object storage;
 - selecting the correct handler for the given `jobType`;
 - downloading input artifacts;
-- performing job-specific semantic validation before execution;
-- publishing lifecycle updates through Worker Runtime; pre-execution statuses
-  (`INPUTS_PREPARED`, `VALIDATED`), terminal statuses, and the initial
-  `IN_PROGRESS` publication are coordinated by the Worker Runtime job state
-  transition coordinator;
-- executing the actual job logic;
+- executing job-specific logic through the configured handler, including any
+  handler-owned semantic validation;
 - uploading output artifacts;
 - publishing lifecycle status updates including its `workerId` when it claims a
   submitted job for local processing and later supervised execution.
@@ -175,7 +170,6 @@ graph TD
 
   subgraph WORKER["Worker Runtime-owned states"]
     INPUTS_PREPARED
-    VALIDATED
     IN_PROGRESS
     CANCEL_REQUESTED
     CANCELLED(CANCELLED)
@@ -187,10 +181,8 @@ graph TD
   DRAFT(DRAFT)-->SUBMITTED;
   SUBMITTED-->INPUTS_PREPARED;
   SUBMITTED-->ERROR(ERROR);
-  INPUTS_PREPARED-->VALIDATED;
+  INPUTS_PREPARED-->IN_PROGRESS;
   INPUTS_PREPARED-->ERROR(ERROR);
-  VALIDATED-->IN_PROGRESS;
-  VALIDATED-->ERROR(ERROR);
   IN_PROGRESS-->ERROR(ERROR);
   IN_PROGRESS-->CANCEL_REQUESTED;
   CANCEL_REQUESTED-->CANCELLED(CANCELLED);
@@ -204,20 +196,19 @@ graph TD
 
   style CANCEL_NOTE fill:#fff8dc,stroke:#b7791f,stroke-width:1px,color:#000;
 
-  linkStyle 0,1,3,5,10,11 stroke-width:2px,fill:none,stroke:green;
-  linkStyle 2,4,6,7,12 stroke-width:2px,fill:none,stroke:red;
-  linkStyle 8,9 stroke-width:2px,fill:none,stroke:blue;
+  linkStyle 0,1,3,8,9 stroke-width:2px,fill:none,stroke:green;
+  linkStyle 2,4,5,10 stroke-width:2px,fill:none,stroke:red;
+  linkStyle 6,7 stroke-width:2px,fill:none,stroke:blue;
 ```
 
 * `DRAFT` — the job has been created, but input artifacts and parameters are still being provided by the client;
 * `SUBMITTED` — the job has been accepted into the execution pipeline, its input artifacts and parameters are immutable, and the submitted job message has been published to the execution queue;
 * `INPUTS_PREPARED` — a Worker has started local processing of the submitted job, loaded the manifest, created the local job workspace, downloaded declared input artifacts, and created the runtime execution context;
-* `VALIDATED` — worker-side semantic validation has completed successfully, but supervised execution has not started yet;
 * `IN_PROGRESS` — a Worker has started supervised execution for the job;
 * `CANCEL_REQUESTED` — a cancellation request has been accepted for a running job and forwarded to the Worker that owns the job;
 * `CANCELLED` — the Worker confirmed that execution was cancelled; this is a terminal state;
 * `DONE` — the job completed successfully and expected output artifacts were published; this is a terminal state;
-* `ERROR` — the job failed because of a runtime, infrastructure, preparation, validation-processing, timeout, output-upload, or execution error; this is a terminal state.
+* `ERROR` — the job failed because of a runtime, infrastructure, preparation, handler execution, timeout, output-upload, or terminal transition error.
 
 ### Lifecycle rules
 
@@ -235,14 +226,10 @@ graph TD
   possible final state.
 - Cancellation is supported only for jobs that are already in `IN_PROGRESS` state and have a known `workerId`.
 - Jobs in `DRAFT` are not cancellable; the client may simply stop using the draft job.
-- Jobs in `SUBMITTED`, `INPUTS_PREPARED`, or `VALIDATED` are already accepted into the execution pipeline, but supervised execution has not started yet. Cancellation before supervised execution is out of scope for v1.
+- Jobs in `SUBMITTED`, `INPUTS_PREPARED` are already accepted into the execution pipeline, but supervised execution has not started yet. Cancellation before supervised execution is out of scope for v1.
 - Downloading results is allowed only when the job is in `DONE`.
 - An upload session id is valid only for the draft phase of a job. Once the job leaves `DRAFT`, that session id is closed and must not be reused.
 - `SUBMITTED` means the job has been accepted into the execution pipeline and became immutable.
-- Semantic validation is performed by the Worker after input preparation. If
-  validation succeeds, the job transitions from `INPUTS_PREPARED` to `VALIDATED`.
-  If validation raises `ValidationFailed` or non-`ValidationFailed` exception, the job transitions from
-  `INPUTS_PREPARED` to terminal `ERROR`.
 - The `SUBMITTED` -> `ERROR` transition applies to Worker-side preparation failures
   after the Worker Runtime has determined `jobId`, `userId`, and `jobType`.
   Failures before job identity is known are handled by the configured retry,
@@ -252,7 +239,8 @@ graph TD
 ## Client-Server Interaction
 
 The diagram below shows the main sequence of interactions from creating job and obtaining its results.
-The diagram shows the successful happy-path scenario. Validation failure, runtime error and cancellation flows are described separately.
+The diagram shows the successful happy-path scenario.
+Handler execution failure, runtime error, output-upload failure, timeout, and cancellation flows are described separately.
 
 ```mermaid
 sequenceDiagram
@@ -291,12 +279,6 @@ sequenceDiagram
     Worker-->>Queue: Status update: INPUTS_PREPARED
     Queue-->>Server: Status update: INPUTS_PREPARED
     Server->>RDBMS: Update Job status to INPUTS_PREPARED
-
-    Worker->>Worker: Run worker-side semantic validation
-    Note over Worker: Job input artifacts and params are semantically valid
-    Worker-->>Queue: Status update: VALIDATED
-    Queue-->>Server: Status update: VALIDATED
-    Server->>RDBMS: Update Job status to VALIDATED
 
     Worker->>Worker: Start supervised execution and register local execution record
     Note over Worker: Execution started
@@ -363,14 +345,12 @@ Note: in S3-compatible storage these are object keys with prefixes, not real dir
 MDDS Python Worker Runtime is a reusable worker template.
 It handles RabbitMQ, S3, manifest loading, status publishing,
 cancellation, progress reporting, output upload, ack/nack, and lifecycle errors.
-A concrete worker implementation provides only job-specific validation and execution logic.
+A concrete worker implementation provides only job-specific handler logic.
+Semantic validation, if required by the job type, is performed inside `execute(context)`.
 Extension point:
 
 ```python
 class JobHandler:
-    def validate(self, context: JobExecutionContext) -> None:
-        ...
-
     def execute(self, context: JobExecutionContext) -> None:
         ...
 ```
@@ -378,8 +358,8 @@ class JobHandler:
 `workerId` is included in all Worker-published status updates for observability
 and ownership tracing.
 
-For `INPUTS_PREPARED` and `VALIDATED`, `workerId` identifies the Worker that is
-preparing or validating the job, but targeted cancellation is still not supported
+For `INPUTS_PREPARED`, `workerId` identifies the Worker that is
+preparing the job, but targeted cancellation is still not supported
 until the job reaches `IN_PROGRESS`.
 
 Only `IN_PROGRESS` workerId is used by the Web Server for targeted cancellation
@@ -413,28 +393,18 @@ For each job message the runtime:
 6. during this transition, the Worker Runtime publishes `INPUTS_PREPARED`
    with `workerId` after the local runtime context has been prepared and commits
    the `INPUTS_PREPARED` state;
-7. calls `handler.validate(context)` as a coordinator-owned validation
-   transition from `INPUTS_PREPARED` to `VALIDATED`;
-8. during this transition, if validation succeeds, the Worker Runtime publishes
-   `VALIDATED` with `workerId` and commits the `VALIDATED` state;
-9. if `handler.validate(context)` raises `ValidationFailed`, requests the
-   coordinator to commit terminal `ERROR`;
-10. if `handler.validate(context)` raises any other exception and job identity is
-    known, requests the coordinator to commit terminal `ERROR`;
-11. requests the coordinator to start supervised execution as a transition from
-    `VALIDATED` to `IN_PROGRESS`;
-12. during this transition, the Worker Runtime starts the supervised process,
+7. during `INPUTS_PREPARED` to `IN_PROGRESS` transition, the Worker Runtime starts the supervised process,
     registers the local execution record in the execution registry, and only then
     publishes `IN_PROGRESS` with `workerId`;
-13. after successful `IN_PROGRESS` publication, the coordinator commits the
+8. after successful `IN_PROGRESS` publication, the coordinator commits the
     public worker lifecycle state as `IN_PROGRESS`;
-14. when the supervised process completes successfully, the Worker Runtime requests the
+9. when the supervised process completes successfully, the Worker Runtime requests the
     coordinator to commit terminal `DONE` with progress `100`;
-15. the `DONE` terminal transition attempt includes collecting output artifacts
+10. the `DONE` terminal transition attempt includes collecting output artifacts
     produced through runtime-provided output abstractions, uploading them to
     object storage, publishing terminal `DONE`, committing the terminal
     transition, and acknowledging the original submitted job message;
-16. acknowledges the job message only through the job state transition
+11. acknowledges the job message only through the job state transition
     coordinator after a terminal transition has been successfully committed.
 
 > The Worker Runtime publishes the initial `IN_PROGRESS` status only after the
@@ -501,46 +471,92 @@ terminal status publication through the job state transition coordinator.
 
 ### Failure policy
 
-If input artifact preparation fails after the runtime has already determined
-`jobId`, `userId`, and `jobType`, the job transitions from `SUBMITTED` to
-terminal `ERROR`. The job must not publish or commit `INPUTS_PREPARED`.
-
-The submitted job message is acknowledged only through the coordinator after
-successful `ERROR` status publication and successful terminal transition commit.
-
-If `handler.validate(context)` raises `ValidationFailed` or any other exception, 
-the job transitions from `INPUTS_PREPARED` to terminal `ERROR`.
-
-If supervised execution cannot be started after validation succeeded, the job
-transitions from `VALIDATED` to terminal `ERROR`.
-
-If supervised execution fails after `IN_PROGRESS` was published, the job
-transitions from `IN_PROGRESS` to terminal `ERROR`.
-
 If manifest loading, manifest schema validation, submitted job message parsing,
 or input preparation fails before the runtime can determine `jobId`, `userId`,
 or `jobType`, the runtime logs the error and rejects or nacks the message
 according to the configured retry policy.
 
-If output artifact collection or upload fails during the `DONE` terminal
-transition attempt, the coordinator must roll back the `DONE` claim. The runtime
-must not publish `DONE`.
+**1. Preparation failure after job identity is known**
 
-After the failed `DONE` terminal transition attempt, the runtime failure path must request the
-coordinator to commit terminal `ERROR`.
+```mermaid
+graph LR
+  SUBMITTED-->ERROR(ERROR);
+  linkStyle 0 stroke-width:2px,fill:none,stroke:red;
+```
+
+If input artifact preparation fails after the runtime has already determined
+`jobId`, `userId`, and `jobType`, the job transitions from `SUBMITTED` to
+terminal `ERROR`.
+
+The submitted job message is acknowledged only through the coordinator after
+successful `ERROR` status publication and successful terminal transition commit.
+
+**2. Supervised execution start failure**
+
+```mermaid
+graph LR
+  INPUTS_PREPARED-->ERROR(ERROR);
+  linkStyle 0 stroke-width:2px,fill:none,stroke:red;
+```
+
+If supervised execution cannot be started during the transition from
+`INPUTS_PREPARED` to `IN_PROGRESS`, the Worker Runtime must not publish
+`IN_PROGRESS` and must request the coordinator to commit terminal `ERROR`
+from `INPUTS_PREPARED`.
+
+**3. Handler execution failure and failed `DONE` terminal transition attempt**
+
+```mermaid
+graph LR
+  IN_PROGRESS-->ERROR(ERROR);
+  linkStyle 0 stroke-width:2px,fill:none,stroke:red;
+```
+
+Any exception raised by `JobHandler.execute(context)` is treated as a terminal
+handler execution failure by the Worker Runtime. The runtime logs the exception
+with traceback, extracts a safe non-blank error message from the exception, and
+requests the job state transition coordinator to commit terminal `ERROR`
+from `IN_PROGRESS`.
+
+If the extracted exception message is blank or contains only whitespace, the
+Worker Runtime uses a safe fallback message.
+
+If output artifact collection or upload fails during the `DONE` terminal
+transition attempt, the coordinator must roll back the `DONE` attempt. The
+runtime must not publish `DONE`.
+
+After the failed `DONE` attempt, the runtime failure path must request the
+coordinator to commit terminal `ERROR` from the current committed public state.
+If no cancellation request was accepted, this normally corresponds to
+`IN_PROGRESS` -> `ERROR`. If the Web Server has already accepted cancellation,
+this may correspond to `CANCEL_REQUESTED` -> `ERROR`.
+
+**4. Failure while cancellation is pending**
+
+```mermaid
+graph LR
+  CANCEL_REQUESTED-->ERROR(ERROR)
+  linkStyle 0 stroke-width:2px,fill:none,stroke:red;
+```
+
+This transition happens when the Web Server has already accepted a cancellation
+request and moved the job to `CANCEL_REQUESTED`, but the Worker Runtime commits
+terminal `ERROR` before cancellation can be finalized as `CANCELLED`.
+
+Examples include:
+
+* the supervised process fails before the cancellation request terminates it;
+* timeout or cancellation finalization fails;
+* a `DONE` attempt rolls back because output artifact collection or upload
+failed after cancellation had already been requested.
 
 A cancellation request that arrived during the `DONE` attempt is stale because
 supervised execution has already completed.
 
 The exact retry and dead-letter policy is implementation-specific in v1.
 
-In v1, semantic validation is performed in the main worker process before
-supervised execution starts. If validation is expected to be long-running for
-some future job type, it should be moved into supervised execution in a later
-version.
-
 Cancellation is supported only after the job enters `IN_PROGRESS`; therefore
-validation itself is not cancellable in v1.
+job input preparation itself is not cancellable in v1.
 
 ### Timeout policy
 
@@ -600,9 +616,9 @@ This must match the queue name used by the Web Server when submitting a job.
 
 ### Job cancellation
 
-Although `workerId` is known for `INPUTS_PREPARED` and `VALIDATED`, targeted
-cancellation is intentionally enabled only after `IN_PROGRESS` in v1. This keeps
-pre-execution preparation and validation non-cancellable and avoids cancellation
+Although `workerId` is known for `INPUTS_PREPARED`, targeted
+cancellation is intentionally enabled only after `IN_PROGRESS` in v1.
+This keeps pre-execution preparation non-cancellable and avoids cancellation
 semantics before the supervised process exists.
 
 After the Worker Runtime consumes a submitted job message, it keeps that message
@@ -646,7 +662,6 @@ A concrete worker implementation must provide a handler class.
 
 The handler is responsible for:
 
-- validating job-specific input artifacts and parameters;
 - executing the job-specific business logic;
 - producing output artifacts expected by the manifest through runtime-provided output abstractions.
 
@@ -668,83 +683,12 @@ Also note that in `JobHandler`
 
 ```python
 class JobHandler:
-    def validate(self, context: JobExecutionContext) -> None:
-        ...
-
     def execute(self, context: JobExecutionContext) -> None:
         ...
 ```
 
-`validate(context)` and `execute(context)` must not rely on shared in-memory state.
-The Worker Runtime may call `validate(context)` in the main worker process and `execute(context)` in a fresh supervised process.
-Therefore `execute(context)` must be able to run using only `JobExecutionContext` and files available through that context.
-Any data required by `execute(context)` must be read from `JobExecutionContext` inputs, parameters, or other runtime-provided artifacts, not from state produced during `validate(context)`.
-
-
-#### Job handler validation method contract
-
-A concrete `JobHandler` must implement semantic validation in:
-
-```python
-def validate(self, context: JobExecutionContext) -> None:
-    ...
-```
-
-The purpose of `validate(context)` is to check whether submitted job inputs and parameters are semantically valid for the concrete job type.
-
-The method must use only `JobExecutionContext` to access inputs and parameters. It must not publish lifecycle statuses, acknowledge queue messages, access RabbitMQ, access object storage directly, or update external metadata.
-
-If validation succeeds, `validate(context)` must return normally.
-
-If submitted job inputs or parameters are semantically invalid, the handler must raise `ValidationFailed`.
-
-`validate(context)` must not produce output artifacts and must not store data in `self` for later use by `execute(context)`. The Worker Runtime may call `validate(context)` in the main worker process and `execute(context)` in a fresh supervised process.
-
-
-Example:
-
-```python
-#
-# Pseudo-code example; imports are omitted for brevity.
-#
-class ExampleJobHandler:
-    def validate(self, context: JobExecutionContext) -> None:
-        # Replace "input_slot" with a real logical input slot declared
-        # in manifest.inputs.
-        raw_value = context.inputs.read("input_slot")
-
-        try:
-            # Perform job-specific semantic checks for raw_value here.
-            ...
-        except ValueError as error:
-            raise ValidationFailed(
-                "Invalid data for input 'input_slot'."
-            ) from error
-```
-
-Only `ValidationFailed` represents expected domain validation failure.
-
-When `validate(context)` raises `ValidationFailed`, the Worker Runtime treats the job as terminally validation-failed:
-
-* requests the job state transition coordinator to commit `ERROR`;
-* includes the validation failure message in the status update;
-* does not publish `VALIDATED`;
-* does not publish `IN_PROGRESS`;
-* does not start supervised execution;
-* does not add the job to the local execution registry;
-* acknowledges the submitted job message only through the job state transition
-  coordinator after successful `ERROR` status publication and
-  successful terminal transition commit;
-* cleans up the local prepared job workspace only after the terminal transition
-  has been successfully committed, or after rollback only when the runtime has
-  decided to abandon, reject, or retry the submitted job according to the
-  configured retry/dead-letter policy and the workspace is no longer required.
-
-Unexpected exceptions from `validate(context)`, such as `RuntimeError`, `ValueError`, `TypeError`, `AttributeError`, or any other non-`ValidationFailed` exception, represent worker-side validation processing failure rather than domain validation failure.
-
-The Worker Runtime should log unexpected validation exceptions with traceback for diagnostics.
-
-The handler author should therefore convert expected data validation problems into `ValidationFailed` explicitly.
+ `execute(context)` must be able to run using only `JobExecutionContext` and files available through that context.
+Any data required by `execute(context)` must be read from `JobExecutionContext` inputs, parameters, or other runtime-provided artifacts.
 
 
 #### Job handler data access pattern
@@ -798,15 +742,6 @@ Conceptually, a job handler follows this structure:
 
 ```python
 class ExampleJobHandler:
-    def validate(self, context: JobExecutionContext) -> None:
-        input_a = context.inputs.read("inputSlotA")
-        input_b_path = context.inputs.path("inputSlotB")
-        required_parameter = context.params.required("requiredParameter")
-
-        # Validate input artifacts and parameters.
-        # Do not write output artifacts here.
-        # Do not store data in self for later use by execute().
-
     def execute(self, context: JobExecutionContext) -> None:
         input_a = context.inputs.read("inputSlotA")
         input_b_path = context.inputs.path("inputSlotB")
@@ -821,8 +756,6 @@ class ExampleJobHandler:
 
         context.outputs.write("outputSlot", output_bytes)
 ```
-
-`validate(context)` and `execute(context)` may run in different processes. Therefore `execute(context)` must re-read all required inputs and parameters from `JobExecutionContext`; it must not depend on values cached or computed during `validate(context)`.
 
 The handler must not access internal context fields or runtime implementation details. In particular, it must not access private artifact mappings directly, construct S3 object keys manually, upload artifacts to object storage, publish lifecycle statuses, or acknowledge queue messages.
 
@@ -917,7 +850,6 @@ graph LR;
   subgraph WORKER[Worker Runtime-owned states]
     subgraph B[Non-terminal state]
     INPUTS_PREPARED
-    VALIDATED
     IN_PROGRESS
     end
     DONE(DONE)
@@ -925,11 +857,10 @@ graph LR;
 
     DRAFT-->SUBMITTED;
     SUBMITTED-->INPUTS_PREPARED;
-    INPUTS_PREPARED-->VALIDATED;
-    VALIDATED-->IN_PROGRESS;
+    INPUTS_PREPARED-->IN_PROGRESS;
     IN_PROGRESS-->DONE;
 
-  linkStyle 0,1,2,3,4 stroke-width:2px,fill:none,stroke:green;    
+  linkStyle 0,1,2,3 stroke-width:2px,fill:none,stroke:green;    
 ```
 Each Worker Runtime-owned state transition is protected by a per-job lock mechanism, and is performed this way (described as pseudocode):
 ```text
@@ -1038,13 +969,12 @@ The worker runtime publishes status updates to `MDDS_WORKER_STATUS_QUEUE_NAME` u
 | Status              | `workerId` required | progress rule                          | message              |
 |---------------------|---------------------|----------------------------------------|----------------------|
 | `INPUTS_PREPARED`   | Yes                 | implementation-defined, usually `0`    | optional             |
-| `VALIDATED`         | Yes                 | implementation-defined, usually `0`    | optional             |
 | `IN_PROGRESS`       | Yes                 | runtime-generated, time-based, `0..99` | optional             |
 | `DONE`              | Yes                 | must be `100`                          | optional             |
 | `ERROR`             | Yes                 | implementation-defined                 | required/recommended |
 | `CANCELLED`         | Yes                 | implementation-defined                 | optional/recommended |
 
-`INPUTS_PREPARED`, `VALIDATED`, and the initial `IN_PROGRESS` are non-terminal
+`INPUTS_PREPARED` and the initial `IN_PROGRESS` are non-terminal
 Worker-published status updates. They are published as part of coordinator-owned
 worker lifecycle transitions.
 
@@ -1223,7 +1153,7 @@ The following rules apply:
 * `Content-Type` is not part of the signed parameters of the pre-signed URL, therefore the client may omit it or send an appropriate value;
 * while the job remains in `DRAFT`, the client may request a new upload URL for the same `inputSlot` and upload a replacement artifact;
 * the artifact currently stored under the canonical object key for that slot is used at submission time;
-* the presence of required uploaded artifacts is checked during `POST /jobs/{jobId}/submit`; semantic correctness is validated later by the Worker.
+* the presence of required uploaded artifacts is checked during `POST /jobs/{jobId}/submit`; semantic correctness is checked later by the Worker handler during execution.
 
 For browser-based deployments, the following object storage CORS requirements apply:
 
@@ -1302,7 +1232,7 @@ The request body must be a JSON object.
 Top-level non-object merge patches are not supported for this endpoint.
 After submission, job parameters are immutable.
 While the job remains in `DRAFT`, the client may send this request again to patch the current parameter set for the job.
-The presence of required parameters is checked during `POST /jobs/{jobId}/submit`; semantic correctness is validated later by the Worker.
+The presence of required parameters is checked during `POST /jobs/{jobId}/submit`; semantic correctness is checked later by the Worker handler during execution.
 Removing a required parameter while the job is in `DRAFT` is allowed, but `POST /jobs/{jobId}/submit` will fail until the required parameter is provided again.
 
 **Possible errors**
@@ -1410,7 +1340,7 @@ X-MDDS-User-Login: <user-login>
 }
 ```
 Here:
-* `status` is one of: `DRAFT`, `SUBMITTED`, `INPUTS_PREPARED`, `VALIDATED`, `IN_PROGRESS`, `CANCEL_REQUESTED`, `DONE`, `ERROR`, `CANCELLED`.
+* `status` is one of: `DRAFT`, `SUBMITTED`, `INPUTS_PREPARED`, `IN_PROGRESS`, `CANCEL_REQUESTED`, `DONE`, `ERROR`, `CANCELLED`.
 * `progress` is an integer in range 0..100;
 * for terminal states it is typically 100 for `DONE`, and implementation-defined for failed/cancelled jobs;
 * for `DRAFT` it is usually 0;
@@ -1425,7 +1355,7 @@ Note: `<timestamp>` uses RFC 3339 format, for example `2026-03-20T14:30:00Z` or 
 Returns the latest persisted job state from the Metadata Store for UI and administration.
 The endpoint does not synchronously query Workers during request processing. Note that if a field
 has a `null` or empty value, the response still contains that field with the value `null` or `""`.
-`message` may contain validation failure details or execution error details for statuses like `ERROR`.
+`message` may contain execution failure details for statuses like `ERROR`.
 This endpoint is observational only and does not change job state.
 
 **Possible errors**
@@ -1474,7 +1404,7 @@ state will be `CANCELLED`. If the Worker Runtime commits `DONE` or `ERROR`
 before cancellation is committed, that terminal state wins and the cancellation
 request is treated as stale.
 If a job is already in `CANCEL_REQUESTED` state, repeated cancellation returns `202 Accepted`.
-Cancellation of `DRAFT`, `SUBMITTED`, `INPUTS_PREPARED`, or `VALIDATED` jobs is
+Cancellation of `DRAFT`, `SUBMITTED` or `INPUTS_PREPARED` jobs is
 not supported in v1.
 
 **Possible errors**
@@ -1483,8 +1413,7 @@ not supported in v1.
 - `400 Bad Request` — required headers are missing;
 - `401 Unauthorized` — unknown user login;
 - `404 Not Found` — the job does not exist (or is not accessible to the current user);
-- `409 Conflict` — the job is in `DRAFT`, `SUBMITTED`, `INPUTS_PREPARED`, or
-  `VALIDATED` state and cancellation is not supported in v1;
+- `409 Conflict` — the job is in `DRAFT`, `SUBMITTED`, `INPUTS_PREPARED`, state and cancellation is not supported in v1;
 - `409 Conflict` — the job is already terminal and can no longer be cancelled.
 
 ---
