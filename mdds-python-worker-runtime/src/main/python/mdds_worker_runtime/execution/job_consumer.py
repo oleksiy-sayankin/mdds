@@ -18,9 +18,6 @@ from mdds_worker_runtime.execution.supervisor import (
     ExecutionSupervisor,
     SupervisedExecutionRequest,
 )
-from mdds_worker_runtime.execution.validation_handler import (
-    ValidationHandler,
-)
 from mdds_worker_runtime.execution.workspace import JobWorkspaceFactory, JobWorkspace
 from mdds_worker_runtime.job_state import JobStateTransitionCoordinator
 from mdds_worker_runtime.manifest.loader import ManifestLoader
@@ -75,7 +72,6 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         job_workspace_factory: JobWorkspaceFactory,
         job_state_transition_coordinator: JobStateTransitionCoordinator,
         job_preparation_handler: JobPreparationHandler,
-        validation_handler: ValidationHandler,
         execution_supervisor: ExecutionSupervisor,
         execution_registry: ExecutionRegistry,
         status_publisher: StatusPublisher,
@@ -88,8 +84,6 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
             raise ValueError("job_state_transition_coordinator cannot be null.")
         if job_preparation_handler is None:
             raise ValueError("job_preparation_handler cannot be null.")
-        if validation_handler is None:
-            raise ValueError("validation_handler cannot be null.")
         if execution_supervisor is None:
             raise ValueError("execution_supervisor cannot be null.")
         if execution_registry is None:
@@ -101,7 +95,6 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         self._job_workspace_factory = job_workspace_factory
         self._job_state_transition_coordinator = job_state_transition_coordinator
         self._job_preparation_handler = job_preparation_handler
-        self._validation_handler = validation_handler
         self._execution_supervisor = execution_supervisor
         self._execution_registry = execution_registry
         self._status_publisher = status_publisher
@@ -165,43 +158,6 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
 
         prepared_job = prepare_result.value
 
-        # Validate prepared inputs
-        validation_result = self._job_state_transition_coordinator.transition(
-            job_id=workspace.job_id,
-            target_state=WorkerJobStatus.VALIDATED,
-            operation=lambda: self._validate_job(
-                prepared_job=prepared_job,
-                workspace=workspace,
-            ),
-        )
-
-        # Validation failures and unexpected validation exceptions are both finalized
-        # as ERROR. ValidationFailed only controls the diagnostic message class.
-        if validation_result.failed:
-            error = validation_result.error
-            error_message = self._message_or_fallback(error, _VALIDATION_FAILED_MESSAGE)
-            terminal_result = self._job_state_transition_coordinator.transition(
-                job_id=workspace.job_id,
-                target_state=WorkerJobStatus.ERROR,
-                operation=lambda: self._status_publisher.publish_error(
-                    workspace=workspace,
-                    message=error_message,
-                ),
-            )
-            if terminal_result.failed:
-                logger.error(
-                    "Failed to publish error",
-                    extra={
-                        "component": "job_state_transition_coordinator",
-                        "event": "terminal_transition_failed",
-                        "jobId": workspace.job_id,
-                    },
-                )
-            return
-
-        if not validation_result.committed:
-            return
-
         # Start job execution
         start_result = self._job_state_transition_coordinator.transition(
             job_id=workspace.job_id,
@@ -256,28 +212,6 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
         )
 
         return prepared_job
-
-    def _validate_job(
-        self,
-        *,
-        prepared_job: PreparedJob,
-        workspace: JobWorkspace,
-    ) -> None:
-        """Run semantic validation and publish VALIDATED on success.
-
-        ValidationFailed and unexpected validation exceptions intentionally
-        escape. JobConsumer classifies them after the failed happy-path
-        transition and commits ERROR through a separate terminal transition.
-        """
-        self._validation_handler.validate(
-            handler=prepared_job.handler,
-            context=prepared_job.context,
-        )
-
-        self._status_publisher.publish_validated(
-            workspace=workspace,
-            message="Worker-side semantic validation succeeded.",
-        )
 
     def _start_supervised_execution(
         self,

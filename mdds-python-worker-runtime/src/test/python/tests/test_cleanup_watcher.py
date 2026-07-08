@@ -101,7 +101,6 @@ def test_cleanup_watcher_ignores_record_without_worker_local_state(
     [
         WorkerJobStatus.SUBMITTED,
         WorkerJobStatus.INPUTS_PREPARED,
-        WorkerJobStatus.VALIDATED,
         WorkerJobStatus.IN_PROGRESS,
     ],
 )

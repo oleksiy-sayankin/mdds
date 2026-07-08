@@ -15,27 +15,18 @@ if TYPE_CHECKING:
 
 
 class PostponedAnnotationsJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         pass
 
 
 class PostponedWrongContextAnnotationJobHandler(JobHandler):
-    def validate(self, context: str) -> None:
-        pass
-
-    def execute(self, context: JobExecutionContext) -> None:
+    def execute(self, context: str) -> None:
         pass
 
 
 class PostponedWrongReturnAnnotationJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> str:
-        return "invalid"
-
-    def execute(self, context: JobExecutionContext) -> None:
-        pass
+    def execute(self, context: JobExecutionContext) -> str:
+        return "wrong"
 
 
 # Intentionally unresolved annotation.
@@ -44,8 +35,5 @@ class PostponedWrongReturnAnnotationJobHandler(JobHandler):
 # but JobHandlerLoader must fail when resolving this annotation with
 # inspect.signature(..., eval_str=True).
 class PostponedUnresolvableContextAnnotationJobHandler(JobHandler):
-    def validate(self, context: MissingJobExecutionContext) -> None:
-        pass
-
-    def execute(self, context: JobExecutionContext) -> None:
+    def execute(self, context: MissingJobExecutionContext) -> None:
         pass

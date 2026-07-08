@@ -39,11 +39,6 @@ class JobHandlerLoader:
         self._validate_handler_class(handler_class, import_path)
         self._validate_handler_method_signature(
             handler_class,
-            "validate",
-            import_path,
-        )
-        self._validate_handler_method_signature(
-            handler_class,
             "execute",
             import_path,
         )

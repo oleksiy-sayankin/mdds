@@ -175,10 +175,6 @@ def test_loader_wraps_handler_constructor_failure() -> None:
     ("class_name", "expected_message"),
     [
         (
-            "ValidateWithoutContextJobHandler",
-            "Handler method validate must have signature",
-        ),
-        (
             "ExecuteWithoutContextJobHandler",
             "Handler method execute must have signature",
         ),
@@ -195,10 +191,6 @@ def test_loader_rejects_handler_method_without_context_parameter(
 @pytest.mark.parametrize(
     ("class_name", "expected_message"),
     [
-        (
-            "ValidateWithKeywordOnlyContextJobHandler",
-            "Handler method validate context parameter must be positional",
-        ),
         (
             "ExecuteWithKeywordOnlyContextJobHandler",
             "Handler method execute context parameter must be positional",
@@ -217,10 +209,6 @@ def test_loader_rejects_handler_method_with_keyword_only_context_parameter(
     ("class_name", "expected_message"),
     [
         (
-            "ValidateWithWrongContextAnnotationJobHandler",
-            "Handler method validate context parameter must be annotated",
-        ),
-        (
             "ExecuteWithWrongContextAnnotationJobHandler",
             "Handler method execute context parameter must be annotated",
         ),
@@ -237,10 +225,6 @@ def test_loader_rejects_handler_method_with_wrong_context_annotation(
 @pytest.mark.parametrize(
     ("class_name", "expected_message"),
     [
-        (
-            "ValidateWithWrongReturnAnnotationJobHandler",
-            "Handler method validate return type must be None",
-        ),
         (
             "ExecuteWithWrongReturnAnnotationJobHandler",
             "Handler method execute return type must be None",
@@ -324,7 +308,7 @@ def test_loader_loads_handler_with_postponed_job_execution_context_annotations()
 def test_loader_rejects_handler_with_postponed_wrong_context_annotation() -> None:
     with pytest.raises(
         JobHandlerLoadError,
-        match="Handler method validate context parameter must be annotated",
+        match="Handler method execute context parameter must be annotated",
     ):
         JobHandlerLoader(
             f"{POSTPONED_ANNOTATIONS_FIXTURE_MODULE}:"
@@ -335,7 +319,7 @@ def test_loader_rejects_handler_with_postponed_wrong_context_annotation() -> Non
 def test_loader_rejects_handler_with_postponed_wrong_return_annotation() -> None:
     with pytest.raises(
         JobHandlerLoadError,
-        match="Handler method validate return type must be None",
+        match="Handler method execute return type must be None",
     ):
         JobHandlerLoader(
             f"{POSTPONED_ANNOTATIONS_FIXTURE_MODULE}:"

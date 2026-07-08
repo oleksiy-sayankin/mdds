@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class WorkerJobStatus(Enum):
     SUBMITTED = "SUBMITTED"
     INPUTS_PREPARED = "INPUTS_PREPARED"
-    VALIDATED = "VALIDATED"
     IN_PROGRESS = "IN_PROGRESS"
     DONE = "DONE"
     ERROR = "ERROR"
@@ -44,11 +43,6 @@ class WorkerJobStatus(Enum):
                     WorkerJobStatus.ERROR,
                 }
             case WorkerJobStatus.INPUTS_PREPARED:
-                return new_status in {
-                    WorkerJobStatus.VALIDATED,
-                    WorkerJobStatus.ERROR,
-                }
-            case WorkerJobStatus.VALIDATED:
                 return new_status in {
                     WorkerJobStatus.IN_PROGRESS,
                     WorkerJobStatus.ERROR,

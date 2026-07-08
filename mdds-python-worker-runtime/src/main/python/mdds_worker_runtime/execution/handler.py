@@ -10,9 +10,5 @@ class JobHandler(ABC):
     """Base class for all concrete MDDS job handlers."""
 
     @abstractmethod
-    def validate(self, context: JobExecutionContext) -> None:
-        """Validate job-specific inputs and parameters before execution."""
-
-    @abstractmethod
     def execute(self, context: JobExecutionContext) -> None:
         """Execute job-specific logic and produce declared output artifacts."""

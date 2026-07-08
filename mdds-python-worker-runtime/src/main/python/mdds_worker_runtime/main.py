@@ -51,7 +51,6 @@ from mdds_worker_runtime.execution.registry import ExecutionRegistry
 from mdds_worker_runtime.execution.status_publisher import StatusPublisher
 from mdds_worker_runtime.execution.supervisor import ExecutionSupervisor
 from mdds_worker_runtime.execution.timeout_watcher import TimeoutWatcher
-from mdds_worker_runtime.execution.validation_handler import ValidationHandler
 from mdds_worker_runtime.execution.workspace import JobWorkspaceFactory
 from mdds_worker_runtime.job_state import JobStateTransitionCoordinator
 from mdds_worker_runtime.logging_config import setup_logging
@@ -309,8 +308,6 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
 
     output_artifact_uploader = OutputArtifactUploader(storage)
 
-    validation_handler = ValidationHandler()
-
     job_preparation_handler = JobPreparationHandler(
         execution_registry=execution_registry,
         input_artifact_preparer=input_artifact_preparer,
@@ -323,7 +320,6 @@ def build_worker_runtime_from_environment() -> WorkerRuntime:
         job_workspace_factory=job_workspace_factory,
         job_state_transition_coordinator=job_state_transition_coordinator,
         job_preparation_handler=job_preparation_handler,
-        validation_handler=validation_handler,
         execution_supervisor=execution_supervisor,
         execution_registry=execution_registry,
         status_publisher=status_publisher,

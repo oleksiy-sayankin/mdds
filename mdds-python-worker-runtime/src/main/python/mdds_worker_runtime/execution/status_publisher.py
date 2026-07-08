@@ -52,19 +52,6 @@ class StatusPublisher:
             message=message,
         )
 
-    def publish_validated(
-        self,
-        workspace: JobWorkspace,
-        message: str = "Worker-side semantic validation completed.",
-    ) -> None:
-        """Publish public VALIDATED status after semantic validation succeeds."""
-        self._publish(
-            workspace=workspace,
-            status=WorkerJobStatus.VALIDATED,
-            progress=0,
-            message=message,
-        )
-
     def publish_in_progress(
         self,
         workspace: JobWorkspace,

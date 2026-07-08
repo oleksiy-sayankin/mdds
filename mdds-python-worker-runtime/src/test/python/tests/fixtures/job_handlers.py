@@ -3,44 +3,30 @@
 
 from mdds_worker_runtime.execution.context import JobExecutionContext
 from mdds_worker_runtime.execution.handler import JobHandler
-from mdds_worker_runtime.execution.validation_handler import ValidationFailed
 
 
 class ValidJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         pass
 
 
 class ValidUnannotatedJobHandler(JobHandler):
-    def validate(self, context) -> None:
-        pass
-
     def execute(self, context) -> None:
         pass
 
 
 class PlainClass:
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         pass
 
 
 class AbstractJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
+    pass
 
 
 class ConstructorArgumentJobHandler(JobHandler):
     def __init__(self, value: str) -> None:
         self.value = value
-
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
 
     def execute(self, context: JobExecutionContext) -> None:
         pass
@@ -50,73 +36,26 @@ class ConstructorRaisesJobHandler(JobHandler):
     def __init__(self) -> None:
         raise RuntimeError("constructor failed")
 
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
-    def execute(self, context: JobExecutionContext) -> None:
-        pass
-
-
-class ValidateWithoutContextJobHandler(JobHandler):
-    def validate(self) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         pass
 
 
 class ExecuteWithoutContextJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self) -> None:
         pass
 
 
-class ValidateWithKeywordOnlyContextJobHandler(JobHandler):
-    def validate(self, *, context: JobExecutionContext) -> None:
-        pass
-
-    def execute(self, context: JobExecutionContext) -> None:
-        pass
-
-
 class ExecuteWithKeywordOnlyContextJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, *, context: JobExecutionContext) -> None:
         pass
 
 
-class ValidateWithWrongContextAnnotationJobHandler(JobHandler):
-    def validate(self, context: str) -> None:
-        pass
-
-    def execute(self, context: JobExecutionContext) -> None:
-        pass
-
-
 class ExecuteWithWrongContextAnnotationJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: str) -> None:
         pass
 
 
-class ValidateWithWrongReturnAnnotationJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> str:
-        return "invalid"
-
-    def execute(self, context: JobExecutionContext) -> None:
-        pass
-
-
 class ExecuteWithWrongReturnAnnotationJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> str:
         return "invalid"
 
@@ -128,16 +67,7 @@ def handler_factory() -> ValidJobHandler:
 not_a_handler_class = ValidJobHandler()
 
 
-class ValidateNoneJobHandler(JobHandler):
-    validate = None
-
-    def execute(self, context: JobExecutionContext) -> None:
-        pass
-
-
 class ExecuteNoneJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
 
     execute = None
 
@@ -145,18 +75,12 @@ class ExecuteNoneJobHandler(JobHandler):
 class InvalidConstructorSignatureJobHandler(JobHandler):
     __signature__ = "invalid"
 
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         pass
 
 
 class VarArgsConstructorJobHandler(JobHandler):
     def __init__(self, *args, **kwargs) -> None:
-        pass
-
-    def validate(self, context: JobExecutionContext) -> None:
         pass
 
     def execute(self, context: JobExecutionContext) -> None:
@@ -167,40 +91,23 @@ class OptionalConstructorArgumentJobHandler(JobHandler):
     def __init__(self, value: str = "default") -> None:
         self.value = value
 
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         pass
 
 
 class WritingExecuteJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
 
     def execute(self, context: JobExecutionContext) -> None:
         context.outputs.write("solution", b"execution-result")
 
 
 class FailingExecuteJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
 
     def execute(self, context: JobExecutionContext) -> None:
         raise RuntimeError("execute failed")
 
 
 class TwoNumbersSumJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        _parse_int_or_raise_validation_failed(
-            context.inputs.read("number_a"),
-            "number_a",
-        )
-        _parse_int_or_raise_validation_failed(
-            context.inputs.read("number_b"),
-            "number_b",
-        )
-
     def execute(self, context: JobExecutionContext) -> None:
         number_a = _parse_int(context.inputs.read("number_a"))
         number_b = _parse_int(context.inputs.read("number_b"))
@@ -210,29 +117,11 @@ class TwoNumbersSumJobHandler(JobHandler):
         context.outputs.write("sum", str(result).encode("utf-8"))
 
 
-def _parse_int_or_raise_validation_failed(value: bytes, input_slot: str) -> int:
-    try:
-        return _parse_int(value)
-    except ValueError as error:
-        raise ValidationFailed(f"Invalid data for input '{input_slot}'.") from error
-
-
 def _parse_int(value: bytes) -> int:
     return int(value.decode("utf-8").strip())
 
 
-class UnexpectedValidationErrorJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        raise RuntimeError("Unexpected validation error. Test message.")
-
-    def execute(self, context: JobExecutionContext) -> None:
-        context.outputs.write("sum", b"must-not-be-produced")
-
-
 class UnexpectedExecutionErrorJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         raise RuntimeError("Unexpected execution error. Test message.")
 
@@ -242,9 +131,6 @@ class ConstructorReturnsNonJobHandlerInstanceJobHandler(JobHandler):
 
     def __new__(cls):
         return object()
-
-    def validate(self, context: JobExecutionContext) -> None:
-        """Validate job input artifacts and parameters."""
 
     def execute(self, context: JobExecutionContext) -> None:
         """Execute job-specific logic."""

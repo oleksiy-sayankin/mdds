@@ -292,7 +292,6 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     )
     job_preparation_handler = MagicMock(name="job_preparation_handler")
     job_handler_loader = MagicMock(name="job_handler_loader")
-    validation_handler = MagicMock(name="validation_handler")
     execution_supervisor = MagicMock(name="execution_supervisor")
     execution_registry = MagicMock(name="execution_registry")
     status_publisher = MagicMock(name="status_publisher")
@@ -324,7 +323,6 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     )
     job_preparation_handler_factory = MagicMock(return_value=job_preparation_handler)
     job_handler_loader_factory = MagicMock(return_value=job_handler_loader)
-    validation_handler_factory = MagicMock(return_value=validation_handler)
     execution_supervisor_factory = MagicMock(return_value=execution_supervisor)
     execution_registry_factory = MagicMock(return_value=execution_registry)
     status_publisher_factory = MagicMock(return_value=status_publisher)
@@ -386,11 +384,6 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         worker_main,
         "JobHandlerLoader",
         job_handler_loader_factory,
-    )
-    monkeypatch.setattr(
-        worker_main,
-        "ValidationHandler",
-        validation_handler_factory,
     )
     monkeypatch.setattr(
         worker_main,
@@ -477,8 +470,6 @@ def test_build_worker_runtime_from_environment_wires_required_components(
     status_publisher_factory.assert_called_once()
     output_artifact_uploader_factory.assert_called_once_with(storage)
 
-    validation_handler_factory.assert_called_once_with()
-
     job_preparation_handler_factory.assert_called_once_with(
         execution_registry=execution_registry,
         input_artifact_preparer=input_artifact_preparer,
@@ -491,7 +482,6 @@ def test_build_worker_runtime_from_environment_wires_required_components(
         job_workspace_factory=job_workspace_factory,
         job_state_transition_coordinator=job_state_transition_coordinator,
         job_preparation_handler=job_preparation_handler,
-        validation_handler=validation_handler,
         execution_supervisor=execution_supervisor,
         execution_registry=execution_registry,
         status_publisher=status_publisher,
@@ -613,7 +603,6 @@ def test_build_worker_runtime_from_environment_uses_working_clock(
     monkeypatch.setattr(worker_main, "JobExecutionContextFactory", MagicMock())
     monkeypatch.setattr(worker_main, "JobPreparationHandler", MagicMock())
     monkeypatch.setattr(worker_main, "JobHandlerLoader", MagicMock())
-    monkeypatch.setattr(worker_main, "ValidationHandler", MagicMock())
     monkeypatch.setattr(worker_main, "ExecutionSupervisor", MagicMock())
     monkeypatch.setattr(worker_main, "ExecutionRegistry", MagicMock())
     monkeypatch.setattr(worker_main, "OutputArtifactUploader", MagicMock())
@@ -738,7 +727,6 @@ def test_build_worker_runtime_from_environment_fails_fast_when_s3_storage_is_not
     fixture.component_factories["ExecutionRegistry"].assert_not_called()
     fixture.component_factories["StatusPublisher"].assert_not_called()
     fixture.component_factories["OutputArtifactUploader"].assert_not_called()
-    fixture.component_factories["ValidationHandler"].assert_not_called()
     fixture.component_factories["JobConsumer"].assert_not_called()
     fixture.component_factories["CancellationRequestHandler"].assert_not_called()
     fixture.component_factories["CancelConsumer"].assert_not_called()
@@ -793,7 +781,6 @@ def test_build_worker_runtime_from_environment_fails_fast_when_job_handler_is_no
     fixture.component_factories["StatusPublisher"].assert_not_called()
     fixture.component_factories["JobPreparationHandler"].assert_not_called()
     fixture.component_factories["OutputArtifactUploader"].assert_not_called()
-    fixture.component_factories["ValidationHandler"].assert_not_called()
     fixture.component_factories["JobConsumer"].assert_not_called()
     fixture.component_factories["CancellationRequestHandler"].assert_not_called()
     fixture.component_factories["CancelConsumer"].assert_not_called()
@@ -852,7 +839,6 @@ def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_is_not_r
     fixture.component_factories["ExecutionRegistry"].assert_not_called()
     fixture.component_factories["StatusPublisher"].assert_not_called()
     fixture.component_factories["OutputArtifactUploader"].assert_not_called()
-    fixture.component_factories["ValidationHandler"].assert_not_called()
     fixture.component_factories["JobConsumer"].assert_not_called()
     fixture.component_factories["CancellationRequestHandler"].assert_not_called()
     fixture.component_factories["CancelConsumer"].assert_not_called()
@@ -1159,7 +1145,6 @@ def _build_runtime_composition_fixture(
         "ExecutionRegistry",
         "StatusPublisher",
         "OutputArtifactUploader",
-        "ValidationHandler",
         "JobConsumer",
         "CancellationRequestHandler",
         "CancelConsumer",
@@ -1265,7 +1250,6 @@ def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_messagin
     fixture.component_factories["ExecutionRegistry"].assert_not_called()
     fixture.component_factories["StatusPublisher"].assert_not_called()
     fixture.component_factories["OutputArtifactUploader"].assert_not_called()
-    fixture.component_factories["ValidationHandler"].assert_not_called()
     fixture.component_factories["JobConsumer"].assert_not_called()
     fixture.component_factories["CancellationRequestHandler"].assert_not_called()
     fixture.component_factories["CancelConsumer"].assert_not_called()

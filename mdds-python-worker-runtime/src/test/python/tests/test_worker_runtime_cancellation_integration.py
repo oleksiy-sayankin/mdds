@@ -50,9 +50,6 @@ SUCCESSFUL_JOB_HANDLER = (
 
 
 class SuccessfulJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         number_a = int(context.inputs.read("number_a").decode("utf-8").strip())
         number_b = int(context.inputs.read("number_b").decode("utf-8").strip())
@@ -64,9 +61,6 @@ class SuccessfulJobHandler(JobHandler):
 
 
 class HangingJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        pass
-
     def execute(self, context: JobExecutionContext) -> None:
         while True:
             time.sleep(0.1)

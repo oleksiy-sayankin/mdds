@@ -458,7 +458,7 @@ def test_execution_watcher_success_when_state_is_not_running(
 
     ack_mock = MagicMock(spec=Acknowledger)
     ack = cast(Acknowledger, cast(object, ack_mock))
-    coordinator = _coordinator_in_state(ack, WorkerJobStatus.VALIDATED)
+    coordinator = _coordinator_in_state(ack, WorkerJobStatus.INPUTS_PREPARED)
 
     output_artifact_uploader = MagicMock()
     status_publisher = MagicMock()
@@ -477,7 +477,7 @@ def test_execution_watcher_success_when_state_is_not_running(
     output_artifact_uploader.upload.assert_not_called()
     status_publisher.publish_done.assert_not_called()
     ack_mock.ack.assert_not_called()
-    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.VALIDATED
+    assert coordinator.get_state(JOB_ID) is WorkerJobStatus.INPUTS_PREPARED
 
 
 def test_execution_watcher_publish_done_failure_does_not_ack_or_commit_done(

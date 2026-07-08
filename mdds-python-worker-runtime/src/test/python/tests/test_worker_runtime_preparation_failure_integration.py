@@ -49,9 +49,6 @@ VALIDATION_MUST_NOT_RUN_HANDLER = (
 
 
 class ValidationMustNotRunJobHandler(JobHandler):
-    def validate(self, context: JobExecutionContext) -> None:
-        raise RuntimeError(VALIDATION_REACHED_MESSAGE)
-
     def execute(self, context: JobExecutionContext) -> None:
         raise RuntimeError(EXECUTION_REACHED_MESSAGE)
 
