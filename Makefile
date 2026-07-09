@@ -195,6 +195,26 @@ push_python_worker_runtime_docker_image:
 	docker push $(USER_NAME)/python-worker-runtime:$(PROJECT_VERSION)
 	$(call log_done,"Pushing Docker image for Python Worker Runtime.")
 
+
+#
+# Build Docker image for the SLAE Python Worker.
+# Requires the Python Worker Runtime Docker image and the SLAE worker wheel package.
+#
+build_python_worker_solving_slae_docker_image:
+	$(call log_info,"Building Python Worker solving SLAE Docker image...")
+	docker buildx build -f deployment/python-worker-solving-slae/Dockerfile --progress=plain --tag $(USER_NAME)/python-worker-solving-slae:$(PROJECT_VERSION) .
+	$(call log_done,"Building Python Worker solving SLAE Docker image completed.")
+
+
+#
+# Push Docker image for Python Worker solving SLAE
+#
+push_python_worker_solving_slae_docker_image:
+	$(call log_info,"Pushing Docker image for Python Worker solving SLAE...")
+	docker push $(USER_NAME)/python-worker-solving-slae:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Docker image for Python Worker solving SLAE.")
+
+
 #
 # Build Developer container Docker image
 #
@@ -443,20 +463,20 @@ build_and_push_observability_images: \
 #
 # Build main images. Here we do not build base Java and Python docker images since they are rarely changed.
 #
-build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_worker_runtime build_python_worker_runtime_docker_image
+build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_workers build_python_worker_runtime_docker_image build_python_worker_solving_slae_docker_image
 
 
 #
 # Build main Docker images without formatting or auto-fixing sources.
 # Intended for CI and reproducible builds.
 #
-build_main_images_ci: build_jars_ci build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_worker_runtime build_python_worker_runtime_docker_image
+build_main_images_ci: build_jars_ci build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_workers build_python_worker_runtime_docker_image build_python_worker_solving_slae_docker_image
 
 
 #
 # Push main images.
 #
-push_main_images: push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image push_python_worker_runtime_docker_image
+push_main_images: push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image push_python_worker_runtime_docker_image push_python_worker_solving_slae_docker_image
 
 #
 # Build and push main images.
@@ -797,7 +817,7 @@ install_js_dependencies: \
 #
 # Package all Python workers
 #
-package_python_workers: package_python_worker_runtime package_python_worker_slae
+package_python_workers: package_python_worker_runtime package_python_worker_solving_slae
 
 
 #
@@ -822,8 +842,8 @@ package_python_worker_runtime:
 #
 # Build Python Worker SLAE wheel package
 #
-package_python_worker_slae:
-	$(call log_info,"Building Python Worker SLAE wheel package...")
+package_python_worker_solving_slae:
+	$(call log_info,"Building Python Worker solving SLAE wheel package...")
 	@rm -rf \
 	  "$(WORKER_SLAE_PACKAGE)/build" \
 	  "$(WORKER_SLAE_DIST)" \
@@ -833,7 +853,7 @@ package_python_worker_slae:
 	    --wheel \
 	    --outdir "target/dist"
 	@test -n "$$(find "$(WORKER_SLAE_DIST)" -maxdepth 1 -name '*.whl' -print -quit)"
-	$(call log_done,"Python Worker SLAE wheel package was built successfully.")
+	$(call log_done,"Python Worker solving SLAE wheel package was built successfully.")
 	$(call log_info,"Built artifacts:")
 	@ls -lh "$(WORKER_SLAE_DIST)"/*.whl
 
