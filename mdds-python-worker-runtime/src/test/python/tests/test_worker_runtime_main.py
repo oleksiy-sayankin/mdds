@@ -1258,3 +1258,110 @@ def test_build_worker_runtime_from_environment_fails_fast_when_rabbitmq_messagin
     fixture.component_factories["TimeoutWatcher"].assert_not_called()
 
     fixture.worker_runtime_factory.assert_not_called()
+
+
+def test_main_delegates_to_runtime_health_server_wait_and_stop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    runtime = MagicMock(name="runtime")
+    health_server = MagicMock(name="health_server")
+
+    setup_logging = MagicMock(name="setup_logging")
+    build_runtime = MagicMock(name="build_runtime", return_value=runtime)
+    build_health_server = MagicMock(
+        name="build_health_server",
+        return_value=health_server,
+    )
+    wait_until_shutdown_signal = MagicMock(name="wait_until_shutdown_signal")
+
+    setup_logging.side_effect = lambda: calls.append("setup_logging")
+    build_runtime.side_effect = lambda: (
+        calls.append("build_runtime"),
+        runtime,
+    )[1]
+    build_health_server.side_effect = lambda: (
+        calls.append("build_health_server"),
+        health_server,
+    )[1]
+    runtime.start.side_effect = lambda: calls.append("runtime.start")
+    health_server.start.side_effect = lambda: calls.append("health_server.start")
+    wait_until_shutdown_signal.side_effect = lambda: calls.append(
+        "wait_until_shutdown_signal"
+    )
+    health_server.stop.side_effect = lambda: calls.append("health_server.stop")
+    runtime.stop.side_effect = lambda: calls.append("runtime.stop")
+
+    monkeypatch.setattr(worker_main, "setup_logging", setup_logging)
+    monkeypatch.setattr(
+        worker_main,
+        "build_worker_runtime_from_environment",
+        build_runtime,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "build_worker_health_server_from_environment",
+        build_health_server,
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "_wait_until_shutdown_signal",
+        wait_until_shutdown_signal,
+    )
+
+    result = worker_main.main()
+
+    assert result == 0
+
+    assert calls == [
+        "setup_logging",
+        "build_runtime",
+        "build_health_server",
+        "runtime.start",
+        "health_server.start",
+        "wait_until_shutdown_signal",
+        "health_server.stop",
+        "runtime.stop",
+    ]
+
+    setup_logging.assert_called_once_with()
+    build_runtime.assert_called_once_with()
+    build_health_server.assert_called_once_with()
+    runtime.start.assert_called_once_with()
+    health_server.start.assert_called_once_with()
+    wait_until_shutdown_signal.assert_called_once_with()
+    health_server.stop.assert_called_once_with()
+    runtime.stop.assert_called_once_with()
+
+
+def test_main_stops_health_server_and_runtime_when_wait_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = MagicMock(name="runtime")
+    health_server = MagicMock(name="health_server")
+
+    monkeypatch.setattr(worker_main, "setup_logging", MagicMock())
+    monkeypatch.setattr(
+        worker_main,
+        "build_worker_runtime_from_environment",
+        MagicMock(return_value=runtime),
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "build_worker_health_server_from_environment",
+        MagicMock(return_value=health_server),
+    )
+    monkeypatch.setattr(
+        worker_main,
+        "_wait_until_shutdown_signal",
+        MagicMock(side_effect=RuntimeError("wait failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="wait failed"):
+        worker_main.main()
+
+    runtime.start.assert_called_once_with()
+    health_server.start.assert_called_once_with()
+    health_server.stop.assert_called_once_with()
+    runtime.stop.assert_called_once_with()

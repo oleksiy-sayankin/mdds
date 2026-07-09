@@ -26,6 +26,7 @@ Concrete job behavior is delegated to the dynamically loaded JobHandler.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 import logging
 import signal
@@ -61,8 +62,14 @@ from mdds_worker_runtime.storage.s3_factory import (
     Boto3S3ClientFactory,
     S3Properties,
 )
+from mdds_worker_runtime.worker_health_server import WorkerHealthServer
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_WORKER_HEALTH_HOST = "0.0.0.0"
+DEFAULT_WORKER_HEALTH_PORT = 12457
+WORKER_HEALTH_HOST_ENV = "MDDS_WORKER_HEALTH_HOST"
+WORKER_HEALTH_PORT_ENV = "MDDS_WORKER_HEALTH_PORT"
 
 
 class WorkerRuntime:
@@ -251,6 +258,25 @@ class WorkerRuntime:
             )
 
 
+def build_worker_health_server_from_environment() -> WorkerHealthServer:
+    """Build WorkerHealthServer from environment variables."""
+    host = os.getenv(WORKER_HEALTH_HOST_ENV, DEFAULT_WORKER_HEALTH_HOST).strip()
+    raw_port = os.getenv(
+        WORKER_HEALTH_PORT_ENV,
+        str(DEFAULT_WORKER_HEALTH_PORT),
+    ).strip()
+
+    try:
+        port = int(raw_port)
+    except ValueError as error:
+        raise ValueError(f"{WORKER_HEALTH_PORT_ENV} must be an integer.") from error
+
+    if port < 1 or port > 65535:
+        raise ValueError(f"{WORKER_HEALTH_PORT_ENV} must be between 1 and 65535.")
+
+    return WorkerHealthServer(host=host, port=port)
+
+
 def build_worker_runtime_from_environment() -> WorkerRuntime:
     """Build WorkerRuntime using environment-backed WorkerConfig.
 
@@ -385,9 +411,11 @@ def main() -> int:
     setup_logging()
 
     runtime = build_worker_runtime_from_environment()
+    health_server = build_worker_health_server_from_environment()
 
     try:
         runtime.start()
+        health_server.start()
         _wait_until_shutdown_signal()
 
         logger.info(
@@ -399,6 +427,7 @@ def main() -> int:
         )
         return 0
     finally:
+        health_server.stop()
         runtime.stop()
 
 
