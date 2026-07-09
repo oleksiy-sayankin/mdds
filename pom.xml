@@ -23,6 +23,7 @@
     <module>mdds-logging</module>
     <module>mdds-python-worker-runtime</module>
     <module>mdds-worker-examples</module>
+    <module>mdds-e2e-tests</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

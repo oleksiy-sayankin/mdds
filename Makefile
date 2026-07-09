@@ -34,6 +34,11 @@ WORKER_SLAE_TEST := $(WORKER_SLAE_ROOT)/src/test/python
 WORKER_SLAE_PACKAGE := $(WORKER_SLAE_ROOT)
 WORKER_SLAE_DIST := $(WORKER_SLAE_ROOT)/target/dist
 
+MDDS_E2E_TESTS := mdds-e2e-tests
+E2E_TESTS_ROOT := $(PROJECT_ROOT)/$(MDDS_E2E_TESTS)
+E2E_TESTS_MAIN := $(E2E_TESTS_ROOT)/src/main/python
+E2E_TESTS_TEST := $(E2E_TESTS_ROOT)/src/test/python
+
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT := src
 JS_ROOT := src
@@ -504,12 +509,12 @@ build_and_copy_web_client_ci: install_js_dependencies
 #
 # Reformat all Python code
 #
-reformat_python: reformat_worker_runtime reformat_worker_slae
+reformat_python: reformat_worker_runtime reformat_worker_slae reformat_e2e_tests
 
 #
 # Check code style for all Python code
 #
-check_python_code_style: check_worker_runtime_code_style check_worker_slae_code_style
+check_python_code_style: check_worker_runtime_code_style check_worker_slae_code_style check_e2e_code_style
 
 #
 # Test all Python code
@@ -547,6 +552,17 @@ check_worker_slae_code_style:
 	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking worker slae style completed.")
 
+
+#
+# Check e2e sources code style
+#
+check_e2e_code_style:
+	$(call log_info,"Checking e2e sources style...")
+	pycodestyle $(E2E_TESTS_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	ruff check $(E2E_TESTS_ROOT) --fix --force-exclude --respect-gitignore
+	PYTHONPATH=$(abspath $(E2E_TESTS_MAIN)):$(E2E_TESTS_MAIN):$(E2E_TESTS_TEST):$$PYTHONPATH pylint $(E2E_TESTS_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	$(call log_done,"Checking e2e sources completed.")
+
 #
 # Check JavaScript code style
 #
@@ -576,6 +592,16 @@ reformat_worker_slae:
 	$(call log_info,"Reformating worker slae sources...")
 	black $(WORKER_SLAE_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
 	$(call log_done,"Reformating worker slae sources completed.")
+
+
+#
+# Reformat e2e tests Python code
+#
+reformat_e2e_tests:
+	$(call log_info,"Reformating e2e tests Python sources...")
+	black $(E2E_TESTS_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
+	$(call log_done,"Reformating e2e tests Python sources completed.")
+
 
 #
 # Check bash code style
@@ -616,6 +642,16 @@ test_worker_runtime_coverage:
 	    --cov-report=xml:target/python-coverage.xml
 	$(call log_done,"Worker runtime tests with coverage completed.")
 
+
+#
+# Run e2e Python tests
+#
+test_e2e_python:
+	$(call log_info,"Running e2e Python tests...")
+	cd $(E2E_TESTS_ROOT) && \
+	  PYTHONPATH=src/main/python:src/test/python:$$PYTHONPATH \
+	  python -m pytest src/test/python
+	$(call log_done,"e2e Python tests completed.")
 
 #
 # Run SLAE Python worker tests with coverage
