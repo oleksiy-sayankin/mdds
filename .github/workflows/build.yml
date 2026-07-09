@@ -64,7 +64,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            deployment/python-base/requirements.txt
+            deployment/python-base/build-constraints.txt
 
       - name: Show tool versions
         run: |
@@ -77,10 +80,25 @@ jobs:
           docker compose version
           make --version
 
+      - name: Install Python native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            gcc \
+            g++ \
+            gfortran \
+            pkg-config \
+            libblas-dev \
+            liblapack-dev
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade "pip>=25.3"
-          python -m pip install -r requirements.txt --build-constraint deployment/python-base/build-constraints.txt
+          python -m pip install \
+            -r deployment/python-base/requirements.txt \
+            -r requirements.txt \
+            --build-constraint deployment/python-base/build-constraints.txt
 
       - name: Install web-client dependencies
         working-directory: mdds-web-client
