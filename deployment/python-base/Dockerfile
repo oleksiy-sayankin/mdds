@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libblas-dev  \
     liblapack-dev \
     gcc \
+    curl \
     build-essential
 
 # Install grpc_health_probe binary
