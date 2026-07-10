@@ -603,6 +603,8 @@ The table below lists environment variables used to configure the Worker runtime
 | `MDDS_WORKER_CLEANUP_INTERVAL_SECONDS`          |       No | `1`                              | Cleanup watcher polling interval.                                           | `1`                                       |
 | `MDDS_WORKER_PROGRESS_INTERVAL_SECONDS`         |       No | `5`                              | Interval for publishing time-based `IN_PROGRESS` updates.                   | `5`                                       |
 | `MDDS_WORKER_LOCAL_ROOT`                        |       No | `/opt/mdds`                      | Local root folder for Worker Runtime job workspaces.                        | `/opt/mdds`                               |
+| `MDDS_WORKER_HEALTH_HOST`                       |       No | `0.0.0.0`                        | Host where the `/health` endpoint is available.                             | `0.0.0.0`                                 |
+| `MDDS_WORKER_HEALTH_PORT`                       |       No | `12457`                          | Port where the `/health` endpoint is available.                             | `12457`                                   |
 
 If `MDDS_WORKER_JOB_QUEUE_NAME` is not set, the runtime derives it as:
 
