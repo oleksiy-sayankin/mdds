@@ -124,7 +124,7 @@ services:
   loki:
     build:
       context: ../../deployment/observability/loki
-      dockerfile: Dockerfile
+      dockerfile: ../../deployment/observability/loki/Dockerfile
     image: mddsproject/loki:0.1.0
     command: ["-config.file=/etc/loki/loki.yaml"]
     user: root
@@ -139,7 +139,7 @@ services:
   alloy:
     build:
       context: ../../deployment/observability/alloy
-      dockerfile: Dockerfile
+      dockerfile: ../../deployment/observability/alloy/Dockerfile
     image: mddsproject/alloy:0.1.0
     environment:
       MDDS_COMPOSE_PROJECT_NAME: mdds-e2e
@@ -163,7 +163,7 @@ services:
   grafana:
     build:
       context: ../../deployment/observability/grafana
-      dockerfile: Dockerfile
+      dockerfile: ../../deployment/observability/grafana/Dockerfile
     image: mddsproject/grafana:0.1.0
     environment:
       GF_SECURITY_ADMIN_USER: admin

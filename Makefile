@@ -38,6 +38,9 @@ MDDS_E2E_TESTS := mdds-e2e-tests
 E2E_TESTS_ROOT := $(PROJECT_ROOT)/$(MDDS_E2E_TESTS)
 E2E_TESTS_MAIN := $(E2E_TESTS_ROOT)/src/main/python
 E2E_TESTS_TEST := $(E2E_TESTS_ROOT)/src/test/python
+E2E_TESTS_NEWMAN_HOME := $(MDDS_E2E_TESTS)/newman
+E2E_TESTS_PROJECT_NAME := mdds-e2e
+E2E_TESTS_COMPOSE := docker compose --project-name $(E2E_TESTS_PROJECT_NAME) --progress=plain -f $(E2E_TESTS_NEWMAN_HOME)/docker-compose.yml
 
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT := src
@@ -49,9 +52,6 @@ DEPLOYMENT_DIR := deployment
 DEPLOYMENT_TEST_ROOT := $(PROJECT_ROOT)/$(DEPLOYMENT_DIR)/test
 MDDS_E2E_SERVER_HOST ?= web-server
 MDDS_E2E_SERVER_PORT ?= 8000
-E2E_HOME := mdds-tests/e2e
-E2E_PROJECT_NAME := mdds-e2e
-E2E_COMPOSE := docker compose --project-name $(E2E_PROJECT_NAME) --progress=plain -f $(E2E_HOME)/docker-compose.yml
 DEMO_HOME := mdds-demo
 GOOGLE_JAVA_FORMAT_HOME := /opt/google-java-format
 DOCKER_GID ?= $(shell stat -c '%g' /var/run/docker.sock)
@@ -930,7 +930,7 @@ stop_mdds_demo:
 start_mdds_env:
 	$(call log_info,"Starting MDDS environment...")
 	@$(MAKE) create_config_file
-	@$(E2E_COMPOSE) up -d --wait --wait-timeout 120
+	@$(E2E_TESTS_COMPOSE) up -d --wait --wait-timeout 120
 	$(call log_done,"Starting MDDS environment completed. MDDS environment is up!")
 
 #
@@ -938,7 +938,7 @@ start_mdds_env:
 #
 stop_mdds_env:
 	$(call log_info,"Stopping MDDS environment...")
-	@$(E2E_COMPOSE) down --volumes --remove-orphans
+	@$(E2E_TESTS_COMPOSE) down --volumes --remove-orphans
 	$(call log_done,"Stopping MDDS environment completed.")
 
 #
@@ -959,21 +959,26 @@ endef
 
 create_config_file:
 	$(call log_info,"Generating env.json file for newman...")
-	$(file > $(E2E_HOME)/env.json,$(FILE_CONTENT))
+	$(file > $(E2E_TESTS_NEWMAN_HOME)/env.json,$(FILE_CONTENT))
 	$(call log_done,"Generating env.json file for newman completed.")
 
+#
+# Run all e2e tests
+#
+test_e2e: test_e2e_newman test_e2e_python
+
 
 #
-# Start Docker containers and run end to end tests
+# Start Docker containers and run Newman end to end smoke tests
 #
-test_e2e:
+test_e2e_newman:
 	@set -e; \
 	trap '$(MAKE) stop_mdds_env' EXIT; \
 	$(MAKE) start_mdds_env; \
-	$(call log_info_sh,"Running end to end tests..."); \
-	tar -C "$(E2E_HOME)" -cf - collection.json env.json | \
-	  $(E2E_COMPOSE) --profile e2e run --rm -T --no-deps newman; \
-	$(call log_done_sh,"End to end tests completed.")
+	$(call log_info_sh,"Running Newman end to end tests..."); \
+	tar -C "$(E2E_TESTS_NEWMAN_HOME)" -cf - collection.json env.json | \
+	  $(E2E_TESTS_COMPOSE) --profile e2e run --rm -T --no-deps newman; \
+	$(call log_done_sh,"Newman end to end tests completed.")
 
 #
 # Setup python environment

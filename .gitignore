@@ -4,8 +4,8 @@ mdds_env
 logs
 *.log
 node_modules
-mdds-tests/e2e/env.json
-mdds-tests/e2e/output/
+mdds-e2e-tests/newman/env.json
+mdds-e2e-tests/newman/output/
 .sonar_token
 target/
 mdds_grpc_core/generated
