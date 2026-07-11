@@ -1,16 +1,13 @@
 # Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
 # Refer to the LICENSE file in the root directory for full license details.
 
-"""End-to-end tests for SLAE Python Worker Docker image."""
+"""Failure e2e tests for SLAE Python Worker Docker image."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-import csv
+from collections.abc import Callable
 from dataclasses import dataclass
-import io
 import json
-import math
 import queue
 import threading
 import time
@@ -24,10 +21,10 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 import pika
 import pytest
-from testcontainers.core.network import Network
-from testcontainers.minio import MinioContainer
 from testcontainers.core.container import DockerContainer
+from testcontainers.core.network import Network
 from testcontainers.core.wait_strategies import HttpWaitStrategy
+from testcontainers.minio import MinioContainer
 
 _RABBITMQ_IMAGE = "rabbitmq:3.13-management"
 _SLAE_WORKER_IMAGE = "mddsproject/python-worker-solving-slae:0.1.0"
@@ -47,17 +44,9 @@ _S3_ACCESS_KEY = "minioadmin"
 _S3_SECRET_KEY = "minioadmin"
 
 _WORKER_HEALTH_PORT = 12457
-_WORKER_ID = "slae-worker-local"
-
-_JOB_QUEUE_NAME = "mdds.local.job.solving_slae"
-_STATUS_QUEUE_NAME = "mdds.local.status.solving_slae"
-_CANCEL_QUEUE_NAME = "mdds.local.cancel.solving_slae"
-
-_RABBITMQ_QUEUE_NAMES = [
-    _JOB_QUEUE_NAME,
-    _STATUS_QUEUE_NAME,
-    _CANCEL_QUEUE_NAME,
-]
+_WORKER_ID = "slae-worker-failure-local"
+_ERROR_JOB_HANDLER = "mdds_python_worker_solving_slae.testing_handlers:ErrorJobHandler"
+_SLAE_JOB_HANDLER = "mdds_python_worker_solving_slae.handler:SlaeJobHandler"
 
 _USER_ID = 123
 _JOB_TYPE = "solving_slae"
@@ -67,13 +56,9 @@ _RHS_INPUT_SLOT = "rhs"
 _SOLUTION_OUTPUT_SLOT = "solution"
 _SOLVING_METHOD_PARAM = "solvingMethod"
 
-_SOLVING_METHODS = [
-    "numpy_exact_solver",
-    "numpy_lstsq_solver",
-    "numpy_pinv_solver",
-    "petsc_solver",
-    "scipy_gmres_solver",
-]
+_MATRIX_CSV = "2,1\n1,3\n"
+_RHS_CSV = "1\n2\n"
+_SOLVING_METHOD = "numpy_exact_solver"
 
 _SINGULAR_MATRIX_SOLVING_METHODS = {
     "numpy_exact_solver": {
@@ -89,14 +74,12 @@ _SINGULAR_MATRIX_SOLVING_METHODS = {
     },
 }
 
-_MATRIX_CSV = "2,1\n1,3\n"
-_RHS_CSV = "1\n2\n"
-_EXPECTED_SOLUTION = [0.2, 0.6]
-
 _INFRASTRUCTURE_TIMEOUT_SECONDS = 60.0
 _WORKER_HEALTH_TIMEOUT_SECONDS = 60.0
 _STATUS_TIMEOUT_SECONDS = 60.0
+_QUEUE_DRAIN_TIMEOUT_SECONDS = 10.0
 
+_TERMINAL_STATUSES = {"DONE", "ERROR", "CANCELLED"}
 
 StatusMessage = dict[str, Any]
 
@@ -109,381 +92,246 @@ class RabbitMqEndpoint:
     password: str
 
 
-@dataclass(frozen=True)
-class SlaeWorkerCluster:
-    rabbitmq: RabbitMqEndpoint
-    s3_client: Any
-    worker_health_url: str
-
-
-@pytest.fixture(scope="module")
-def e2e_network() -> Iterator[Network]:
-    """Create shared Docker network for RabbitMQ, MinIO, and SLAE worker."""
-    with Network() as network:
-        yield network
-
-
-@pytest.fixture(scope="module")
-def rabbitmq_container(e2e_network: Network) -> Iterator[DockerContainer]:
-    """Start RabbitMQ in the shared e2e Docker network."""
-    with (
-        DockerContainer(_RABBITMQ_IMAGE)
-        .with_network(e2e_network)
-        .with_network_aliases(_RABBITMQ_NETWORK_ALIAS)
-        .with_env("RABBITMQ_DEFAULT_USER", _RABBITMQ_USER)
-        .with_env("RABBITMQ_DEFAULT_PASS", _RABBITMQ_PASSWORD)
-        .with_exposed_ports(
-            _RABBITMQ_INTERNAL_PORT,
-            _RABBITMQ_MANAGEMENT_PORT,
-        )
-        .waiting_for(HttpWaitStrategy(_RABBITMQ_MANAGEMENT_PORT).for_status_code(200))
-    ) as container:
-        yield container
-
-
-@pytest.fixture(scope="module")
-def minio_container(e2e_network: Network) -> Iterator[MinioContainer]:
-    """Start MinIO in the shared e2e Docker network."""
-    with (
-        MinioContainer(
-            access_key=_S3_ACCESS_KEY,
-            secret_key=_S3_SECRET_KEY,
-        )
-        .with_network(e2e_network)
-        .with_network_aliases(_MINIO_NETWORK_ALIAS)
-    ) as container:
-        yield container
-
-
-@pytest.fixture(scope="module")
-def slae_worker_cluster(
-    e2e_network: Network,
-    rabbitmq_container: DockerContainer,
-    minio_container: MinioContainer,
-) -> Iterator[SlaeWorkerCluster]:
-    """Start SLAE Worker Docker image once for all solver-method test cases."""
-    rabbitmq_endpoint = _rabbitmq_endpoint(rabbitmq_container)
-    _wait_for_rabbitmq(rabbitmq_endpoint)
-
-    s3_client, _s3_endpoint = _create_s3_client_and_endpoint(minio_container)
-    _create_bucket_if_absent(s3_client, _S3_BUCKET)
-    _wait_for_s3_bucket(s3_client)
-
-    _declare_queues(rabbitmq_endpoint, _RABBITMQ_QUEUE_NAMES)
-
-    with _new_slae_worker_container(e2e_network) as worker_container:
-        worker_health_url = _worker_health_url(worker_container)
-        _wait_for_worker_health(worker_health_url, worker_container)
-
-        yield SlaeWorkerCluster(
-            rabbitmq=rabbitmq_endpoint,
-            s3_client=s3_client,
-            worker_health_url=worker_health_url,
-        )
-
-
-@pytest.fixture()
-def clean_rabbitmq_queues(
-    slae_worker_cluster: SlaeWorkerCluster,
-) -> Iterator[None]:
-    """Keep RabbitMQ queues isolated between parameterized solver test cases."""
-    _purge_queues(slae_worker_cluster.rabbitmq, _RABBITMQ_QUEUE_NAMES)
-
-    yield
-
-    _purge_queues(slae_worker_cluster.rabbitmq, _RABBITMQ_QUEUE_NAMES)
-
-
-@pytest.mark.parametrize("solving_method", _SOLVING_METHODS)
-def test_slae_worker_docker_image_processes_real_job_through_rabbitmq_and_s3(
-    slae_worker_cluster: SlaeWorkerCluster,
-    clean_rabbitmq_queues: None,
-    solving_method: str,
-) -> None:
-    """Verify concrete SLAE Docker image through real RabbitMQ and S3 flow.
+def test_slae_worker_docker_image_publishes_error_when_job_handler_fails() -> None:
+    """Verify Dockerized SLAE worker reports ERROR for handler execution failure.
 
     Test chain:
 
     Docker image
-      -> inherited runtime entrypoint
-      -> image-level default handler/job type
-      -> RabbitMQ startup readiness
-      -> S3 bucket readiness
-      -> /health
-      -> real job message
-      -> SLAE handler
-      -> solution.csv in S3
+      -> explicit MDDS_WORKER_HANDLER override
+      -> ErrorJobHandler
+      -> RabbitMQ submitted job message
+      -> INPUTS_PREPARED
+      -> IN_PROGRESS
+      -> supervised child process execution failure
+      -> ERROR
+      -> submitted message acknowledgement
     """
-    del clean_rabbitmq_queues
+    test_id = str(uuid4())
+    job_id = f"job-handler-failure-{test_id}"
 
-    s3_client = slae_worker_cluster.s3_client
-    rabbitmq_endpoint = slae_worker_cluster.rabbitmq
-    job_id = f"job-{solving_method}-{uuid4()}"
-
-    manifest_key = f"jobs/{_USER_ID}/{job_id}/manifest.json"
-    matrix_key = f"jobs/{_USER_ID}/{job_id}/in/matrix.csv"
-    rhs_key = f"jobs/{_USER_ID}/{job_id}/in/rhs.csv"
-    solution_key = f"jobs/{_USER_ID}/{job_id}/out/solution.csv"
-
-    _put_bytes(
-        s3_client=s3_client,
-        key=matrix_key,
-        body=_MATRIX_CSV.encode("utf-8"),
-        content_type="text/csv",
-    )
-    _put_bytes(
-        s3_client=s3_client,
-        key=rhs_key,
-        body=_RHS_CSV.encode("utf-8"),
-        content_type="text/csv",
-    )
-    _put_json(
-        s3_client=s3_client,
-        key=manifest_key,
-        value=_manifest(
-            job_id=job_id,
-            matrix_key=matrix_key,
-            rhs_key=rhs_key,
-            solution_key=solution_key,
-            solving_method=solving_method,
-        ),
-    )
-
-    with StatusQueueConsumer(rabbitmq_endpoint, _STATUS_QUEUE_NAME) as status_consumer:
-        _publish_job_message(rabbitmq_endpoint, manifest_key)
-
-        statuses = _wait_for_status_sequence(
-            status_consumer=status_consumer,
-            job_id=job_id,
-            expected_statuses=[
-                "INPUTS_PREPARED",
-                "IN_PROGRESS",
-                "DONE",
-            ],
-        )
-        statuses.extend(status_consumer.drain())
-
-    _assert_status_order(
-        statuses=statuses,
+    _run_worker_failure_flow(
+        test_id=test_id,
         job_id=job_id,
-        earlier_status="INPUTS_PREPARED",
-        later_status="IN_PROGRESS",
-    )
-    _assert_status_order(
-        statuses=statuses,
-        job_id=job_id,
-        earlier_status="IN_PROGRESS",
-        later_status="DONE",
-    )
-    _assert_status_absent(statuses, job_id, "ERROR")
-    _assert_status_absent(statuses, job_id, "CANCELLED")
-
-    done_status = _status_by_name(statuses, job_id, "DONE")
-    assert done_status is not None
-    assert _status_field(done_status, "workerId", "worker_id") == _WORKER_ID
-    assert int(done_status["progress"]) == 100
-
-    solution = _read_solution_from_s3(
-        s3_client=s3_client,
-        key=solution_key,
-    )
-
-    assert _vectors_are_close(solution, _EXPECTED_SOLUTION)
-
-    _wait_until(
-        lambda: _basic_get_without_consuming(rabbitmq_endpoint, _JOB_QUEUE_NAME)
-        is None,
-        description="Job queue to become empty after terminal ack",
-        timeout_seconds=10.0,
+        worker_handler=_ERROR_JOB_HANDLER,
+        matrix_csv=_MATRIX_CSV,
+        rhs_csv=_RHS_CSV,
+        solving_method=_SOLVING_METHOD,
+        expected_message_fragments=None,
     )
 
 
-def test_slae_worker_docker_image_publishes_error_when_rhs_input_is_missing_in_s3(
-    slae_worker_cluster: SlaeWorkerCluster,
-    clean_rabbitmq_queues: None,
+@pytest.mark.parametrize("solving_method", _SINGULAR_MATRIX_SOLVING_METHODS.keys())
+def test_slae_worker_docker_image_publishes_error_when_matrix_is_singular(
+    solving_method: str,
 ) -> None:
-    """Verify SLAE worker publishes ERROR when declared rhs input is absent in S3."""
-    del clean_rabbitmq_queues
+    """Verify SLAE worker publishes ERROR for singular matrix."""
+    test_id = str(uuid4())
+    job_id = f"job-singular-matrix-{solving_method}-{test_id}"
 
-    s3_client = slae_worker_cluster.s3_client
-    rabbitmq_endpoint = slae_worker_cluster.rabbitmq
-    job_id = f"job-missing-rhs-{uuid4()}"
+    singular_matrix_csv = "0,0\n0,0\n"
+    zero_rhs_csv = "0\n0\n"
+    expected_message_fragments = _SINGULAR_MATRIX_SOLVING_METHODS[solving_method][
+        "expected_message_fragments"
+    ]
+
+    _run_worker_failure_flow(
+        test_id=test_id,
+        job_id=job_id,
+        worker_handler=_SLAE_JOB_HANDLER,
+        matrix_csv=singular_matrix_csv,
+        rhs_csv=zero_rhs_csv,
+        solving_method=solving_method,
+        expected_message_fragments=expected_message_fragments,
+    )
+
+
+def _run_worker_failure_flow(
+    *,
+    test_id: str,
+    job_id: str,
+    worker_handler: str,
+    matrix_csv: str,
+    rhs_csv: str,
+    solving_method: str,
+    expected_message_fragments: tuple[str, ...] | None,
+) -> None:
+    job_queue_name = f"mdds.local.job.solving_slae.failure.{test_id}"
+    status_queue_name = f"mdds.local.status.solving_slae.failure.{test_id}"
+    cancel_queue_name = f"mdds.local.cancel.solving_slae.failure.{test_id}"
+
+    queue_names = [
+        job_queue_name,
+        status_queue_name,
+        cancel_queue_name,
+    ]
 
     manifest_key = f"jobs/{_USER_ID}/{job_id}/manifest.json"
     matrix_key = f"jobs/{_USER_ID}/{job_id}/in/matrix.csv"
     rhs_key = f"jobs/{_USER_ID}/{job_id}/in/rhs.csv"
     solution_key = f"jobs/{_USER_ID}/{job_id}/out/solution.csv"
 
-    _put_bytes(
-        s3_client=s3_client,
-        key=matrix_key,
-        body=_MATRIX_CSV.encode("utf-8"),
-        content_type="text/csv",
-    )
+    with Network() as e2e_network:
+        with _new_rabbitmq_container(e2e_network) as rabbitmq_container:
+            rabbitmq_endpoint = _rabbitmq_endpoint(rabbitmq_container)
+            _wait_for_rabbitmq(rabbitmq_endpoint)
 
-    # Intentionally do not upload rhs_key.
-    _put_json(
-        s3_client=s3_client,
-        key=manifest_key,
-        value=_manifest(
-            job_id=job_id,
-            matrix_key=matrix_key,
-            rhs_key=rhs_key,
-            solution_key=solution_key,
-            solving_method="numpy_exact_solver",
-        ),
-    )
-
-    statuses: list[StatusMessage] = []
-
-    with StatusQueueConsumer(rabbitmq_endpoint, _STATUS_QUEUE_NAME) as status_consumer:
-        _publish_job_message(rabbitmq_endpoint, manifest_key)
-
-        deadline = time.monotonic() + _STATUS_TIMEOUT_SECONDS
-
-        while time.monotonic() < deadline:
-            remaining = max(0.1, deadline - time.monotonic())
+            _declare_queues(rabbitmq_endpoint, queue_names)
 
             try:
-                status = status_consumer.get(timeout=min(1.0, remaining))
-            except queue.Empty:
-                continue
+                with _new_minio_container(e2e_network) as minio_container:
+                    s3_client, _s3_endpoint = _create_s3_client_and_endpoint(
+                        minio_container
+                    )
+                    _create_bucket_if_absent(s3_client, _S3_BUCKET)
+                    _wait_for_s3_bucket(s3_client)
 
-            if _status_job_id(status) != job_id:
-                continue
+                    _put_bytes(
+                        s3_client=s3_client,
+                        key=matrix_key,
+                        body=matrix_csv.encode("utf-8"),
+                        content_type="text/csv",
+                    )
+                    _put_bytes(
+                        s3_client=s3_client,
+                        key=rhs_key,
+                        body=rhs_csv.encode("utf-8"),
+                        content_type="text/csv",
+                    )
+                    _put_json(
+                        s3_client=s3_client,
+                        key=manifest_key,
+                        value=_manifest(
+                            job_id=job_id,
+                            matrix_key=matrix_key,
+                            rhs_key=rhs_key,
+                            solution_key=solution_key,
+                            solving_method=solving_method,
+                        ),
+                    )
 
-            statuses.append(status)
+                    assert _object_exists(s3_client=s3_client, key=manifest_key)
+                    assert _object_exists(s3_client=s3_client, key=matrix_key)
+                    assert _object_exists(s3_client=s3_client, key=rhs_key)
+                    assert not _object_exists(s3_client=s3_client, key=solution_key)
 
-            if _status_name(status) == "ERROR":
-                break
+                    with _new_slae_worker_container(
+                        e2e_network=e2e_network,
+                        job_queue_name=job_queue_name,
+                        status_queue_name=status_queue_name,
+                        cancel_queue_name=cancel_queue_name,
+                        worker_handler=worker_handler,
+                    ) as worker_container:
+                        worker_health_url = _worker_health_url(worker_container)
+                        _wait_for_worker_health(worker_health_url, worker_container)
 
-        statuses.extend(status_consumer.drain())
+                        with StatusQueueConsumer(
+                            rabbitmq_endpoint,
+                            status_queue_name,
+                        ) as status_consumer:
+                            statuses: list[StatusMessage] = []
 
-    error_status = _status_by_name(statuses, job_id, "ERROR")
-    assert error_status is not None, (
-        "ERROR status was not published for job with missing rhs input. "
-        f"receivedStatuses={[_status_name(status) for status in statuses]}"
-    )
+                            _publish_job_message(
+                                rabbitmq_endpoint=rabbitmq_endpoint,
+                                queue_name=job_queue_name,
+                                manifest_key=manifest_key,
+                            )
 
-    assert _status_field(error_status, "workerId", "worker_id") == _WORKER_ID
-    assert str(error_status.get("message", "")).strip() != ""
+                            _wait_for_job_status(
+                                status_consumer=status_consumer,
+                                job_id=job_id,
+                                expected_status="INPUTS_PREPARED",
+                                received_statuses=statuses,
+                            )
+                            in_progress_status = _wait_for_job_status(
+                                status_consumer=status_consumer,
+                                job_id=job_id,
+                                expected_status="IN_PROGRESS",
+                                received_statuses=statuses,
+                            )
+                            error_status = _wait_for_job_status(
+                                status_consumer=status_consumer,
+                                job_id=job_id,
+                                expected_status="ERROR",
+                                received_statuses=statuses,
+                            )
 
-    _assert_status_absent(statuses, job_id, "INPUTS_PREPARED")
-    _assert_status_absent(statuses, job_id, "IN_PROGRESS")
-    _assert_status_absent(statuses, job_id, "DONE")
-    _assert_status_absent(statuses, job_id, "CANCELLED")
+                            statuses.extend(status_consumer.drain())
 
-    _wait_until(
-        lambda: _basic_get_without_consuming(rabbitmq_endpoint, _JOB_QUEUE_NAME)
-        is None,
-        description="Job queue to become empty after terminal error ack",
-        timeout_seconds=10.0,
-    )
+                    assert (
+                        _status_field(
+                            in_progress_status,
+                            "workerId",
+                            "worker_id",
+                        )
+                        == _WORKER_ID
+                    )
+                    assert (
+                        _status_field(
+                            error_status,
+                            "workerId",
+                            "worker_id",
+                        )
+                        == _WORKER_ID
+                    )
 
+                    error_message = str(error_status.get("message", "")).strip()
+                    assert error_message != ""
 
-def test_slae_worker_docker_image_publishes_error_when_matrix_contains_not_number(
-    slae_worker_cluster: SlaeWorkerCluster,
-    clean_rabbitmq_queues: None,
-) -> None:
-    """Verify SLAE worker publishes ERROR when matrix CSV contains non-numeric value."""
-    del clean_rabbitmq_queues
+                    if expected_message_fragments is not None:
+                        assert any(
+                            fragment in error_message.lower()
+                            for fragment in expected_message_fragments
+                        ), (
+                            "ERROR message does not explain singular matrix / "
+                            "non-unique solution. "
+                            f"solvingMethod={solving_method!r}, "
+                            f"message={error_message!r}"
+                        )
 
-    s3_client = slae_worker_cluster.s3_client
-    rabbitmq_endpoint = slae_worker_cluster.rabbitmq
-    job_id = f"job-invalid-matrix-number-{uuid4()}"
+                    _assert_status_order(
+                        statuses=statuses,
+                        job_id=job_id,
+                        earlier_status="INPUTS_PREPARED",
+                        later_status="IN_PROGRESS",
+                    )
+                    _assert_status_order(
+                        statuses=statuses,
+                        job_id=job_id,
+                        earlier_status="IN_PROGRESS",
+                        later_status="ERROR",
+                    )
 
-    manifest_key = f"jobs/{_USER_ID}/{job_id}/manifest.json"
-    matrix_key = f"jobs/{_USER_ID}/{job_id}/in/matrix.csv"
-    rhs_key = f"jobs/{_USER_ID}/{job_id}/in/rhs.csv"
-    solution_key = f"jobs/{_USER_ID}/{job_id}/out/solution.csv"
+                    _assert_status_absent(statuses, job_id, "DONE")
+                    _assert_status_absent(statuses, job_id, "CANCELLED")
 
-    invalid_matrix_csv = "2,not-a-number\n1,3\n"
+                    assert [
+                        _status_name(status)
+                        for status in _terminal_statuses_for_job(
+                            statuses=statuses,
+                            job_id=job_id,
+                        )
+                    ] == ["ERROR"]
 
-    _put_bytes(
-        s3_client=s3_client,
-        key=matrix_key,
-        body=invalid_matrix_csv.encode("utf-8"),
-        content_type="text/csv",
-    )
-    _put_bytes(
-        s3_client=s3_client,
-        key=rhs_key,
-        body=_RHS_CSV.encode("utf-8"),
-        content_type="text/csv",
-    )
-    _put_json(
-        s3_client=s3_client,
-        key=manifest_key,
-        value=_manifest(
-            job_id=job_id,
-            matrix_key=matrix_key,
-            rhs_key=rhs_key,
-            solution_key=solution_key,
-            solving_method="numpy_exact_solver",
-        ),
-    )
+                    assert not _object_exists(
+                        s3_client=s3_client,
+                        key=solution_key,
+                    )
 
-    statuses: list[StatusMessage] = []
-
-    with StatusQueueConsumer(rabbitmq_endpoint, _STATUS_QUEUE_NAME) as status_consumer:
-        _publish_job_message(rabbitmq_endpoint, manifest_key)
-
-        deadline = time.monotonic() + _STATUS_TIMEOUT_SECONDS
-
-        while time.monotonic() < deadline:
-            remaining = max(0.1, deadline - time.monotonic())
-
-            try:
-                status = status_consumer.get(timeout=min(1.0, remaining))
-            except queue.Empty:
-                continue
-
-            if _status_job_id(status) != job_id:
-                continue
-
-            statuses.append(status)
-
-            if _status_name(status) == "ERROR":
-                break
-
-        statuses.extend(status_consumer.drain())
-
-    error_status = _status_by_name(statuses, job_id, "ERROR")
-    assert error_status is not None, (
-        "ERROR status was not published for job with invalid matrix number. "
-        f"receivedStatuses={[_status_name(status) for status in statuses]}"
-    )
-
-    error_message = str(error_status.get("message", "")).strip()
-
-    assert _status_field(error_status, "workerId", "worker_id") == _WORKER_ID
-    assert error_message != ""
-    assert (
-        "Input artifact 'matrix' contains a non-numeric value in row 1" in error_message
-    )
-
-    _assert_status_order(
-        statuses=statuses,
-        job_id=job_id,
-        earlier_status="INPUTS_PREPARED",
-        later_status="IN_PROGRESS",
-    )
-    _assert_status_order(
-        statuses=statuses,
-        job_id=job_id,
-        earlier_status="IN_PROGRESS",
-        later_status="ERROR",
-    )
-
-    _assert_status_absent(statuses, job_id, "DONE")
-    _assert_status_absent(statuses, job_id, "CANCELLED")
-
-    _wait_until(
-        lambda: _basic_get_without_consuming(rabbitmq_endpoint, _JOB_QUEUE_NAME)
-        is None,
-        description="Job queue to become empty after terminal error ack",
-        timeout_seconds=10.0,
-    )
+                    _wait_until(
+                        lambda: _basic_get_without_consuming(
+                            rabbitmq_endpoint,
+                            job_queue_name,
+                        )
+                        is None,
+                        description=(
+                            "Job queue to become empty after terminal error ack"
+                        ),
+                        timeout_seconds=_QUEUE_DRAIN_TIMEOUT_SECONDS,
+                    )
+            finally:
+                for queue_name in queue_names:
+                    _delete_queue_if_exists(rabbitmq_endpoint, queue_name)
 
 
 class StatusQueueConsumer:
@@ -585,14 +433,49 @@ class StatusQueueConsumer:
         channel.basic_ack(delivery_tag=method_frame.delivery_tag)
 
 
-def _new_slae_worker_container(e2e_network: Network) -> DockerContainer:
+def _new_rabbitmq_container(e2e_network: Network) -> DockerContainer:
+    return (
+        DockerContainer(_RABBITMQ_IMAGE)
+        .with_network(e2e_network)
+        .with_network_aliases(_RABBITMQ_NETWORK_ALIAS)
+        .with_env("RABBITMQ_DEFAULT_USER", _RABBITMQ_USER)
+        .with_env("RABBITMQ_DEFAULT_PASS", _RABBITMQ_PASSWORD)
+        .with_exposed_ports(
+            _RABBITMQ_INTERNAL_PORT,
+            _RABBITMQ_MANAGEMENT_PORT,
+        )
+        .waiting_for(HttpWaitStrategy(_RABBITMQ_MANAGEMENT_PORT).for_status_code(200))
+    )
+
+
+def _new_minio_container(e2e_network: Network) -> MinioContainer:
+    return (
+        MinioContainer(
+            access_key=_S3_ACCESS_KEY,
+            secret_key=_S3_SECRET_KEY,
+        )
+        .with_network(e2e_network)
+        .with_network_aliases(_MINIO_NETWORK_ALIAS)
+    )
+
+
+def _new_slae_worker_container(
+    *,
+    e2e_network: Network,
+    job_queue_name: str,
+    status_queue_name: str,
+    cancel_queue_name: str,
+    worker_handler: str,
+) -> DockerContainer:
     return (
         DockerContainer(_SLAE_WORKER_IMAGE)
         .with_network(e2e_network)
         .with_env("MDDS_WORKER_ID", _WORKER_ID)
-        .with_env("MDDS_WORKER_JOB_QUEUE_NAME", _JOB_QUEUE_NAME)
-        .with_env("MDDS_WORKER_STATUS_QUEUE_NAME", _STATUS_QUEUE_NAME)
-        .with_env("MDDS_WORKER_CANCEL_QUEUE_NAME", _CANCEL_QUEUE_NAME)
+        .with_env("MDDS_WORKER_JOB_TYPE", _JOB_TYPE)
+        .with_env("MDDS_WORKER_JOB_QUEUE_NAME", job_queue_name)
+        .with_env("MDDS_WORKER_STATUS_QUEUE_NAME", status_queue_name)
+        .with_env("MDDS_WORKER_CANCEL_QUEUE_NAME", cancel_queue_name)
+        .with_env("MDDS_WORKER_HANDLER", worker_handler)
         .with_env("MDDS_RABBITMQ_HOST", _RABBITMQ_NETWORK_ALIAS)
         .with_env("MDDS_RABBITMQ_PORT", str(_RABBITMQ_INTERNAL_PORT))
         .with_env("MDDS_RABBITMQ_USER", _RABBITMQ_USER)
@@ -717,9 +600,9 @@ def _declare_queues(
         connection.close()
 
 
-def _purge_queues(
+def _delete_queue_if_exists(
     rabbitmq_endpoint: RabbitMqEndpoint,
-    queue_names: list[str],
+    queue_name: str,
 ) -> None:
     connection = pika.BlockingConnection(
         _rabbitmq_connection_parameters(rabbitmq_endpoint)
@@ -727,15 +610,15 @@ def _purge_queues(
 
     try:
         channel = connection.channel()
-
-        for queue_name in queue_names:
-            channel.queue_purge(queue=queue_name)
+        channel.queue_delete(queue=queue_name)
     finally:
         connection.close()
 
 
 def _publish_job_message(
+    *,
     rabbitmq_endpoint: RabbitMqEndpoint,
+    queue_name: str,
     manifest_key: str,
 ) -> None:
     connection = pika.BlockingConnection(
@@ -746,7 +629,7 @@ def _publish_job_message(
         channel = connection.channel()
         channel.basic_publish(
             exchange="",
-            routing_key=_JOB_QUEUE_NAME,
+            routing_key=queue_name,
             body=json.dumps({"manifestObjectKey": manifest_key}).encode("utf-8"),
             properties=pika.BasicProperties(
                 content_type="application/json",
@@ -864,33 +747,22 @@ def _put_bytes(
     )
 
 
-def _read_solution_from_s3(
+def _object_exists(
     *,
     s3_client: Any,
     key: str,
-) -> list[float]:
-    response = s3_client.get_object(
-        Bucket=_S3_BUCKET,
-        Key=key,
-    )
-    content = response["Body"].read().decode("utf-8")
+) -> bool:
+    try:
+        s3_client.head_object(Bucket=_S3_BUCKET, Key=key)
+        return True
+    except ClientError as error:
+        error_code = error.response.get("Error", {}).get("Code")
+        http_status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
 
-    return _read_csv_vector(content)
+        if error_code in {"404", "NoSuchKey", "NotFound"} or http_status == 404:
+            return False
 
-
-def _read_csv_vector(content: str) -> list[float]:
-    values: list[float] = []
-
-    for row in csv.reader(io.StringIO(content)):
-        if len(row) == 0 or all(cell.strip() == "" for cell in row):
-            continue
-
-        if len(row) != 1:
-            raise AssertionError(f"Expected one value per solution row, got: {row}")
-
-        values.append(float(row[0]))
-
-    return values
+        raise
 
 
 def _manifest(
@@ -928,15 +800,14 @@ def _manifest(
     }
 
 
-def _wait_for_status_sequence(
+def _wait_for_job_status(
     *,
     status_consumer: StatusQueueConsumer,
     job_id: str,
-    expected_statuses: list[str],
-) -> list[StatusMessage]:
+    expected_status: str,
+    received_statuses: list[StatusMessage],
+) -> StatusMessage:
     deadline = time.monotonic() + _STATUS_TIMEOUT_SECONDS
-    received: list[StatusMessage] = []
-    expected_index = 0
 
     while time.monotonic() < deadline:
         remaining = max(0.1, deadline - time.monotonic())
@@ -949,27 +820,23 @@ def _wait_for_status_sequence(
         if _status_job_id(status) != job_id:
             continue
 
-        received.append(status)
-
+        received_statuses.append(status)
         status_name = _status_name(status)
 
-        if status_name in {"ERROR", "CANCELLED"}:
+        if status_name == expected_status:
+            return status
+
+        if status_name in _TERMINAL_STATUSES and status_name != expected_status:
             raise AssertionError(
-                "Unexpected terminal status was published: "
-                f"jobId='{job_id}', status='{status_name}', "
-                f"message='{status.get('message')}'."
+                "Unexpected terminal status was published before expected status: "
+                f"jobId='{job_id}', expectedStatus='{expected_status}', "
+                f"actualStatus='{status_name}', message='{status.get('message')}'."
             )
 
-        if status_name == expected_statuses[expected_index]:
-            expected_index += 1
-
-            if expected_index == len(expected_statuses):
-                return received
-
     raise AssertionError(
-        "Expected status sequence was not published before timeout: "
-        f"jobId='{job_id}', expectedStatuses={expected_statuses}, "
-        f"receivedStatuses={[_status_name(status) for status in received]}."
+        "Expected status was not published before timeout: "
+        f"jobId='{job_id}', expectedStatus='{expected_status}', "
+        f"receivedStatuses={[_status_name(status) for status in received_statuses]}."
     )
 
 
@@ -996,17 +863,17 @@ def _assert_status_absent(
     assert _index_of_status(statuses, job_id, status_name) is None
 
 
-def _status_by_name(
+def _terminal_statuses_for_job(
+    *,
     statuses: list[StatusMessage],
     job_id: str,
-    status_name: str,
-) -> StatusMessage | None:
-    index = _index_of_status(statuses, job_id, status_name)
-
-    if index is None:
-        return None
-
-    return statuses[index]
+) -> list[StatusMessage]:
+    return [
+        status
+        for status in statuses
+        if _status_job_id(status) == job_id
+        and _status_name(status) in _TERMINAL_STATUSES
+    ]
 
 
 def _index_of_status(
@@ -1046,18 +913,6 @@ def _decode_json_message(body: bytes) -> StatusMessage:
         raise AssertionError(f"Expected JSON object message, got: {decoded!r}")
 
     return decoded
-
-
-def _vectors_are_close(
-    actual: list[float],
-    expected: list[float],
-    *,
-    abs_tol: float = 1e-8,
-) -> bool:
-    return len(actual) == len(expected) and all(
-        math.isclose(actual_value, expected_value, abs_tol=abs_tol)
-        for actual_value, expected_value in zip(actual, expected)
-    )
 
 
 def _container_logs(container: DockerContainer) -> str:

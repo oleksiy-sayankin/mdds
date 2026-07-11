@@ -20,3 +20,13 @@ class HangingJobHandler(JobHandler):
 
         while True:
             time.sleep(0.1)
+
+
+class ErrorJobHandler(JobHandler):
+    """Synthetic JobHandler used by Docker e2e error tests."""
+
+    def execute(self, context: JobExecutionContext) -> None:
+        """Simulate a deterministic job execution failure."""
+        del context
+
+        raise ZeroDivisionError("Synthetic division by zero execution failure.")
