@@ -12,10 +12,10 @@ from mdds_worker_runtime.execution.handler import JobHandler
 
 
 class HangingJobHandler(JobHandler):
-    """Synthetic JobHandler used by Docker e2e cancellation tests."""
+    """Synthetic JobHandler used by Docker e2e cancellation and timeout tests."""
 
     def execute(self, context: JobExecutionContext) -> None:
-        """Keep the supervised job process alive until Worker Runtime cancels it."""
+        """Keep the supervised job process alive until Worker Runtime stops it."""
         del context
 
         while True:
