@@ -536,7 +536,7 @@ reformat_ts: install_js_dependencies
 #
 check_worker_runtime_code_style:
 	$(call log_info,"Checking worker runtime code style...")
-	pycodestyle $(WORKER_RUNTIME_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	pycodestyle $(WORKER_RUNTIME_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(WORKER_RUNTIME_ROOT) --fix --force-exclude --respect-gitignore
 	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking worker runtime code style completed.")
@@ -547,7 +547,7 @@ check_worker_runtime_code_style:
 #
 check_worker_slae_code_style:
 	$(call log_info,"Checking worker slae style...")
-	pycodestyle $(WORKER_SLAE_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	pycodestyle $(WORKER_SLAE_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(WORKER_SLAE_ROOT) --fix --force-exclude --respect-gitignore
 	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking worker slae style completed.")
@@ -558,7 +558,7 @@ check_worker_slae_code_style:
 #
 check_e2e_code_style:
 	$(call log_info,"Checking e2e sources style...")
-	pycodestyle $(E2E_TESTS_ROOT) --exclude=*$(VENV_DIR)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	pycodestyle $(E2E_TESTS_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(E2E_TESTS_ROOT) --fix --force-exclude --respect-gitignore
 	PYTHONPATH=$(abspath $(E2E_TESTS_MAIN)):$(E2E_TESTS_MAIN):$(E2E_TESTS_TEST):$$PYTHONPATH pylint $(E2E_TESTS_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking e2e sources completed.")
