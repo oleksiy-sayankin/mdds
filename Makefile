@@ -331,9 +331,9 @@ push_result_consumer_docker_image:
 
 
 #
-# Format Common Web Client
+# Reformat Common Web Client
 #
-format_common_web_client:
+reformat_common_web_client:
 	cd $(COMMON_WEB_CLIENT_DIR) && npm run format
 
 
