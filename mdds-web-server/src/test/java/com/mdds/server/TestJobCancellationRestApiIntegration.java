@@ -9,10 +9,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobCancelResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.rest.v1.CancelJobResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
 import com.mdds.server.support.JobTestFixture;
 import java.io.IOException;
 import java.time.Duration;
@@ -92,7 +92,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, login, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
@@ -116,7 +116,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, jobStatus);
@@ -149,7 +149,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, jobStatus);
@@ -176,7 +176,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
@@ -197,7 +197,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
 
     var response =
@@ -228,7 +228,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
@@ -249,7 +249,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
@@ -269,7 +269,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
@@ -277,7 +277,7 @@ class TestJobCancellationRestApiIntegration {
 
     var response = http.post("/jobs/" + jobId + "/cancel", Map.of("X-MDDS-User-Login", GUEST));
     assertThat(response.statusCode()).isEqualTo(HttpStatus.ACCEPTED.value());
-    var result = JsonHelper.fromJson(response.body(), JobCancelResponseDTO.class);
+    var result = JsonHelper.fromJson(response.body(), CancelJobResponseDTO.class);
     assertThat(result.jobId()).isEqualTo(jobId);
     assertThat(result.status()).isEqualTo("CANCEL_REQUESTED");
   }
@@ -299,7 +299,7 @@ class TestJobCancellationRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var workerId = newWorkerId();
     jobFixture.forceStatus(jobId, JobStatus.IN_PROGRESS);
@@ -318,7 +318,7 @@ class TestJobCancellationRestApiIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private static JobIdResponseDTO createOrReuseJob(
+  private static CreateJobResponseDTO createOrReuseJob(
       HttpTestClient http, String userLogin, String uploadSessionId, String jobType)
       throws IOException, InterruptedException {
     var response =
@@ -335,13 +335,13 @@ class TestJobCancellationRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
 
-    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    var dto = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class);
     assertThat(dto).isNotNull();
-    assertThat(dto.getJobId()).isNotBlank();
+    assertThat(dto.jobId()).isNotBlank();
     return dto;
   }
 
-  private static JobCancelResponseDTO cancel(HttpTestClient http, String userLogin, String jobId)
+  private static CancelJobResponseDTO cancel(HttpTestClient http, String userLogin, String jobId)
       throws IOException, InterruptedException {
     var response =
         http.post(
@@ -350,7 +350,7 @@ class TestJobCancellationRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.ACCEPTED.value());
 
-    return JsonHelper.fromJson(response.body(), JobCancelResponseDTO.class);
+    return JsonHelper.fromJson(response.body(), CancelJobResponseDTO.class);
   }
 
   private static String newWorkerId() {

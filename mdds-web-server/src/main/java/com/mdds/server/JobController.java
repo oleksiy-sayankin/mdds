@@ -6,14 +6,14 @@ package com.mdds.server;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.JobCancelResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.JobOutputResponseDTO;
-import com.mdds.dto.JobStatusResponseDTO;
-import com.mdds.dto.JobSubmitResponseDTO;
-import com.mdds.dto.JobUploadUrlRequestDTO;
-import com.mdds.dto.JobUploadUrlResponseDTO;
+import com.mdds.dto.rest.v1.CancelJobResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.JobOutputResponseDTO;
+import com.mdds.dto.rest.v1.JobStatusResponseDTO;
+import com.mdds.dto.rest.v1.JobUploadUrlRequestDTO;
+import com.mdds.dto.rest.v1.JobUploadUrlResponseDTO;
+import com.mdds.dto.rest.v1.SubmitJobResponseDTO;
 import jakarta.validation.Valid;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -60,7 +60,7 @@ public class JobController {
       path = "/jobs",
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
-  public ResponseEntity<JobIdResponseDTO> createOrReuseDraftJob(
+  public ResponseEntity<CreateJobResponseDTO> createOrReuseDraftJob(
       @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin,
       @RequestHeader(value = "X-MDDS-Upload-Session-Id", required = true) String uploadSessionId,
       @Valid @RequestBody CreateJobRequestDTO createJobRequestDTO) {
@@ -74,8 +74,8 @@ public class JobController {
         var ignoredEvent = MDC.putCloseable(EVENT, created ? "create_job" : "reuse_job")) {
       log.info(created ? "Created draft job" : "Reused existing draft job");
       return created
-          ? ResponseEntity.status(HttpStatus.CREATED).body(new JobIdResponseDTO(jobId))
-          : ResponseEntity.ok(new JobIdResponseDTO(jobId));
+          ? ResponseEntity.status(HttpStatus.CREATED).body(new CreateJobResponseDTO(jobId))
+          : ResponseEntity.ok(new CreateJobResponseDTO(jobId));
     }
   }
 
@@ -117,7 +117,7 @@ public class JobController {
   }
 
   @PostMapping(path = "/jobs/{jobId}/submit")
-  public ResponseEntity<JobSubmitResponseDTO> submit(
+  public ResponseEntity<SubmitJobResponseDTO> submit(
       @PathVariable("jobId") String jobId,
       @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin) {
 
@@ -129,7 +129,7 @@ public class JobController {
       jobSubmissionService.submit(userId, jobId);
       log.info("Submitted job.");
       return ResponseEntity.accepted()
-          .body(new JobSubmitResponseDTO(jobId, JobStatus.SUBMITTED.getCode()));
+          .body(new SubmitJobResponseDTO(jobId, JobStatus.SUBMITTED.getCode()));
     }
   }
 
@@ -159,7 +159,7 @@ public class JobController {
   }
 
   @PostMapping(path = "/jobs/{jobId}/cancel")
-  public ResponseEntity<JobCancelResponseDTO> cancel(
+  public ResponseEntity<CancelJobResponseDTO> cancel(
       @PathVariable("jobId") String jobId,
       @RequestHeader(value = "X-MDDS-User-Login", required = true) String userLogin) {
     var userId = userLookupService.findUserId(userLogin);
@@ -170,7 +170,7 @@ public class JobController {
       jobCancellationService.cancel(userId, jobId);
       log.info("Cancel requested for job.");
       return ResponseEntity.accepted()
-          .body(new JobCancelResponseDTO(jobId, JobStatus.CANCEL_REQUESTED.getCode()));
+          .body(new CancelJobResponseDTO(jobId, JobStatus.CANCEL_REQUESTED.getCode()));
     }
   }
 

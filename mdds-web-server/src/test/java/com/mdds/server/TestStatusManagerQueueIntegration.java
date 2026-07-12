@@ -9,7 +9,7 @@ import static com.mdds.domain.JobStatus.SUBMITTED;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
-import com.mdds.dto.JobStatusUpdateDTO;
+import com.mdds.dto.worker.v1.JobStatusUpdateDTO;
 import com.mdds.queue.Message;
 import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobsRepository;

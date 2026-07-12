@@ -12,9 +12,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
 import com.mdds.server.support.JobTestFixture;
 import java.io.IOException;
 import java.time.Duration;
@@ -92,7 +92,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, userLogin, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramName = "solvingMethod";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
@@ -110,7 +110,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
@@ -150,7 +150,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
@@ -187,7 +187,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
@@ -223,7 +223,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
@@ -258,7 +258,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var solvingMethod = "solvingMethod";
     var solvingMethodValue = MAPPER.readTree("\"numpy_exact_solver\"");
 
@@ -314,7 +314,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramsAsJson = JsonHelper.toJson(params);
 
     var response =
@@ -338,7 +338,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var response =
         http.patch(
@@ -363,7 +363,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramsAsJson = JsonHelper.toJson(params);
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
 
@@ -385,7 +385,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramName = "";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
@@ -413,7 +413,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
@@ -461,7 +461,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramsAsMap = Map.of(paramName, paramValue);
     var paramsAsJson = JsonHelper.toJson(paramsAsMap);
 
@@ -492,7 +492,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramName = "solvingMethod";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
@@ -514,7 +514,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramName = "solvingMethod";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
@@ -534,7 +534,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramName = "solvingMethod";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
@@ -551,7 +551,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var paramName = "solvingMethod";
     var paramValue = MAPPER.readTree("\"numpy_exact_solver\"");
     var paramsAsMap = Map.of(paramName, paramValue);
@@ -583,7 +583,7 @@ class TestJobParamsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var response =
         http.patch(
@@ -611,7 +611,7 @@ class TestJobParamsRestApiIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private static JobIdResponseDTO createOrReuseJob(
+  private static CreateJobResponseDTO createOrReuseJob(
       HttpTestClient http, String userLogin, String uploadSessionId, String jobType)
       throws IOException, InterruptedException {
     var response =
@@ -628,9 +628,9 @@ class TestJobParamsRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
 
-    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    var dto = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class);
     assertThat(dto).isNotNull();
-    assertThat(dto.getJobId()).isNotBlank();
+    assertThat(dto.jobId()).isNotBlank();
     return dto;
   }
 

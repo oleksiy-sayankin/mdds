@@ -11,9 +11,9 @@ import static com.mdds.server.ServerHelper.unwrapOrSendError;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.dto.JobDTO;
-import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.dto.SolveRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.queue.Message;
 import com.mdds.queue.QueueClient;
@@ -60,7 +60,7 @@ public class ServerSolveController {
       path = "/solve",
       consumes = MediaType.APPLICATION_JSON_VALUE,
       produces = MediaType.APPLICATION_JSON_VALUE)
-  public JobIdResponseDTO solve(@RequestBody SolveRequestDTO request) {
+  public CreateJobResponseDTO solve(@RequestBody SolveRequestDTO request) {
     var rawType = request.getDataSourceType();
     var rawMethod = request.getSlaeSolvingMethod();
     var params = request.getParams();
@@ -90,7 +90,7 @@ public class ServerSolveController {
           commonProperties.getJobQueueName(),
           new Message<>(new JobDTO(jobId, now, matrix, rhs, method), Collections.emptyMap(), now));
       log.info("Published job to queue '{}' = {}", commonProperties.getJobQueueName(), queueClient);
-      return new JobIdResponseDTO(jobId);
+      return new CreateJobResponseDTO(jobId);
     }
   }
 }

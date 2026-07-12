@@ -10,13 +10,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.JobStatusResponseDTO;
-import com.mdds.dto.JobSubmitResponseDTO;
-import com.mdds.dto.JobUploadUrlRequestDTO;
-import com.mdds.dto.JobUploadUrlResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
+import com.mdds.dto.rest.v1.JobStatusResponseDTO;
+import com.mdds.dto.rest.v1.JobUploadUrlRequestDTO;
+import com.mdds.dto.rest.v1.JobUploadUrlResponseDTO;
+import com.mdds.dto.rest.v1.SubmitJobResponseDTO;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.errors.MinioException;
@@ -144,7 +144,7 @@ class TestJobStatusRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, login, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var response = status(http, login, jobId);
     assertThat(response.status()).isEqualTo(JobStatus.DRAFT.toString());
@@ -199,7 +199,7 @@ class TestJobStatusRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var inputSlot = "matrix";
     var issueUrlResponse = issueUploadUrl(http, ADMIN, jobId, inputSlot);
@@ -232,7 +232,7 @@ class TestJobStatusRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var inputSlot = "matrix";
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, inputSlot);
@@ -268,7 +268,7 @@ class TestJobStatusRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var inputSlot = "matrix";
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, inputSlot);
@@ -313,7 +313,7 @@ class TestJobStatusRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var inputSlot = "matrix";
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, inputSlot);
@@ -356,7 +356,7 @@ class TestJobStatusRestApiIntegration {
     return "session-" + UUID.randomUUID();
   }
 
-  private static JobIdResponseDTO createOrReuseJob(
+  private static CreateJobResponseDTO createOrReuseJob(
       HttpTestClient http, String userLogin, String uploadSessionId, String jobType)
       throws IOException, InterruptedException {
     var response =
@@ -373,9 +373,9 @@ class TestJobStatusRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
 
-    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    var dto = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class);
     assertThat(dto).isNotNull();
-    assertThat(dto.getJobId()).isNotBlank();
+    assertThat(dto.jobId()).isNotBlank();
     return dto;
   }
 
@@ -435,7 +435,7 @@ class TestJobStatusRestApiIntegration {
     assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
   }
 
-  private static JobSubmitResponseDTO submit(HttpTestClient http, String userLogin, String jobId)
+  private static SubmitJobResponseDTO submit(HttpTestClient http, String userLogin, String jobId)
       throws IOException, InterruptedException {
     var response =
         http.post(
@@ -444,7 +444,7 @@ class TestJobStatusRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.ACCEPTED.value());
 
-    return JsonHelper.fromJson(response.body(), JobSubmitResponseDTO.class);
+    return JsonHelper.fromJson(response.body(), SubmitJobResponseDTO.class);
   }
 
   private static String message(String rawJson) {

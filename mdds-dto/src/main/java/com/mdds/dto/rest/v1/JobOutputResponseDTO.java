@@ -2,7 +2,7 @@
  * Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
  * Refer to the LICENSE file in the root directory for full license details.
  */
-package com.mdds.dto;
+package com.mdds.dto.rest.v1;
 
 import java.time.Instant;
 

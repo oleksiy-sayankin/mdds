@@ -10,10 +10,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.JobOutputResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
+import com.mdds.dto.rest.v1.JobOutputResponseDTO;
 import com.mdds.server.support.JobTestFixture;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -129,7 +129,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(login);
     var createJobResponse = createOrReuseJob(http, login, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     var result = outputs(http, login, jobId, "solution");
@@ -167,7 +167,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, status);
 
@@ -189,7 +189,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(ADMIN);
     var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -221,7 +221,7 @@ class TestJobOutputsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
 
     var response =
         http.get(
@@ -240,7 +240,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -266,7 +266,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -291,7 +291,7 @@ class TestJobOutputsRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
     var response =
@@ -316,7 +316,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
     var result = outputs(http, GUEST, jobId, outputSlot);
@@ -341,7 +341,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -359,7 +359,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -396,7 +396,7 @@ class TestJobOutputsRestApiIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     uploadToMinIO(solutionObjectKey(userId, jobId), "solution.csv");
     jobFixture.forceStatus(jobId, JobStatus.DONE);
 
@@ -456,7 +456,7 @@ class TestJobOutputsRestApiIntegration {
     return uri.toURL().openStream();
   }
 
-  private static JobIdResponseDTO createOrReuseJob(
+  private static CreateJobResponseDTO createOrReuseJob(
       HttpTestClient http, String userLogin, String uploadSessionId, String jobType)
       throws IOException, InterruptedException {
     var response =
@@ -473,9 +473,9 @@ class TestJobOutputsRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
 
-    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    var dto = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class);
     assertThat(dto).isNotNull();
-    assertThat(dto.getJobId()).isNotBlank();
+    assertThat(dto.jobId()).isNotBlank();
     return dto;
   }
 

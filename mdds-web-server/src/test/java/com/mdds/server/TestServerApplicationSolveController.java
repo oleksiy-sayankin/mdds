@@ -48,7 +48,7 @@ class TestServerApplicationSolveController {
                 List.of(1.3, 2.2, 3.7)));
     var actual = ssc.solve(request);
     assertThat(actual).isNotNull();
-    assertThat(actual.getJobId()).isNotEmpty();
+    assertThat(actual.jobId()).isNotEmpty();
   }
 
   @Test

@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mdds.common.util.JsonHelper;
-import com.mdds.dto.ManifestDTO;
+import com.mdds.dto.worker.v1.ManifestDTO;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;

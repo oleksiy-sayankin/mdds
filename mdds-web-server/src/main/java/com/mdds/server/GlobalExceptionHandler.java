@@ -4,7 +4,7 @@
  */
 package com.mdds.server;
 
-import com.mdds.dto.ErrorResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;

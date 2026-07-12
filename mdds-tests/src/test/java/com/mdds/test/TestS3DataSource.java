@@ -10,7 +10,7 @@ import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_C
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.domain.SlaeSolver;
-import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
 import com.mdds.grpc.solver.JobStatus;
 import java.io.IOException;
 import java.net.URI;
@@ -68,7 +68,7 @@ class TestS3DataSource extends BaseEnvironment {
     var response = webServerClient.postSolve("s3", solver.getValue(), params);
     var json = response.body();
 
-    var jobId = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();
+    var jobId = JsonHelper.fromJson(json, CreateJobResponseDTO.class).jobId();
     Assertions.assertThat(jobId).as("Job id should not be null").isNotNull();
     var actual = awaitForResult(jobId);
 

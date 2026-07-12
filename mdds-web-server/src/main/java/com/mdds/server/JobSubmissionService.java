@@ -7,7 +7,7 @@ package com.mdds.server;
 import com.mdds.domain.ArtifactSpec;
 import com.mdds.domain.JobParamSpec;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.JobMessageDTO;
+import com.mdds.dto.worker.v1.JobMessageDTO;
 import com.mdds.persistence.entity.JobEntity;
 import com.mdds.persistence.entity.JobParamEntity;
 import com.mdds.queue.Message;

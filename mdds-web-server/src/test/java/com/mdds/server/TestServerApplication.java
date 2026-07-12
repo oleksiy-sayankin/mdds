@@ -12,9 +12,9 @@ import static software.amazon.awssdk.http.SdkHttpConfigurationOption.TRUST_ALL_C
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.ResultDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
 import com.mdds.grpc.solver.JobStatus;
 import com.mdds.storage.redis.RedisDataStorage;
 import java.io.IOException;
@@ -217,7 +217,7 @@ class TestServerApplication {
     var contentType = response.headers().firstValue("Content-Type").orElse("");
     assertThat(contentType).contains("application/json");
     var json = response.body();
-    var id = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();
+    var id = JsonHelper.fromJson(json, CreateJobResponseDTO.class).jobId();
     assertThat(id).isNotNull();
   }
 
@@ -239,7 +239,7 @@ class TestServerApplication {
     params.put("mysql.rhs.primary.key.field.value", "1");
     var response = http.postSolve("mysql", "numpy_exact_solver", params);
     var json = response.body();
-    var id = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();
+    var id = JsonHelper.fromJson(json, CreateJobResponseDTO.class).jobId();
     assertThat(id).isNotNull();
   }
 
@@ -272,7 +272,7 @@ class TestServerApplication {
     params.put("aws.path.style.access.enabled", "true");
     var response = http.postSolve("s3", "numpy_exact_solver", params);
     var json = response.body();
-    var id = JsonHelper.fromJson(json, JobIdResponseDTO.class).getJobId();
+    var id = JsonHelper.fromJson(json, CreateJobResponseDTO.class).jobId();
     assertThat(id).isNotNull();
   }
 

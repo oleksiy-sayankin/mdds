@@ -8,9 +8,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
 import com.mdds.server.jpa.JobsRepository;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -102,7 +102,7 @@ class TestJobCreationRestApiIntegration {
                 sessionId),
             new CreateJobRequestDTO("solving_slae"));
 
-    var jobId = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class).getJobId();
+    var jobId = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class).jobId();
     var jobResponse = jobsRepository.findById(jobId);
     var status = com.mdds.domain.JobStatus.SUBMITTED;
     jobResponse.ifPresent(
@@ -371,7 +371,7 @@ class TestJobCreationRestApiIntegration {
     assertThat(response.statusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value());
   }
 
-  private JobIdResponseDTO createOrReuseJob(
+  private CreateJobResponseDTO createOrReuseJob(
       HttpTestClient http, String userLogin, String uploadSessionId, HttpStatus status)
       throws IOException, InterruptedException {
     var response =
@@ -388,9 +388,9 @@ class TestJobCreationRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(status.value());
 
-    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    var dto = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class);
     assertThat(dto).isNotNull();
-    assertThat(dto.getJobId()).isNotBlank();
+    assertThat(dto.jobId()).isNotBlank();
     return dto;
   }
 

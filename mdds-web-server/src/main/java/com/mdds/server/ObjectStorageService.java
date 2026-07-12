@@ -5,7 +5,7 @@
 package com.mdds.server;
 
 import com.mdds.common.util.JsonHelper;
-import com.mdds.dto.ManifestDTO;
+import com.mdds.dto.worker.v1.ManifestDTO;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.net.URI;

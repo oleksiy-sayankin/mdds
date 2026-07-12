@@ -9,8 +9,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.mdds.dto.JobDTO;
-import com.mdds.dto.JobIdResponseDTO;
 import com.mdds.dto.ResultDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
 import com.mdds.grpc.solver.JobStatus;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -96,7 +96,7 @@ class TestJsonHelper {
 
   @Test
   void testToJsonJobIdResponseDTO() {
-    var jobIdResponse = new JobIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
+    var jobIdResponse = new CreateJobResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
     var actualJson = JsonHelper.toJson(jobIdResponse);
     var expectedJson = "{\"jobId\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
     assertThat(actualJson).isEqualTo(expectedJson);
@@ -105,8 +105,8 @@ class TestJsonHelper {
   @Test
   void testFromJsonJobIdResponseDTO() {
     var json = "{\"jobId\":\"87a027b0-beb7-4171-8fbf-7b7568dce461\"}";
-    var expectedJobIdResponseDTO = new JobIdResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
-    var actualJobIdResponseDTO = JsonHelper.fromJson(json, JobIdResponseDTO.class);
+    var expectedJobIdResponseDTO = new CreateJobResponseDTO("87a027b0-beb7-4171-8fbf-7b7568dce461");
+    var actualJobIdResponseDTO = JsonHelper.fromJson(json, CreateJobResponseDTO.class);
     assertThat(actualJobIdResponseDTO).isEqualTo(expectedJobIdResponseDTO);
   }
 

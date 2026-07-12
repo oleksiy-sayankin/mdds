@@ -10,11 +10,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mdds.common.util.HttpTestClient;
 import com.mdds.common.util.JsonHelper;
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CreateJobRequestDTO;
-import com.mdds.dto.ErrorResponseDTO;
-import com.mdds.dto.JobIdResponseDTO;
-import com.mdds.dto.JobUploadUrlRequestDTO;
-import com.mdds.dto.JobUploadUrlResponseDTO;
+import com.mdds.dto.rest.v1.CreateJobRequestDTO;
+import com.mdds.dto.rest.v1.CreateJobResponseDTO;
+import com.mdds.dto.rest.v1.ErrorResponseDTO;
+import com.mdds.dto.rest.v1.JobUploadUrlRequestDTO;
+import com.mdds.dto.rest.v1.JobUploadUrlResponseDTO;
 import com.mdds.server.support.JobTestFixture;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
@@ -130,7 +130,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, userLogin, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "matrix";
     var issueUrlResponse = issueUploadUrl(http, userLogin, jobId, inputSlot);
     var url = issueUrlResponse.uploadUrl();
@@ -151,7 +151,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "matrix";
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, inputSlot);
     var url = issueUrlResponse.uploadUrl();
@@ -177,7 +177,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, notNormalizedInputSlot);
     var url = issueUrlResponse.uploadUrl();
     var objectKey = extractObjectKeyFromPresignedUrl(url);
@@ -191,7 +191,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "matrix";
 
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, inputSlot);
@@ -223,7 +223,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var result = issueUploadUrl(http, GUEST, jobId, "matrix");
     assertExpiresAtMatchesSignature(result.expiresAt(), result.uploadUrl(), PRE_SIGNED_PUT_TTL);
   }
@@ -241,7 +241,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var issueUrlResponse = issueUploadUrl(http, GUEST, jobId, inputSlot);
     var url = issueUrlResponse.uploadUrl();
     assertThat(url).isNotBlank();
@@ -260,7 +260,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "wrong_slot";
     var response =
         http.post(
@@ -289,7 +289,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var response =
         http.post(
             "/jobs/" + jobId + "/inputs",
@@ -317,7 +317,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var response =
         http.post(
             "/jobs/" + jobId + "/inputs",
@@ -334,7 +334,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "matrix";
     var response =
         http.post(
@@ -352,7 +352,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "matrix";
     var response =
         http.post(
@@ -368,7 +368,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var inputSlot = "matrix";
     var response =
         http.post(
@@ -395,7 +395,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var response =
         http.post(
             "/jobs/" + jobId + "/inputs",
@@ -412,7 +412,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, ADMIN, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     var response =
         http.post(
             "/jobs/" + jobId + "/inputs",
@@ -429,7 +429,7 @@ class TestJobInputUploadRestApiIntegration {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var createJobResponse = createOrReuseJob(http, GUEST, sessionId, jobType);
-    var jobId = createJobResponse.getJobId();
+    var jobId = createJobResponse.jobId();
     jobFixture.forceStatus(jobId, JobStatus.SUBMITTED);
     var response =
         http.post(
@@ -470,7 +470,7 @@ class TestJobInputUploadRestApiIntegration {
     return dto;
   }
 
-  private static JobIdResponseDTO createOrReuseJob(
+  private static CreateJobResponseDTO createOrReuseJob(
       HttpTestClient http, String userLogin, String uploadSessionId, String jobType)
       throws IOException, InterruptedException {
     var response =
@@ -487,9 +487,9 @@ class TestJobInputUploadRestApiIntegration {
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
 
-    var dto = JsonHelper.fromJson(response.body(), JobIdResponseDTO.class);
+    var dto = JsonHelper.fromJson(response.body(), CreateJobResponseDTO.class);
     assertThat(dto).isNotNull();
-    assertThat(dto.getJobId()).isNotBlank();
+    assertThat(dto.jobId()).isNotBlank();
     return dto;
   }
 

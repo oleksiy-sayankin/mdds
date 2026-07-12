@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.mdds.common.CommonProperties;
-import com.mdds.dto.JobStatusUpdateDTO;
+import com.mdds.dto.worker.v1.JobStatusUpdateDTO;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;

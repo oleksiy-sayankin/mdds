@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import com.mdds.domain.JobStatus;
 import com.mdds.domain.UnknownJobStatusException;
-import com.mdds.dto.JobStatusUpdateDTO;
+import com.mdds.dto.worker.v1.JobStatusUpdateDTO;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.support.JobTestFixture;
 import java.time.Instant;

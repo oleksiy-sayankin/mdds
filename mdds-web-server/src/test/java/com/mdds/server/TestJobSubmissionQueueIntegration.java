@@ -7,7 +7,7 @@ package com.mdds.server;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mdds.dto.JobMessageDTO;
+import com.mdds.dto.worker.v1.JobMessageDTO;
 import com.mdds.queue.Acknowledger;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;

@@ -11,7 +11,7 @@ import static com.mdds.domain.JobStatus.IN_PROGRESS;
 import static com.mdds.domain.JobStatus.SUBMITTED;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.JobStatusUpdateDTO;
+import com.mdds.dto.worker.v1.JobStatusUpdateDTO;
 import com.mdds.server.jpa.JobsRepository;
 import java.time.Instant;
 import java.util.Set;
