@@ -180,7 +180,8 @@ jobs:
             -Dsonar.organization=oleksiy-sayankin \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.coverage.jacoco.xmlReportPaths="${JAVA_COVERAGE_FILES}" \
-            -Dsonar.python.coverage.reportPaths=mdds-python-worker-runtime/target/python-coverage.xml \
+            -Dsonar.coverage.exclusions='mdds-dto/src/main/java/com/mdds/dto/**/*.java' \
+            -Dsonar.python.coverage.reportPaths=mdds-python-worker-runtime/target/python-coverage.xml,mdds-examples/workers/mdds-python-worker-solving-slae/target/python-coverage.xml \
             -Dsonar.issue.ignore.multicriteria=e1 \
             -Dsonar.issue.ignore.multicriteria.e1.ruleKey=githubactions:S8544 \
             -Dsonar.issue.ignore.multicriteria.e1.resourceKey=.github/workflows/build.yml \

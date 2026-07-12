@@ -695,8 +695,11 @@ test_worker_slae_coverage:
 
 test_java_coverage:
 	$(call log_info,"Running Java tests with coverage...")
-	mvn clean verify
+	# Remove stale Java coverage reports.
 	mkdir -p target
+	rm -f target/java-coverage-files.txt
+	find . \( -path "*/target/jacoco.exec" -o -path "*/target/site/jacoco/jacoco.xml" \) -type f -delete
+	mvn verify
 	find . -path "*/target/site/jacoco/jacoco.xml" -type f | sort | tee target/java-coverage-files.txt
 	@test -s target/java-coverage-files.txt
 	$(call log_done,"Java tests with coverage completed.")
@@ -784,15 +787,42 @@ ensure_sonar_token: wait_for_sonarqube
 
 
 #
-# Perform Sonar Qube scan and put the results to console
+# Perform SonarQube scan and print results to console.
+#
+# This target does not run tests. It expects coverage reports to be generated
+# beforehand by test_java_coverage and test_python_coverage.
 #
 sonar_scan: ensure_sonar_token
 	$(call log_info,"Running SonarQube analysis...")
-	$(call log_info,"Python coverage report expected at $(MDDS_WORKER_RUNTIME)/target/python-coverage.xml")
+	$(call log_info,"Java coverage report list expected at target/java-coverage-files.txt")
+	$(call log_info,"Python coverage reports expected in worker target directories.")
+	@test -s target/java-coverage-files.txt || { \
+		$(call log_error_sh,"Java coverage report list is missing. Run 'make test_java_coverage' first."); \
+		exit 1; \
+	}
+	@while read -r coverage_file; do \
+		test -s "$$coverage_file" || { \
+			$(call log_error_sh,"Java coverage report is missing: $$coverage_file"); \
+			exit 1; \
+		}; \
+	done < target/java-coverage-files.txt
+	@test -s $(WORKER_RUNTIME_ROOT)/target/python-coverage.xml || { \
+		$(call log_error_sh,"Worker Runtime Python coverage report is missing. Run 'make test_python_coverage' first."); \
+		exit 1; \
+	}
+	@test -s $(WORKER_SLAE_ROOT)/target/python-coverage.xml || { \
+		$(call log_error_sh,"SLAE Worker Python coverage report is missing. Run 'make test_python_coverage' first."); \
+		exit 1; \
+	}
 	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
-	mvn clean verify sonar:sonar \
+	JAVA_COVERAGE_FILES=$$(paste -sd, target/java-coverage-files.txt); \
+	PYTHON_COVERAGE_FILES="$(WORKER_RUNTIME_ROOT)/target/python-coverage.xml,$(WORKER_SLAE_ROOT)/target/python-coverage.xml"; \
+	mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
 	  -Dsonar.host.url=$(SONAR_HOST_URL) \
+	  -Dsonar.coverage.jacoco.xmlReportPaths="$$JAVA_COVERAGE_FILES" \
+	  -Dsonar.python.coverage.reportPaths="$$PYTHON_COVERAGE_FILES" \
+	  -Dsonar.coverage.exclusions='mdds-dto/src/main/java/com/mdds/dto/**/*.java' \
 	  -Dsonar.token=$$TOKEN
 	$(call log_info,"Checking SonarQube Quality Gate status...")
 	@sleep 5
