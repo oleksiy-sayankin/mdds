@@ -23,7 +23,7 @@ services:
       MDDS_SERVER_HOST: localhost
       MDDS_SERVER_PORT: 8000
       PYTHON_BIN: python3.12
-      PYTHONPATH: /workspaces/mdds/mdds-python-worker-runtime/src/main/python:/workspaces/mdds/mdds-worker-examples/mdds-python-worker-solving-slae/src/main/python
+      PYTHONPATH: /workspaces/mdds/mdds-python-worker-runtime/src/main/python:/workspaces/mdds/mdds-examples/workers/mdds-python-worker-solving-slae/src/main/python
       SONAR_HOST_URL: http://sonarqube:9000
       SONAR_ADMIN_LOGIN: admin
       SONAR_DEFAULT_ADMIN_PASSWORD: ${SONAR_DEFAULT_ADMIN_PASSWORD:-admin}

@@ -28,7 +28,7 @@ WORKER_RUNTIME_PACKAGE := $(MDDS_WORKER_RUNTIME)
 WORKER_RUNTIME_DIST := $(WORKER_RUNTIME_PACKAGE)/target/dist
 
 MDDS_WORKER_SLAE := mdds-python-worker-solving-slae
-WORKER_SLAE_ROOT := $(PROJECT_ROOT)/mdds-worker-examples/$(MDDS_WORKER_SLAE)
+WORKER_SLAE_ROOT := $(PROJECT_ROOT)/mdds-examples/workers/$(MDDS_WORKER_SLAE)
 WORKER_SLAE_MAIN := $(WORKER_SLAE_ROOT)/src/main/python
 WORKER_SLAE_TEST := $(WORKER_SLAE_ROOT)/src/test/python
 WORKER_SLAE_PACKAGE := $(WORKER_SLAE_ROOT)
@@ -549,7 +549,7 @@ check_worker_slae_code_style:
 	$(call log_info,"Checking worker slae style...")
 	pycodestyle $(WORKER_SLAE_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(WORKER_SLAE_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking worker slae style completed.")
 
 

@@ -5,7 +5,7 @@ FROM mddsproject/python-worker-runtime:0.1.0
 
 USER root
 
-COPY mdds-worker-examples/mdds-python-worker-solving-slae/target/dist/*.whl /tmp/
+COPY mdds-examples/workers/mdds-python-worker-solving-slae/target/dist/*.whl /tmp/
 
 RUN python -m pip install --no-cache-dir --no-deps /tmp/*.whl && \
     python -m pip check && \

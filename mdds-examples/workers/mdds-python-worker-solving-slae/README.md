@@ -121,20 +121,21 @@ scipy_gmres_solver   — SciPy GMRES iterative solver
 ## Package layout
 
 ```text
-mdds-worker-examples/
-└── mdds-python-worker-solving-slae/
-    ├── pyproject.toml
-    ├── README.md
-    ├── LICENSE
-    └── src/
-        ├── main/
-        │   └── python/
-        │       └── mdds_python_worker_solving_slae/
-        │           ├── __init__.py
-        │           └── handler.py
-        └── test/
-            └── python/
-                └── test_slae_job_handler.py
+mdds-examples/
+└── workers/
+    └── mdds-python-worker-solving-slae/
+        ├── pyproject.toml
+        ├── README.md
+        ├── LICENSE
+        └── src/
+            ├── main/
+            │   └── python/
+            │       └── mdds_python_worker_solving_slae/
+            │           ├── __init__.py
+            │           └── handler.py
+            └── test/
+                └── python/
+                    └── test_slae_job_handler.py
 ```
 
 ## Build
