@@ -42,6 +42,9 @@ E2E_TESTS_NEWMAN_HOME := $(MDDS_E2E_TESTS)/newman
 E2E_TESTS_PROJECT_NAME := mdds-e2e
 E2E_TESTS_COMPOSE := docker compose --project-name $(E2E_TESTS_PROJECT_NAME) --progress=plain -f $(E2E_TESTS_NEWMAN_HOME)/docker-compose.yml
 
+
+COMMON_WEB_CLIENT_DIR := ./mdds-examples/web-clients/mdds-common-web-client
+
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT := src
 JS_ROOT := src
@@ -327,6 +330,25 @@ push_result_consumer_docker_image:
 	$(call log_done,"Pushing result-consumer Docker image completed.")
 
 
+#
+# Format Common Web Client
+#
+format_common_web_client:
+	cd $(COMMON_WEB_CLIENT_DIR) && npm run format
+
+
+#
+# Check code style
+#
+check_common_web_client_code_style:
+	cd $(COMMON_WEB_CLIENT_DIR) && npm run code:check
+
+#
+# Run Common Web Client tests
+#
+test_common_web_client:
+	cd $(COMMON_WEB_CLIENT_DIR) && npm test
+
 .PHONY: \
 	build_alloy_docker_image \
 	push_alloy_docker_image \
@@ -340,7 +362,10 @@ push_result_consumer_docker_image:
 	build_release_images \
 	build_release_images_ci \
 	push_release_images \
-	build_and_push_release_images
+	build_and_push_release_images \
+	format_common_web_client \
+	check_common_web_client_code_style \
+	test_common_web_client
 
 
 #
