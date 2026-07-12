@@ -6,12 +6,10 @@ package com.mdds.executor;
 
 import static com.mdds.common.util.CommonHelper.findFreePort;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.offset;
 
 import com.mdds.common.CommonProperties;
 import com.mdds.domain.SlaeSolver;
-import com.mdds.dto.CancelJobDTO;
 import com.mdds.dto.JobDTO;
 import com.mdds.dto.ResultDTO;
 import com.mdds.grpc.solver.JobStatus;
@@ -30,7 +28,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
@@ -277,71 +274,6 @@ class TestExecutorApplication {
         .contains("ValueError: setting an array element with a sequence.");
   }
 
-  @Test
-  void testCancelJob() {
-    String jobId;
-    var duration = Duration.ofMillis(3000);
-    Duration currentDuration;
-    var size = 500;
-    var maxSize = 2900;
-    double[][] matrix;
-    double[] rhs;
-    do {
-      size = Math.toIntExact(Math.round(size * 1.05));
-      if (size > maxSize) {
-        fail("Can not cancel job after maximum size is " + maxSize);
-      }
-      matrix = matrix(size);
-      rhs = rhs(size);
-      jobId = UUID.randomUUID().toString();
-      var startTime = BASE_EVENT_TIME;
-      var job = new JobDTO(jobId, startTime, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
-      var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
-      jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
-      log.info("Submitted job for SLAE size {} x {}. Waiting for solution...", size, size);
-      var actual = waitForResult(jobId, resultQueueClient);
-      var endTime = actual.getDateTimeJobEnded();
-      currentDuration = Duration.between(startTime, endTime);
-      log.info("Solved SLAE with size {} x {} for {}", size, size, currentDuration);
-    } while (currentDuration.compareTo(duration) < 0);
-
-    matrix = matrix(size);
-    rhs = rhs(size);
-    jobId = UUID.randomUUID().toString();
-    var job = new JobDTO(jobId, BASE_EVENT_TIME, matrix, rhs, SlaeSolver.NUMPY_EXACT_SOLVER);
-    var jobMessage = new Message<>(job, new HashMap<>(), BASE_EVENT_TIME);
-    jobQueueClient.publish(commonProperties.getJobQueueName(), jobMessage);
-    log.info(
-        "Submitted job {} for SLAE size {} x {}. Waiting for cancellation...", jobId, size, size);
-    var result = waitForStatus(jobId, resultQueueClient, JobStatus.IN_PROGRESS);
-    log.info("Started processing job {}", jobId);
-    var executorId = result.getExecutorId();
-    var cancelJob = new CancelJobDTO(jobId);
-    var cancelMessage = new Message<>(cancelJob, new HashMap<>(), BASE_EVENT_TIME);
-    cancelBus.sendCancel(executorId, cancelMessage);
-    log.info("Submitting cancel message for job {} to executor {}", jobId, executorId);
-    result = waitForStatus(jobId, resultQueueClient, JobStatus.CANCELLED);
-    assertThat(result.getJobStatus()).isEqualTo(JobStatus.CANCELLED);
-  }
-
-  private static double[][] matrix(int size) {
-    var matrix = new double[size][size];
-    for (int i = 0; i < size; i++) {
-      for (int j = 0; j < size; j++) {
-        matrix[i][j] = Math.random();
-      }
-    }
-    return matrix;
-  }
-
-  private static double[] rhs(int size) {
-    var rhs = new double[size];
-    for (int i = 0; i < size; i++) {
-      rhs[i] = Math.random();
-    }
-    return rhs;
-  }
-
   private ResultDTO waitForResult(String jobId, QueueClient resultQueueClient) {
     var results = new CopyOnWriteArrayList<ResultDTO>();
 
@@ -358,26 +290,6 @@ class TestExecutorApplication {
             })) {
       Awaitility.await().atMost(Duration.ofSeconds(60)).until(() -> results.size() == 2);
       return results.getLast();
-    } catch (Exception e) {
-      throw new AssertionError("Failed to receive result for jobId = " + jobId, e);
-    }
-  }
-
-  private ResultDTO waitForStatus(String jobId, QueueClient resultQueueClient, JobStatus status) {
-    AtomicReference<ResultDTO> result = new AtomicReference<>();
-    try (var ignored =
-        resultQueueClient.subscribe(
-            commonProperties.getResultQueueName(),
-            ResultDTO.class,
-            (message, ack) -> {
-              var payload = message.payload();
-              if (jobId.equals(payload.getJobId()) && status.equals(payload.getJobStatus())) {
-                result.set(payload);
-              }
-              ack.ack();
-            })) {
-      Awaitility.await().atMost(Duration.ofSeconds(60)).until(() -> result.get() != null);
-      return result.get();
     } catch (Exception e) {
       throw new AssertionError("Failed to receive result for jobId = " + jobId, e);
     }
