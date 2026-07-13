@@ -166,13 +166,41 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Upload Python coverage to Codecov
+      - name: Upload Python Worker Runtime coverage to Codecov
         if: ${{ !env.ACT }}
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # codecov/codecov-action@v5
         with:
           files: mdds-python-worker-runtime/target/python-coverage.xml
-          flags: python
-          name: python-coverage
+          flags: python-worker-runtime
+          name: python-worker-runtime-coverage
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload SLAE Python Worker coverage to Codecov
+        if: ${{ !env.ACT }}
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # codecov/codecov-action@v5
+        with:
+          files: mdds-examples/workers/mdds-python-worker-solving-slae/target/python-coverage.xml
+          flags: slae-python-worker
+          name: slae-python-worker-coverage
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload Common Web Client coverage to Codecov
+        if: ${{ !env.ACT }}
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # codecov/codecov-action@v5
+        with:
+          files: mdds-examples/web-clients/mdds-common-web-client/target/coverage/lcov.info
+          flags: common-web-client
+          name: common-web-client-coverage
           fail_ci_if_error: true
           disable_search: true
           plugins: noop
