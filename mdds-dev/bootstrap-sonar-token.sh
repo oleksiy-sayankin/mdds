@@ -51,7 +51,7 @@ wait_for_sonarqube() {
         jq -r '.status // empty' 2>/dev/null || true
     )"
 
-    if [ "${status}" = "UP" ] || [ "${status}" = "DEGRADED" ]; then
+    if [[ "${status}" = "UP" ]] || [[ "${status}" = "DEGRADED" ]]; then
       log_done "SonarQube is ready: ${status}"
       return 0
     fi
@@ -82,7 +82,7 @@ change_admin_password() {
       -w '%{http_code}'
   )"
 
-  if [ "${http_code}" != "204" ]; then
+  if [[ "${http_code}" != "204" ]]; then
     log_error "Could not change SonarQube admin password. HTTP status: ${http_code}"
     log_error "SonarQube response:"
     cat "${response_file}" >&2
@@ -122,10 +122,10 @@ ensure_admin_password() {
 }
 
 ensure_token() {
-  if [ -s "${SONAR_TOKEN_FILE}" ]; then
+  if [[ -s "${SONAR_TOKEN_FILE}" ]]; then
     existing_token="$(tr -d '\n' <"${SONAR_TOKEN_FILE}")"
 
-    if [ -n "${existing_token}" ] && validate_token "${existing_token}"; then
+    if [[ -n "${existing_token}" ]] && validate_token "${existing_token}"; then
       log_done "Existing SonarQube token is valid."
       return 0
     fi
@@ -156,7 +156,7 @@ ensure_token() {
 
   token="$(printf '%s' "${response}" | jq -r '.token // empty')"
 
-  if [ -z "${token}" ]; then
+  if [[ -z "${token}" ]]; then
     log_info "Typed token generation failed or is unsupported. Trying legacy token generation..."
 
     response="$(
@@ -170,7 +170,7 @@ ensure_token() {
     token="$(printf '%s' "${response}" | jq -r '.token // empty')"
   fi
 
-  if [ -z "${token}" ]; then
+  if [[ -z "${token}" ]]; then
     log_error "Could not generate SonarQube token."
     log_error "SonarQube response:"
     printf '%s\n' "${response}" >&2
