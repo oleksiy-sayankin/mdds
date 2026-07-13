@@ -11,8 +11,12 @@ ENV MDDS_USER=mdds
 ENV MDDS_GROUP=mdds
 ENV MDDS_USER_ID=1010
 ENV MDDS_GROUP_ID=1010
-RUN groupadd --gid $MDDS_GROUP_ID $MDDS_USER && \
-    useradd --uid $MDDS_USER_ID --gid $MDDS_GROUP_ID -m -s /bin/bash $MDDS_USER
-RUN apt-get update && apt-get install -y netcat-traditional
+
+RUN groupadd --gid "$MDDS_GROUP_ID" "$MDDS_GROUP" && \
+    useradd --uid "$MDDS_USER_ID" --gid "$MDDS_GROUP_ID" -m -s /bin/bash "$MDDS_USER" && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends netcat-traditional && \
+    rm -rf /var/lib/apt/lists/*
+
 USER $MDDS_USER
 WORKDIR $MDDS_HOME

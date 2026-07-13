@@ -8,9 +8,8 @@ ENV MDDS_RESULT_CONSUMER_HOME=$MDDS_HOME/mdds-result-consumer
 ENV MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION=$MDDS_RESULT_CONSUMER_HOME/static
 ENV MDDS_RESULT_CONSUMER_PORT=8863
 
-# Create app directory
-RUN mkdir -p $MDDS_RESULT_CONSUMER_HOME
-RUN mkdir -p $MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION
+# Create app directories
+RUN mkdir -p "$MDDS_RESULT_CONSUMER_HOME" "$MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION"
 
 COPY --chown=$MDDS_USER:$MDDS_GROUP ./mdds-result-consumer/target/mdds-result-consumer*jar-with-spring-dependencies.jar $MDDS_RESULT_CONSUMER_HOME/mdds-result-consumer.jar
 
