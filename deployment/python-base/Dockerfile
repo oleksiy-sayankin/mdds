@@ -15,8 +15,8 @@ ENV MDDS_GROUP_ID=1010
 # Set non-interactive mode for apt
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Copy list of Python packages
-COPY deployment/python-base/requirements.txt /tmp/requirements.txt
+# Copy locked list of Python packages
+COPY deployment/python-base/requirements.lock.txt /tmp/requirements.lock.txt
 
 # Copy package version constraints
 COPY deployment/python-base/build-constraints.txt /tmp/build-constraints.txt
@@ -27,20 +27,27 @@ RUN groupadd --gid "$MDDS_GROUP_ID" "$MDDS_GROUP" && \
     useradd --uid "$MDDS_USER_ID" --gid "$MDDS_GROUP_ID" -m -s /bin/bash "$MDDS_USER" && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        libblas-dev \
-        liblapack-dev \
-        gcc \
+        build-essential \
         curl \
-        build-essential && \
-    curl -fsSL \
+        gcc \
+        libblas-dev \
+        liblapack-dev && \
+    curl --fail --silent --show-error --location \
+        --proto "=https" \
+        --proto-redir "=https" \
+        --tlsv1.2 \
         https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.41/grpc_health_probe-linux-amd64 \
         -o /usr/local/bin/grpc_health_probe && \
     chmod +x /usr/local/bin/grpc_health_probe && \
-    pip install --upgrade "pip>=25.3" && \
-    pip install --no-cache-dir \
+    python -m pip install \
+        --upgrade \
+        --only-binary=:all: \
+        "pip==26.1.2" && \
+    python -m pip install --no-cache-dir \
+        --require-hashes \
         --build-constraint /tmp/build-constraints.txt \
-        -r /tmp/requirements.txt && \
-    pip check && \
+        -r /tmp/requirements.lock.txt && \
+    python -m pip check && \
     rm -rf /var/lib/apt/lists/*
 
 USER $MDDS_USER

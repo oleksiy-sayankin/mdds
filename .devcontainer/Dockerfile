@@ -59,7 +59,7 @@ RUN chmod +x \
 
 
 # Upgrade pip.
-RUN python -m pip install --upgrade "pip>=25.3"
+RUN python -m pip install --upgrade "pip==26.1.2"
 
 # Install production Python dependencies.
 COPY deployment/python-base/requirements.txt /tmp/python-base-requirements.txt

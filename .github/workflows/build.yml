@@ -67,6 +67,7 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             deployment/python-base/requirements.txt
+            deployment/python-base/requirements.lock.txt
             deployment/python-base/build-constraints.txt
 
       - name: Show tool versions
@@ -94,15 +95,26 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade "pip>=25.3"
           python -m pip install \
-            -r deployment/python-base/requirements.txt \
-            -r requirements.txt \
-            --build-constraint deployment/python-base/build-constraints.txt
+            --upgrade \
+            --only-binary=:all: \
+            "pip==26.1.2"
+
+          python -m pip install --no-cache-dir \
+            --require-hashes \
+            --build-constraint deployment/python-base/build-constraints.txt \
+            -r deployment/python-base/requirements.lock.txt
+
+          python -m pip install --no-cache-dir \
+            --only-binary=:all: \
+            --build-constraint deployment/python-base/build-constraints.txt \
+            -r requirements.txt
+
+          python -m pip check
 
       - name: Install Common Web Client dependencies
         working-directory: mdds-examples/web-clients/mdds-common-web-client
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4

@@ -20,3 +20,4 @@ boto3==1.43.21
 pydantic==2.13.4
 testcontainers[minio,rabbitmq]==4.14.2
 build==1.5.0
+pip-tools==7.5.3

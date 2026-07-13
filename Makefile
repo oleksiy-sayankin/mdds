@@ -42,6 +42,10 @@ E2E_TESTS_NEWMAN_HOME := $(MDDS_E2E_TESTS)/newman
 E2E_TESTS_PROJECT_NAME := mdds-e2e
 E2E_TESTS_COMPOSE := docker compose --project-name $(E2E_TESTS_PROJECT_NAME) --progress=plain -f $(E2E_TESTS_NEWMAN_HOME)/docker-compose.yml
 
+PYTHON_BASE_REQUIREMENTS := deployment/python-base/requirements.txt
+PYTHON_BASE_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
+PYTHON_BASE_REQUIREMENTS_LOCK := deployment/python-base/requirements.lock.txt
+
 
 COMMON_WEB_CLIENT_ROOT := ./mdds-examples/web-clients/mdds-common-web-client
 
@@ -168,6 +172,22 @@ push_java_base_docker_image:
 	$(call log_info,"Pushing Java base Docker image...")
 	docker push $(USER_NAME)/java-base:$(PROJECT_VERSION)
 	$(call log_done,"Pushing Java base Docker image completed.")
+
+#
+# Generate Python base requirements lock file
+#
+.PHONY: lock_python_base_requirements
+lock_python_base_requirements:
+	@echo "[INFO] Generating Python base requirements lock file..."
+	CUSTOM_COMPILE_COMMAND="make lock_python_base_requirements" \
+	python -m piptools compile \
+		--generate-hashes \
+		--allow-unsafe \
+		--resolver=backtracking \
+		--constraint $(PYTHON_BASE_BUILD_CONSTRAINTS) \
+		--output-file $(PYTHON_BASE_REQUIREMENTS_LOCK) \
+		$(PYTHON_BASE_REQUIREMENTS)
+	@echo "[INFO] ✅ Python base requirements lock file generated."
 
 #
 # Build common Docker that is use as root image for Python images
