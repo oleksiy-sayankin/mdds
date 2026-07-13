@@ -26,25 +26,25 @@ class PetscSolver(LinearSolverInterface):
         from numpy import array
 
         n = len(rhs)
-        PETSc = self.PETSc
+        petsc = self.PETSc
 
         matrix_csr = csr_matrix(matrix, dtype=float)
 
         # Create PETSc matrix
         # pylint: disable=no-member
-        matrix_petsc = PETSc.Mat().createAIJ(
+        matrix_petsc = petsc.Mat().createAIJ(
             size=matrix_csr.shape,
             csr=(matrix_csr.indptr, matrix_csr.indices, matrix_csr.data),
         )
 
         # Create PETSc vectors
-        rhs_petsc = PETSc.Vec().createSeq(n)
+        rhs_petsc = petsc.Vec().createSeq(n)
         rhs_petsc.setValues(range(n), array(rhs, dtype=float))
 
-        x_petsc = PETSc.Vec().createSeq(n)
+        x_petsc = petsc.Vec().createSeq(n)
 
         # Create solver
-        ksp = PETSc.KSP().create()
+        ksp = petsc.KSP().create()
         ksp.setType(self.ksp_type)
         ksp.setOperators(matrix_petsc)
         ksp.setTolerances(rtol=self.tol, max_it=self.maxiter)

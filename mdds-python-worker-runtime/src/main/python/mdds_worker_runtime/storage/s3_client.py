@@ -62,7 +62,7 @@ class S3Storage:
     def get_json(self, key: str) -> Any:
         """Gets JSON from S3 storage."""
         if key is None or key.strip() == "":
-            raise ValueError("key cannot be null or blank.")
+            raise ValueError(_KEY_CANNOT_BE_NULL_OR_BLANK)
         logger.debug(
             "Loading JSON object from S3-compatible storage.",
             extra={
@@ -91,7 +91,7 @@ class S3Storage:
     def download_file(self, key: str, destination: Path) -> None:
         """Download object from S3-compatible storage to a local file."""
         if key is None or key.strip() == "":
-            raise ValueError("key cannot be null or blank.")
+            raise ValueError(_KEY_CANNOT_BE_NULL_OR_BLANK)
         if destination is None:
             raise ValueError("destination cannot be null.")
 
@@ -128,7 +128,7 @@ class S3Storage:
     def upload_file(self, key: str, local_path: Path) -> None:
         """Upload local file to S3-compatible storage."""
         if key is None or key.strip() == "":
-            raise ValueError("key cannot be null or blank.")
+            raise ValueError(_KEY_CANNOT_BE_NULL_OR_BLANK)
         if local_path is None:
             raise ValueError("local_path cannot be null.")
 
@@ -159,3 +159,6 @@ class S3Storage:
                 "localPath": str(local_path),
             },
         )
+
+
+_KEY_CANNOT_BE_NULL_OR_BLANK = "key cannot be null or blank."

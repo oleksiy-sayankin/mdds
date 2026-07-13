@@ -14,7 +14,7 @@ class JobMessageDTO:
     The JSON field name is intentionally camelCase: manifestObjectKey.
     """
 
-    manifestObjectKey: str
+    manifestObjectKey: str  # NOSONAR - External JSON contract uses camelCase.
 
     def __post_init__(self) -> None:
         if self.manifestObjectKey is None or self.manifestObjectKey.strip() == "":
@@ -35,12 +35,12 @@ class JobStatusUpdateDTO:
     the Web Server status update pipeline.
     """
 
-    jobId: str
-    workerId: str
+    jobId: str  # NOSONAR - External JSON contract uses camelCase.
+    workerId: str  # NOSONAR - External JSON contract uses camelCase.
     status: str
     progress: int
     message: str
-    eventTime: str
+    eventTime: str  # NOSONAR - External JSON contract uses camelCase.
 
     @property
     def job_id(self) -> str:
@@ -66,7 +66,7 @@ class CancelJobDTO:
     is handled by Worker Runtime lifecycle services.
     """
 
-    jobId: str
+    jobId: str  # NOSONAR - External JSON contract uses camelCase.
 
     @property
     def job_id(self) -> str:

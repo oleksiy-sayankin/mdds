@@ -36,6 +36,9 @@ DEFAULT_CONNECTION_TIMEOUT_SECONDS = 60.0
 DEFAULT_RETRY_INTERVAL_SECONDS = 2.0
 DEFAULT_CLOSE_TIMEOUT_SECONDS = 5.0
 
+_READINESS_CHECK_FAILED = "RabbitMQ connection readiness check failed."
+_QUEUE_NAME_CANNOT_BE_NULL_OR_BLANK = "queue_name cannot be null or blank."
+
 
 class RabbitMqConnectionError(RuntimeError):
     """RabbitMQ connection or channel operation failed."""
@@ -173,7 +176,7 @@ class RabbitMqSubscription(Subscription):
         if properties is None:
             raise ValueError("properties cannot be null.")
         if queue_name is None or queue_name.strip() == "":
-            raise ValueError("queue_name cannot be null or blank.")
+            raise ValueError(_QUEUE_NAME_CANNOT_BE_NULL_OR_BLANK)
         if payload_type is None:
             raise ValueError("payload_type cannot be null.")
         if handler is None:
@@ -295,7 +298,7 @@ class RabbitMqSubscription(Subscription):
             while not self._closed.is_set() and connection.is_open:
                 connection.process_data_events(time_limit=1.0)
 
-        except BaseException as exc:
+        except Exception as exc:
             self._failed = exc
             self._ready.set()
             logger.exception(
@@ -451,7 +454,7 @@ class RabbitMqQueueClient(QueueClient):
     def publish(self, queue_name: str, message: QueueMessage[T]) -> None:
         """Publish a message to a RabbitMQ queue."""
         if queue_name is None or queue_name.strip() == "":
-            raise ValueError("queue_name cannot be null or blank.")
+            raise ValueError(_QUEUE_NAME_CANNOT_BE_NULL_OR_BLANK)
         if message is None:
             raise ValueError("message cannot be null.")
 
@@ -497,7 +500,7 @@ class RabbitMqQueueClient(QueueClient):
     def delete_queue(self, queue_name: str) -> None:
         """Delete RabbitMQ queue."""
         if queue_name is None or queue_name.strip() == "":
-            raise ValueError("queue_name cannot be null or blank.")
+            raise ValueError(_QUEUE_NAME_CANNOT_BE_NULL_OR_BLANK)
 
         with self._lock:
             self._raise_if_closed()
@@ -572,7 +575,7 @@ class RabbitMqQueueClient(QueueClient):
 
             except RabbitMqConnectionError:
                 logger.exception(
-                    "RabbitMQ connection readiness check failed.",
+                    _READINESS_CHECK_FAILED,
                     extra={
                         "component": "rabbitmq_queue_client",
                         "event": "rabbitmq_readiness_check_failed",
@@ -583,7 +586,7 @@ class RabbitMqQueueClient(QueueClient):
                 raise
             except Exception as exc:
                 logger.exception(
-                    "RabbitMQ connection readiness check failed.",
+                    _READINESS_CHECK_FAILED,
                     extra={
                         "component": "rabbitmq_queue_client",
                         "event": "rabbitmq_readiness_check_failed",
@@ -591,9 +594,7 @@ class RabbitMqQueueClient(QueueClient):
                         "port": self._properties.port,
                     },
                 )
-                raise RabbitMqConnectionError(
-                    "RabbitMQ connection readiness check failed."
-                ) from exc
+                raise RabbitMqConnectionError(_READINESS_CHECK_FAILED) from exc
 
         logger.info(
             "RabbitMQ connection readiness check completed.",

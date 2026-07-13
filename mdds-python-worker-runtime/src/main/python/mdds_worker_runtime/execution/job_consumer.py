@@ -189,7 +189,6 @@ class JobConsumer(MessageHandler[JobMessageDTO]):
                         "jobId": workspace.job_id,
                     },
                 )
-            return
 
     def _prepare_job(
         self,

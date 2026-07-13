@@ -36,15 +36,9 @@ class ArtifactSnapshot:
     format: str
 
     @staticmethod
-    def from_input_artifact(artifact: PreparedInputArtifact) -> "ArtifactSnapshot":
-        return ArtifactSnapshot(
-            object_key=artifact.object_key,
-            local_path=str(artifact.local_path),
-            format=_artifact_format_to_string(artifact.format),
-        )
-
-    @staticmethod
-    def from_output_artifact(artifact: PreparedOutputArtifact) -> "ArtifactSnapshot":
+    def from_artifact(
+        artifact: PreparedInputArtifact | PreparedOutputArtifact,
+    ) -> "ArtifactSnapshot":
         return ArtifactSnapshot(
             object_key=artifact.object_key,
             local_path=str(artifact.local_path),
@@ -120,11 +114,11 @@ class JobExecutionContextSnapshot:
             input_dir=str(context.workspace.input_dir),
             output_dir=str(context.workspace.output_dir),
             inputs={
-                slot: ArtifactSnapshot.from_input_artifact(artifact)
+                slot: ArtifactSnapshot.from_artifact(artifact)
                 for slot, artifact in context.inputs._artifacts.items()
             },
             outputs={
-                slot: ArtifactSnapshot.from_output_artifact(artifact)
+                slot: ArtifactSnapshot.from_artifact(artifact)
                 for slot, artifact in context.outputs._artifacts.items()
             },
             params=dict(context.params._params),

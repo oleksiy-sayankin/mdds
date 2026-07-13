@@ -273,4 +273,4 @@ def test_artifact_snapshot_rejects_null_artifact_format(tmp_path) -> None:
     )
 
     with pytest.raises(ValueError, match="artifact format cannot be null."):
-        ArtifactSnapshot.from_input_artifact(artifact)
+        ArtifactSnapshot.from_artifact(artifact)
