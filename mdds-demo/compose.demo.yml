@@ -97,7 +97,7 @@ services:
       MDDS_REDIS_PORT: 6379
       MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres:5432/mdds
       MDDS_METADATA_STORAGE_USER: mdds
-      MDDS_METADATA_STORAGE_PASSWORD: mdds123
+      MDDS_METADATA_STORAGE_PASSWORD: mdds123 # NOSONAR local demo-only credential, not used outside demo
     ports:
       - "8000:8000"
     healthcheck:
@@ -245,7 +245,7 @@ services:
     environment:
       POSTGRES_DB: mdds
       POSTGRES_USER: mdds
-      POSTGRES_PASSWORD: mdds123
+      POSTGRES_PASSWORD: mdds123 # NOSONAR local demo-only credential, not used outside demo
       TZ: UTC
     ports:
       - "5432:5432"

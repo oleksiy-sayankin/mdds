@@ -88,7 +88,7 @@ services:
       MDDS_REDIS_PORT: 6379
       MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres:5432/mdds
       MDDS_METADATA_STORAGE_USER: mdds
-      MDDS_METADATA_STORAGE_PASSWORD: mdds123
+      MDDS_METADATA_STORAGE_PASSWORD: mdds123 # NOSONAR local e2e-only credential, not used outside e2e tests
     healthcheck:
       test: ["CMD", "curl", "-f", "http://web-server:8000/health"]
       interval: 3s
@@ -223,7 +223,7 @@ services:
     environment:
       POSTGRES_DB: mdds
       POSTGRES_USER: mdds
-      POSTGRES_PASSWORD: mdds123
+      POSTGRES_PASSWORD: mdds123 # NOSONAR local e2e-only credential, not used outside e2e tests
       TZ: UTC
     volumes:
       # PostgreSQL 18+ Docker image uses PGDATA=/var/lib/postgresql/18/docker
