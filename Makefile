@@ -43,7 +43,7 @@ E2E_TESTS_PROJECT_NAME := mdds-e2e
 E2E_TESTS_COMPOSE := docker compose --project-name $(E2E_TESTS_PROJECT_NAME) --progress=plain -f $(E2E_TESTS_NEWMAN_HOME)/docker-compose.yml
 
 
-COMMON_WEB_CLIENT_DIR := ./mdds-examples/web-clients/mdds-common-web-client
+COMMON_WEB_CLIENT_ROOT := ./mdds-examples/web-clients/mdds-common-web-client
 
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
 TS_ROOT := src
@@ -334,20 +334,30 @@ push_result_consumer_docker_image:
 # Reformat Common Web Client
 #
 reformat_common_web_client:
-	cd $(COMMON_WEB_CLIENT_DIR) && npm run format
+	cd $(COMMON_WEB_CLIENT_ROOT) && npm run format
 
 
 #
 # Check code style
 #
 check_common_web_client_code_style:
-	cd $(COMMON_WEB_CLIENT_DIR) && npm run code:check
+	cd $(COMMON_WEB_CLIENT_ROOT) && npm run code:check
 
 #
 # Run Common Web Client tests
 #
 test_common_web_client:
-	cd $(COMMON_WEB_CLIENT_DIR) && npm test
+	cd $(COMMON_WEB_CLIENT_ROOT) && npm test
+
+
+#
+# Run Common Web Client tests with TypeScript coverage.
+#
+test_common_web_client_coverage:
+	$(call log_info,"Running Common Web Client tests with TypeScript coverage...")
+	cd $(COMMON_WEB_CLIENT_ROOT) && npm run test:coverage
+	@test -s $(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info
+	$(call log_done,"Common Web Client tests with TypeScript coverage completed.")
 
 .PHONY: \
 	build_alloy_docker_image \
@@ -365,7 +375,9 @@ test_common_web_client:
 	build_and_push_release_images \
 	format_common_web_client \
 	check_common_web_client_code_style \
-	test_common_web_client
+	test_common_web_client \
+	test_coverage \
+	test_common_web_client_coverage
 
 
 #
@@ -563,7 +575,7 @@ check_worker_runtime_code_style:
 	$(call log_info,"Checking worker runtime code style...")
 	pycodestyle $(WORKER_RUNTIME_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(WORKER_RUNTIME_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking worker runtime code style completed.")
 
 
@@ -585,7 +597,7 @@ check_e2e_code_style:
 	$(call log_info,"Checking e2e sources style...")
 	pycodestyle $(E2E_TESTS_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
 	ruff check $(E2E_TESTS_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(abspath $(E2E_TESTS_MAIN)):$(E2E_TESTS_MAIN):$(E2E_TESTS_TEST):$$PYTHONPATH pylint $(E2E_TESTS_ROOT)/ --ignore $(VENV_DIR),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(abspath $(E2E_TESTS_MAIN)):$(E2E_TESTS_MAIN):$(E2E_TESTS_TEST):$$PYTHONPATH pylint $(E2E_TESTS_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES),$(PYTHON_GENERATED_SOURCES) --errors-only
 	$(call log_done,"Checking e2e sources completed.")
 
 #
@@ -785,17 +797,29 @@ ensure_sonar_token: wait_for_sonarqube
 		bash mdds-dev/bootstrap-sonar-token.sh; \
 	fi
 
+#
+# Run all tests with coverage
+#
+test_coverage: test_java_coverage \
+	test_python_coverage \
+	test_common_web_client_coverage
 
 #
 # Perform SonarQube scan and print results to console.
 #
-# This target does not run tests. It expects coverage reports to be generated
-# beforehand by test_java_coverage and test_python_coverage.
+# This target does not run tests. It expects coverage reports to be generated beforehand by:
+#   * java coverage
+#   * python coverage
+#   * common web client coverage
 #
-sonar_scan: ensure_sonar_token
+sonar_scan:
+	@if [ -z "$$SONAR_TOKEN" ]; then \
+		$(MAKE) ensure_sonar_token; \
+	fi
 	$(call log_info,"Running SonarQube analysis...")
 	$(call log_info,"Java coverage report list expected at target/java-coverage-files.txt")
 	$(call log_info,"Python coverage reports expected in worker target directories.")
+	$(call log_info,"Common Web Client TypeScript coverage report expected at target directories")
 	@test -s target/java-coverage-files.txt || { \
 		$(call log_error_sh,"Java coverage report list is missing. Run 'make test_java_coverage' first."); \
 		exit 1; \
@@ -814,34 +838,56 @@ sonar_scan: ensure_sonar_token
 		$(call log_error_sh,"SLAE Worker Python coverage report is missing. Run 'make test_python_coverage' first."); \
 		exit 1; \
 	}
-	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	@test -s $(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info || { \
+		$(call log_error_sh,"Common Web Client TypeScript coverage report is missing. Run 'make test_common_web_client_coverage' first."); \
+		exit 1; \
+	}
+	@# githubactions:S8544 is suppressed for build.yml because Sonar treats
+	@# pip install -r as unlocked even though project requirements files pin
+	@# all direct dependencies. A hash-based lock file is a separate future
+	@# hardening task.
+	@TOKEN="$${SONAR_TOKEN:-$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)")}"; \
+	SONAR_ORGANIZATION_ARG="" ; \
+	if [ -n "$$SONAR_ORGANIZATION" ]; then \
+		SONAR_ORGANIZATION_ARG="-Dsonar.organization=$$SONAR_ORGANIZATION" ; \
+	fi ; \
 	JAVA_COVERAGE_FILES=$$(paste -sd, target/java-coverage-files.txt); \
 	PYTHON_COVERAGE_FILES="$(WORKER_RUNTIME_ROOT)/target/python-coverage.xml,$(WORKER_SLAE_ROOT)/target/python-coverage.xml"; \
+	JS_COVERAGE_FILES="$(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info"; \
 	mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
 	  -Dsonar.host.url=$(SONAR_HOST_URL) \
+	  $$SONAR_ORGANIZATION_ARG \
 	  -Dsonar.coverage.jacoco.xmlReportPaths="$$JAVA_COVERAGE_FILES" \
 	  -Dsonar.python.coverage.reportPaths="$$PYTHON_COVERAGE_FILES" \
+	  -Dsonar.javascript.lcov.reportPaths="$$JS_COVERAGE_FILES" \
+	  -Dsonar.exclusions='mdds_grpc_core/**,mdds-web-client/**,**/src/test/**,**/node_modules/**,**/target/**,**/build/**,**/dist/**,**/generated/**,**/__pycache__/**,**/.pytest_cache/**,**/.venv/**,**/venv/**' \
+	  -Dsonar.test.inclusions='**/*Test.java,**/Test*.java,**/test_*.py,**/*_test.py,**/*.test.ts,**/*.test.tsx' \
+	  -Dsonar.qualitygate.wait=$${SONAR_QUALITYGATE_WAIT:-false} \
+	  -Dsonar.issue.ignore.multicriteria=e1 \
+	  -Dsonar.issue.ignore.multicriteria.e1.ruleKey=githubactions:S8544 \
+	  -Dsonar.issue.ignore.multicriteria.e1.resourceKey=.github/workflows/build.yml \
+	  -Dsonar.maven.scanAll=true \
 	  -Dsonar.coverage.exclusions='mdds-dto/src/main/java/com/mdds/dto/**/*.java' \
 	  -Dsonar.token=$$TOKEN
 	$(call log_info,"Checking SonarQube Quality Gate status...")
 	@sleep 5
 	$(call log_info,"Fetching total number of issues...");
-	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	@TOKEN="$${SONAR_TOKEN:-$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)")}" ; \
 	curl -s -u $$TOKEN: \
 	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=INFO,MINOR,MAJOR,CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
 	    | jq -r '" - Total issues: " + (.total|tostring)'
 	$(call log_info,"Fetching list of issues...");
-	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	@TOKEN="$${SONAR_TOKEN:-$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)")}" ; \
 	curl -s -u $$TOKEN: \
     	    "$(SONAR_HOST_URL)/api/issues/search?projectKeys=$(SONAR_PROJECT_KEY)&severities=INFO,MINOR,MAJOR,CRITICAL,BLOCKER&statuses=OPEN,CONFIRMED,REOPENED" \
     	    | jq -r '.issues[] | "- " + .severity + " | " + .component + ":" + (.line|tostring) + " → " + .message';
 	$(call log_info,"Fetching additional metrics ...");
-	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	@TOKEN="$${SONAR_TOKEN:-$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)")}" ; \
 	curl -s -u $$TOKEN: \
       "$(SONAR_HOST_URL)/api/measures/component?component=$(SONAR_PROJECT_KEY)&metricKeys=coverage,new_coverage,duplicated_lines_density,security_hotspots" \
       | jq -r '.component.measures[] | " - " + .metric + ": " + .value + "%"'
-	@TOKEN=$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)"); \
+	@TOKEN="$${SONAR_TOKEN:-$$(tr -d '\n' < "$(SONAR_TOKEN_FILE)")}" ; \
 	STATUS=$$(curl -s -u $$TOKEN: \
 	  "$(SONAR_HOST_URL)/api/qualitygates/project_status?projectKey=$(SONAR_PROJECT_KEY)" \
 	  | jq -r '.projectStatus.status'); \

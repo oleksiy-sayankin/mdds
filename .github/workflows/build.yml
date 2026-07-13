@@ -57,7 +57,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: mdds-web-client/package-lock.json
+          cache-dependency-path: mdds-examples/web-clients/mdds-common-web-client/package-lock.json
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -100,8 +100,8 @@ jobs:
             -r requirements.txt \
             --build-constraint deployment/python-base/build-constraints.txt
 
-      - name: Install web-client dependencies
-        working-directory: mdds-web-client
+      - name: Install Common Web Client dependencies
+        working-directory: mdds-examples/web-clients/mdds-common-web-client
         run: npm ci
 
       - name: Cache SonarQube Cloud packages
@@ -119,6 +119,9 @@ jobs:
 
       - name: Run Python tests with coverage
         run: make test_python_coverage
+
+      - name: Run Common Web Client tests with TypeScript coverage
+        run: make test_common_web_client_coverage
 
       - name: Run end-to-end tests
         run: make test_e2e
@@ -170,19 +173,8 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # githubactions:S8544 is suppressed for build.yml because Sonar treats
-          # pip install -r as unlocked even though project requirements files pin
-          # all direct dependencies. A hash-based lock file is a separate future
-          # hardening task.
-          mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.projectKey=oleksiy-sayankin_mdds \
-            -Dsonar.organization=oleksiy-sayankin \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths="${JAVA_COVERAGE_FILES}" \
-            -Dsonar.coverage.exclusions='mdds-dto/src/main/java/com/mdds/dto/**/*.java' \
-            -Dsonar.python.coverage.reportPaths=mdds-python-worker-runtime/target/python-coverage.xml,mdds-examples/workers/mdds-python-worker-solving-slae/target/python-coverage.xml \
-            -Dsonar.issue.ignore.multicriteria=e1 \
-            -Dsonar.issue.ignore.multicriteria.e1.ruleKey=githubactions:S8544 \
-            -Dsonar.issue.ignore.multicriteria.e1.resourceKey=.github/workflows/build.yml \
-            -Dsonar.qualitygate.wait=true
+          SONAR_PROJECT_KEY: oleksiy-sayankin_mdds
+          SONAR_ORGANIZATION: oleksiy-sayankin
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_QUALITYGATE_WAIT: "true"
+        run: make sonar_scan
