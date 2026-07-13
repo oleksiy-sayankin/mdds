@@ -24,6 +24,9 @@ dependencies = [
     "mdds-python-worker-runtime==0.1.0"
 ]
 
+[tool.uv.sources]
+mdds-python-worker-runtime = { path = "../../../mdds-python-worker-runtime" }
+
 [tool.setuptools]
 package-dir = { "" = "src/main/python" }
 

@@ -1,0 +1,19 @@
+version = 1
+revision = 3
+requires-python = "==3.12.*"
+
+[[package]]
+name = "mdds-python-worker-runtime"
+version = "0.1.0"
+source = { directory = "../../../mdds-python-worker-runtime" }
+
+[[package]]
+name = "mdds-python-worker-solving-slae"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "mdds-python-worker-runtime" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mdds-python-worker-runtime", directory = "../../../mdds-python-worker-runtime" }]
