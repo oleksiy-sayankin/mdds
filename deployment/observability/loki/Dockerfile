@@ -3,4 +3,10 @@
 
 FROM grafana/loki:2.9.8
 
-COPY loki.yaml /etc/loki/loki.yaml
+USER root
+
+COPY --chown=root:root loki.yaml /etc/loki/loki.yaml
+
+RUN chmod 644 /etc/loki/loki.yaml
+
+USER 10001:10001

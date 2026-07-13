@@ -8,10 +8,15 @@ ENV MDDS_EXECUTOR_HOME=$MDDS_HOME/mdds-executor
 ENV MDDS_EXECUTOR_WEBAPP_DIR_LOCATION=$MDDS_HOME/mdds-executor/web-app
 ENV MDDS_EXECUTOR_PORT=35232
 
+USER root
+
 # Create app directories
-RUN mkdir -p "$MDDS_EXECUTOR_HOME" "$MDDS_EXECUTOR_WEBAPP_DIR_LOCATION"
+RUN mkdir -p "$MDDS_EXECUTOR_HOME" "$MDDS_EXECUTOR_WEBAPP_DIR_LOCATION" && \
+    chown -R "$MDDS_USER:$MDDS_GROUP" "$MDDS_EXECUTOR_HOME"
 
 COPY --chown=$MDDS_USER:$MDDS_GROUP ./mdds-executor/target/mdds-executor*jar-with-spring-dependencies.jar $MDDS_EXECUTOR_HOME/mdds-executor.jar
+
+USER $MDDS_USER
 
 # Default executor port
 EXPOSE $MDDS_EXECUTOR_PORT

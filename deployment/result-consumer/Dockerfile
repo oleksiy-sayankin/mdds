@@ -8,12 +8,19 @@ ENV MDDS_RESULT_CONSUMER_HOME=$MDDS_HOME/mdds-result-consumer
 ENV MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION=$MDDS_RESULT_CONSUMER_HOME/static
 ENV MDDS_RESULT_CONSUMER_PORT=8863
 
+USER root
+
 # Create app directories
 RUN mkdir -p "$MDDS_RESULT_CONSUMER_HOME" "$MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION"
 
-COPY --chown=$MDDS_USER:$MDDS_GROUP ./mdds-result-consumer/target/mdds-result-consumer*jar-with-spring-dependencies.jar $MDDS_RESULT_CONSUMER_HOME/mdds-result-consumer.jar
+COPY --chown=root:root ./mdds-result-consumer/target/mdds-result-consumer*jar-with-spring-dependencies.jar $MDDS_RESULT_CONSUMER_HOME/mdds-result-consumer.jar
 
-# Default result-consumer port
+RUN chmod 555 "$MDDS_RESULT_CONSUMER_HOME" "$MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION" && \
+    chmod 444 "$MDDS_RESULT_CONSUMER_HOME/mdds-result-consumer.jar"
+
+USER $MDDS_USER
+
+# Default result consumer port
 EXPOSE $MDDS_RESULT_CONSUMER_PORT
 
 CMD ["java", "-jar", "/opt/mdds/mdds-result-consumer/mdds-result-consumer.jar"]
