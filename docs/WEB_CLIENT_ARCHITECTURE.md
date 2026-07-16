@@ -31,16 +31,23 @@ Refer to the LICENSE file in the root directory for full license details.
     * [8.7 Job Monitor](#87-job-monitor)
     * [8.8 Job Cancellation](#88-job-cancellation)
     * [8.9 Output slot Lifecycle](#89-output-slot-lifecycle)
-  * [9. Screen-to-state mapping](#9-screen-to-state-mapping)
-    * [9.1 Screen 1: Select Job Type](#91-screen-1-select-job-type)
-    * [9.2 Screen 2: Select Job Inputs](#92-screen-2-select-job-inputs)
-    * [9.3 Screen 3: Upload Job Inputs](#93-screen-3-upload-job-inputs)
-    * [9.4 Screen 4: Set Job Parameters](#94-screen-4-set-job-parameters)
-    * [9.5 Screen 5: Review Job Summary](#95-screen-5-review-job-summary)
-    * [9.6 Screen 6: Monitor Job Progress](#96-screen-6-monitor-job-progress)
-    * [9.7 Screen 7: Download Job Outputs](#97-screen-7-download-job-outputs)
-  * [10. Acceptance scenarios](#10-acceptance-scenarios)
-  * [11. Deferred decisions and out-of-scope behavior](#11-deferred-decisions-and-out-of-scope-behavior)
+  * [9. Common Wizard Layout](#9-common-wizard-layout)
+    * [9.1 Wizard Header](#91-wizard-header)
+    * [9.2 Progress Indicator](#92-progress-indicator)
+    * [9.3 Step Panel](#93-step-panel)
+    * [9.4 Feedback and Notification Region](#94-feedback-and-notification-region)
+    * [9.5 Action Bar](#95-action-bar)
+    * [9.6 Confirmation Dialogs](#96-confirmation-dialogs)
+  * [10. Screen-to-state mapping](#10-screen-to-state-mapping)
+    * [10.1 Screen 1: Select Job Type](#101-screen-1-select-job-type)
+    * [10.2 Screen 2: Select Job Inputs](#102-screen-2-select-job-inputs)
+    * [10.3 Screen 3: Upload Job Inputs](#103-screen-3-upload-job-inputs)
+    * [10.4 Screen 4: Set Job Parameters](#104-screen-4-set-job-parameters)
+    * [10.5 Screen 5: Review Job Summary](#105-screen-5-review-job-summary)
+    * [10.6 Screen 6: Monitor Job Progress](#106-screen-6-monitor-job-progress)
+    * [10.7 Screen 7: Download Job Outputs](#107-screen-7-download-job-outputs)
+  * [11. Acceptance scenarios](#11-acceptance-scenarios)
+  * [12. Deferred decisions and out-of-scope behavior](#12-deferred-decisions-and-out-of-scope-behavior)
 <!-- TOC -->
 
 
@@ -82,6 +89,8 @@ Refer to the LICENSE file in the root directory for full license details.
 | `monitorState`         | Local state of the job monitoring workflow.                                                                   |
 | `cancellationState`    | Local state of the job cancellation workflow.                                                                 |
 | `downloadState`        | Local state of one output download workflow.                                                                  |
+| `jobProgress`          | The last confirmed job progress value received for the current job, from 0 to 100.                            |
+| `jobMessage`           | The last confirmed public job message received for the current job.                                           |
 
 ## 4. Client state composition and ownership
 
@@ -339,30 +348,310 @@ FAILED_DOWNLOAD
 CANCELLED_DOWNLOAD
 ```
 
-## 9. Screen-to-state mapping
+## 9. Common Wizard Layout
+
+This section defines the common functional regions of every wizard step.
+The diagrams illustrate their relative composition and do not prescribe exact dimensions, spacing, styling, or responsive placement.
+The diagram below shows the common wizard window structure.
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│  Wizard Header                                                         │
+│                                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│    Progress Indicator                                                  │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Step Panel                                          Step n of N │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │  Feedback and Notification Region                                │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                           Action Bar   │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.1 Wizard Header
+
+The header is shared by all wizard steps.
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 Progress Indicator
+
+Step labels are not clickable.
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│    (*)                                                                 │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.3 Step Panel
+
+The wizard step panel displays the content of the current step.
+
+```text
+┌──────────────────────────────────────────────────────────────────┐ 
+│  Select Job Type                                     Step 1 of 7 │
+│                                                                  │
+│  Job Type: [ solving_slae ▼ ]                                    │
+│                                                                  │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘ 
+```
+
+### 9.4 Feedback and Notification Region
+
+```text
+┌──────────────────────────────────────────────────────────────────┐ 
+│     Status, warning, and error messages appear here              │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 9.5 Action Bar
+
+The action bar contains the primary action for the current step and any available backward, secondary, or workflow-level actions.
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐ 
+│   < Previous                                                   Next >  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.6 Confirmation Dialogs
+
+```text
+┌────────────────────────────────────────────────┐
+│           Confirmation question                │
+│                                                │
+│   [the first choice]     [the second choice]   │
+└────────────────────────────────────────────────┘
+```
+
+## 10. Screen-to-state mapping
 
 This section maps local client states to visible content, control availability,
 and generated client events. It does not redefine state transitions or network
 recovery policies.
 
-### 9.1 Screen 1: Select Job Type
+### 10.1 Screen 1: Select Job Type
 
-### 9.2 Screen 2: Select Job Inputs
 
-### 9.3 Screen 3: Upload Job Inputs
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│     (*)                                                                │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Select Job Type                                     Step 1 of 7 │  │
+│  │                                                                  │  │
+│  │  Job Type: [ solving_slae ▼ ]                                    │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │                                                                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                Next >  │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-### 9.4 Screen 4: Set Job Parameters
 
-### 9.5 Screen 5: Review Job Summary
+### 10.2 Screen 2: Select Job Inputs
 
-### 9.6 Screen 6: Monitor Job Progress
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│               (*)                                                      │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Select Job Inputs                                   Step 2 of 7 │  │
+│  │                                                                  │  │
+│  │  Matrix   : file1.csv  [Choose file]                             │  │
+│  │  RHS      : file2.csv  [Choose file]                             │  │
+│  │                                                                  │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │                                                                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│   < Previous                                                   Next >  │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-### 9.7 Screen 7: Download Job Outputs
+### 10.3 Screen 3: Upload Job Inputs
 
-## 10. Acceptance scenarios
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│                       (*)                                              │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Upload Job Inputs                                   Step 3 of 7 │  │
+│  │                                                                  │  │
+│  │  Matrix    matrix.csv    Uploaded                                │  │
+│  │  RHS       rhs.csv       Uploading...                            │  │
+│  │                                                                  │  │
+│  │                         (Stop uploading)  (Retry failed uploads) │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │  Uploading input files...                                        │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│   < Previous                                                   Next >  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+> `(Retry failed uploads)` is disabled since there is no failed file uploads.
+
+> `< Previous` and `Next >` are disabled while uploads are running.
+
+```text
+┌────────────────────────────────────────────────┐
+│  Stop uploading and return to file selection?  │
+│                                                │
+│    [Continue uploading]     [Stop upload]      │
+└────────────────────────────────────────────────┘
+```
+
+### 10.4 Screen 4: Set Job Parameters
+
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│                                  (*)                                   │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Set Job Parameters                                  Step 4 of 7 │  │
+│  │                                                                  │  │
+│  │  Solving method *    [numpy_exact_solver ▼]                      │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │  Network error while updating job parameters                     │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│   < Previous                                                   Next >  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+
+### 10.5 Screen 5: Review Job Summary
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│                                              (*)                       │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Review Job Summary                                  Step 5 of 7 │  │
+│  │                                                                  │  │
+│  │  Job type                                                        │  │
+│  │  solving_slae                                                    │  │
+│  │                                                                  │  │
+│  │  Inputs                                                          │  │
+│  │  ✓ Matrix    matrix.csv                                          │  │
+│  │  ✓ RHS       rhs.csv                                             │  │
+│  │                                                                  │  │
+│  │  Parameters                                                      │  │
+│  │  Solving method    numpy_exact_solver                            │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │  Network error while submitting the job                          │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│   < Previous                                             [Submit job]  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+
+### 10.6 Screen 6: Monitor Job Progress
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│                                                       (*)              │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Monitor Job Progress                                Step 6 of 7 │  │
+│  │                                                                  │  │
+│  │  Status : IN_PROGRESS                                            │  │
+│  │                                                                  │  │
+│  │  Estimated progress: [████████████████░░░░] 78%                  │  │
+│  │                                                                  │  │
+│  │  Message : Worker is processing job                              │  │
+│  │                                                                  │  │
+│  │                                                     (Cancel job) │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                        View outputs >  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+> Button `View outputs >` is disabled since Job is in progress.
+
+
+```text
+┌──────────────────────────────┐
+│   Cancel this running job?   │
+│                              │
+│ [Keep running]  [Cancel job] │
+└──────────────────────────────┘
+```
+
+### 10.7 Screen 7: Download Job Outputs
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ MDDS Job Wizard                                                        │
+│ Create, configure, submit, and monitor an MDDS job                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  Job type → Inputs → Upload → Parameters → Review → Monitor → Outputs  │
+│                                                                 (*)    │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Download Job Outputs                                Step 7 of 7 │  │
+│  │                                                                  │  │
+│  │  Solution    CSV    [Download]                                   │  │
+│  │                                                                  │  │
+│  │                                                                  │  │
+│  ├──────────────────────────────────────────────────────────────────┤  │
+│  │                                                                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                    [Start new job]     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+
+## 11. Acceptance scenarios
 
 | Given                                         | When                                  | Then                                                                                                                   |
 |-----------------------------------------------|---------------------------------------|------------------------------------------------------------------------------------------------------------------------|
 | The current `submissionState` is `SUBMITTING` | `POST /jobs/{jobId}/submit` times out | The client must not repeat the submit request; it must enter `RECONCILING`; it must request `GET /jobs/{jobId}/status` |
 
-## 11. Deferred decisions and out-of-scope behavior
+## 12. Deferred decisions and out-of-scope behavior
