@@ -106,7 +106,10 @@ alloy             — log collector
 grafana           — dashboards and log UI
 ```
 
-For more details see [ARCHITECTURE](./ARCHITECTURE.md).
+For more details see:
+
+- [Job Orchestrator Architecture](docs/JOB_ORCHESTRATOR_ARCHITECTURE.md)
+- [Web Client Architecture](docs/WEB_CLIENT_ARCHITECTURE.md)
 
 ## Quick start with Docker Compose
 
