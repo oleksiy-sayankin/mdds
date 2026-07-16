@@ -13,13 +13,14 @@ Refer to the LICENSE file in the root directory for full license details.
   * [6. Common client policies](#6-common-client-policies)
     * [6.1 Asynchronous operation ownership](#61-asynchronous-operation-ownership)
     * [6.2 Request serialization](#62-request-serialization)
-    * [6.3 Automatic retry](#63-automatic-retry)
-    * [6.4 Operation reconciliation](#64-operation-reconciliation)
-    * [6.5 User-initiated cancellation](#65-user-initiated-cancellation)
-    * [6.6 Stale and late response handling](#66-stale-and-late-response-handling)
-    * [6.7 Navigation locking](#67-navigation-locking)
-    * [6.8 Warning and error presentation](#68-warning-and-error-presentation)
-    * [6.9 Workflow reset and abandonment](#69-workflow-reset-and-abandonment)
+    * [6.3 Request failure classification](#63-request-failure-classification)
+    * [6.4 Automatic retry](#64-automatic-retry)
+    * [6.5 Operation reconciliation](#65-operation-reconciliation)
+    * [6.6 User-initiated cancellation](#66-user-initiated-cancellation)
+    * [6.7 Stale and late response handling](#67-stale-and-late-response-handling)
+    * [6.8 Navigation locking](#68-navigation-locking)
+    * [6.9 Warning and error presentation](#69-warning-and-error-presentation)
+    * [6.10 Workflow reset and abandonment](#610-workflow-reset-and-abandonment)
   * [7. Network operation catalog](#7-network-operation-catalog)
   * [8. Client state machines](#8-client-state-machines)
     * [8.1 Wizard Navigation](#81-wizard-navigation)
@@ -77,20 +78,21 @@ Refer to the LICENSE file in the root directory for full license details.
 
 ## 3. Client terminology
 
-| Term                   | Meaning                                                                                                       |
-|------------------------|---------------------------------------------------------------------------------------------------------------|
-| `jobStatus`            | The last confirmed public job status obtained from or accepted by the MDDS orchestrator.                      |
-| `wizardStep`           | The currently displayed wizard step.                                                                          |
-| `draftCreationState`   | Local state of the draft job creation workflow.                                                               |
-| `uploadManagerState`   | Local state of the current upload queue run.                                                                  |
-| `inputSlotState`       | Local state of one declared input slot.                                                                       |
-| `parameterUpdateState` | Local state of synchronization between locally edited job parameters and the current server-side `DRAFT` job. |
-| `submissionState`      | Local state of the job submission workflow.                                                                   |
-| `monitorState`         | Local state of the job monitoring workflow.                                                                   |
-| `cancellationState`    | Local state of the job cancellation workflow.                                                                 |
-| `downloadState`        | Local state of one output download workflow.                                                                  |
-| `jobProgress`          | The last confirmed job progress value received for the current job, from 0 to 100.                            |
-| `jobMessage`           | The last confirmed public job message received for the current job.                                           |
+| Term                   | Meaning                                                                                                               |
+|------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `jobStatus`            | The last confirmed public job status obtained from or accepted by the MDDS orchestrator.                              |
+| `sessionId`            | Idempotency identifier owned by one Draft Job Creation instance and reused by all automatic retries of that instance. |
+| `wizardStep`           | The currently displayed wizard step.                                                                                  |
+| `draftCreationState`   | Local state of the draft job creation workflow.                                                                       |
+| `uploadManagerState`   | Local state of the current upload queue run.                                                                          |
+| `inputSlotState`       | Local state of one declared input slot.                                                                               |
+| `parameterUpdateState` | Local state of synchronization between locally edited job parameters and the current server-side `DRAFT` job.         |
+| `submissionState`      | Local state of the job submission workflow.                                                                           |
+| `monitorState`         | Local state of the job monitoring workflow.                                                                           |
+| `cancellationState`    | Local state of the job cancellation workflow.                                                                         |
+| `downloadState`        | Local state of one output download workflow.                                                                          |
+| `jobProgress`          | The last confirmed job progress value received for the current job, from 0 to 100.                                    |
+| `jobMessage`           | The last confirmed public job message received for the current job.                                                   |
 
 ## 4. Client state composition and ownership
 
@@ -135,19 +137,45 @@ The Web Client does not redefine that lifecycle. It stores and renders the last 
 
 ### 6.2 Request serialization
 
-### 6.3 Automatic retry
+### 6.3 Request failure classification
 
-### 6.4 Operation reconciliation
+Request failures are classified for automatic recovery purposes. The classification does not by itself authorize repeating a request.
+The operation-specific repeatability and reconciliation rules in the Network Operation Catalog take precedence.
 
-### 6.5 User-initiated cancellation
+| Failure classification        | Default examples                                                                                                                                                         | Default handling                                                       |
+|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| Retryable request failure     | Client-side timeout, network failure, connection failure, `408`, `429`, `500`, `502`, `503`, `504`                                                                       | Apply bounded automatic retry when the operation permits it            |
+| Non-retryable request failure | Malformed, unsupported, or schema-invalid response, including a successful HTTP response without required fields; `400`, `401`, `403`, `404`, `409`, `415`, `422`, `501` | Do not retry automatically; expose an operation-specific recovery path |
 
-### 6.6 Stale and late response handling
+The Network Operation Catalog may override the default classification or require reconciliation instead of repeating the original request.
 
-### 6.7 Navigation locking
+### 6.4 Automatic retry
 
-### 6.8 Warning and error presentation
+Automatic retry is bounded.
 
-### 6.9 Workflow reset and abandonment
+All attempts belonging to one operation instance reuse the same request intent and idempotency data.
+
+The retry counter and retry delay belong to the current operation instance. A new operation instance starts with a new retry budget.
+
+If the server returns Retry-After and the operation permits automatic retry, the client should respect that value.
+
+The concrete retry limit and delay strategy are implementation-defined in v1.
+
+### 6.5 Operation reconciliation
+
+### 6.6 User-initiated cancellation
+
+### 6.7 Stale and late response handling
+
+### 6.8 Navigation locking
+
+### 6.9 Warning and error presentation
+
+### 6.10 Workflow reset and abandonment
+
+Resetting or abandoning the current wizard workflow clears the current job context and discards all local state machine instances.
+
+A new wizard workflow creates new state machine instances initialized in their respective initial states.
 
 ## 7. Network operation catalog
 
@@ -180,24 +208,33 @@ The Wizard Navigation state machine consists of the following states:
 * `MONITOR` — the client monitors the submitted job, displays its current public status, and allows cancellation while supported;
 * `OUTPUTS` — the user may download the output artifacts of a successfully completed job or start a new job.
 
-The table below shows the state transitions of the Wizard Navigation state machine. The initial state is `JOB_TYPE`.
+The table below shows the state transitions of the Wizard Navigation state machine.
 
-| Current state | Event                           | Condition                                                                                                                                                         | Side effects                                                          | Next state   |
-|---------------|---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|--------------|
-| `JOB_TYPE`    | User presses `Next >`           | `jobType` has a valid value                                                                                                                                       | Store the selected job type                                           | `INPUTS`     |
-| `INPUTS`      | User presses `Next >`           | `draftCreationState` is one of `IDLE`, `FAILED`, or `CANCELLED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                             | Request Draft Job Creation                                            | `INPUTS`     |
-| `INPUTS`      | User presses `Next >`           | `draftCreationState` == `CREATED` and `inputSlotState` is one of `FILE_SELECTED`, `UPLOADED`, or `FAILED` for every declared input slot                           | Request the Upload Manager to upload every non-`UPLOADED` input slot  | `UPLOAD`     |
-| `INPUTS`      | Draft job creation is confirmed | `draftCreationState` == `CREATED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                                           | Request the Upload Manager to upload every input slot                 | `UPLOAD`     |
-| `INPUTS`      | User presses `< Previous`       | `draftCreationState` is one of `IDLE`, `CREATED`, `FAILED`, or `CANCELLED` and `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED`, or `STOPPED_BY_USER` | Abandon the current client workflow and clear the current job context | `JOB_TYPE`   |
-| `UPLOAD`      | User presses `Next >`           | `uploadManagerState` == `COMPLETED` and every declared input slot has `inputSlotState` == `UPLOADED`                                                              | —                                                                     | `PARAMETERS` |
-| `UPLOAD`      | User presses `< Previous`       | `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED` or `STOPPED_BY_USER`                                                                                 | —                                                                     | `INPUTS`     |
-| `PARAMETERS`  | User presses `Next >`           | `parameterUpdateState` == `UPDATED`                                                                                                                               | —                                                                     | `REVIEW`     |
-| `PARAMETERS`  | User presses `< Previous`       | `parameterUpdateState` is one of `PENDING`, `UPDATED` or `FAILED`                                                                                                 | —                                                                     | `UPLOAD`     |
-| `REVIEW`      | Job submission is confirmed     | `submissionState` == `SUBMITTED` and `jobStatus` != `DRAFT`                                                                                                       | Request the Job Monitor to start monitoring the current job           | `MONITOR`    |
-| `REVIEW`      | User presses `< Previous`       | `jobStatus` == `DRAFT` and `submissionState` is one of `IDLE`, `NOT_SUBMITTED`, `FAILED`                                                                          | —                                                                     | `PARAMETERS` |
-| `MONITOR`     | User presses `View outputs >`   | `monitorState` == `COMPLETED` and `jobStatus` == `DONE`                                                                                                           | —                                                                     | `OUTPUTS`    |
-| `MONITOR`     | User presses `[Start new job]`  | `monitorState` == `COMPLETED` and `jobStatus` is one of `ERROR` or `CANCELLED`                                                                                    | Reset the current wizard workflow and initialize a new workflow       | `JOB_TYPE`   |
-| `OUTPUTS`     | User presses `[Start new job]`  | `jobStatus` == `DONE`                                                                                                                                             | Reset the current wizard workflow and initialize a new workflow       | `JOB_TYPE`   |
+| Current state | Event                          | Condition                                                                                                                                           | Side effects                                                                                  | Next state   |
+|---------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|--------------|
+| `JOB_TYPE`    | User presses `Next >`          | `jobType` has a valid value                                                                                                                         | Store the selected job type                                                                   | `INPUTS`     |
+| `INPUTS`      | User presses `Next >`          | `draftCreationState` == `IDLE` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                                | Request the current Draft Job Creation instance to create a draft                             | `INPUTS`     |
+| `INPUTS`      | User presses `Next >`          | `draftCreationState` == `FAILED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                              | Discard the failed instance; create a new Draft Job Creation instance; request draft creation | `INPUTS`     |
+| `INPUTS`      | User presses `Next >`          | `draftCreationState` == `CREATED` and `inputSlotState` is one of `FILE_SELECTED`, `UPLOADED`, or `FAILED` for every declared input slot             | Request the Upload Manager to upload every non-`UPLOADED` input slot                          | `UPLOAD`     |
+| `INPUTS`      | Draft creation confirmed       | `draftCreationState` == `CREATED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                             | Request the Upload Manager to upload every input slot                                         | `UPLOAD`     |
+| `INPUTS`      | User presses `< Previous`      | `draftCreationState` is one of `IDLE`, `CREATED` or `FAILED` and `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED`, or `STOPPED_BY_USER` | Abandon the current client workflow and clear the current job context                         | `JOB_TYPE`   |
+| `UPLOAD`      | User presses `Next >`          | `uploadManagerState` == `COMPLETED` and every declared input slot has `inputSlotState` == `UPLOADED`                                                | —                                                                                             | `PARAMETERS` |
+| `UPLOAD`      | User presses `< Previous`      | `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED` or `STOPPED_BY_USER`                                                                   | —                                                                                             | `INPUTS`     |
+| `PARAMETERS`  | User presses `Next >`          | `parameterUpdateState` == `UPDATED`                                                                                                                 | —                                                                                             | `REVIEW`     |
+| `PARAMETERS`  | User presses `< Previous`      | `parameterUpdateState` is one of `PENDING`, `UPDATED` or `FAILED`                                                                                   | —                                                                                             | `UPLOAD`     |
+| `REVIEW`      | Job submission is confirmed    | `submissionState` == `SUBMITTED` and `jobStatus` != `DRAFT`                                                                                         | Request the Job Monitor to start monitoring the current job                                   | `MONITOR`    |
+| `REVIEW`      | User presses `< Previous`      | `jobStatus` == `DRAFT` and `submissionState` is one of `IDLE`, `NOT_SUBMITTED`, `FAILED`                                                            | —                                                                                             | `PARAMETERS` |
+| `MONITOR`     | User presses `View outputs >`  | `monitorState` == `COMPLETED` and `jobStatus` == `DONE`                                                                                             | —                                                                                             | `OUTPUTS`    |
+| `MONITOR`     | User presses `[Start new job]` | `monitorState` == `COMPLETED` and `jobStatus` is one of `ERROR` or `CANCELLED`                                                                      | Reset the current wizard workflow and initialize a new workflow                               | `JOB_TYPE`   |
+| `OUTPUTS`     | User presses `[Start new job]` | `jobStatus` == `DONE`                                                                                                                               | Reset the current wizard workflow and initialize a new workflow                               | `JOB_TYPE`   |
+
+Initial and terminal states are described in the table below.
+
+| State type | State Name |
+|------------|------------|
+| Initial    | `JOB_TYPE` |
+| Terminal   | —          |
+
 
 ```mermaid
 flowchart TD
@@ -227,16 +264,50 @@ flowchart TD
 
 ### 8.2 Draft Job Creation
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+The Draft Job Creation state machine consists of the following states:
 
-```text
-IDLE
-CREATING
-WAITING_RETRY
-CREATED
-FAILED
-CANCELLED
+* `IDLE` — No draft creation request has started for this state machine instance;
+* `CREATING` — One `POST /jobs` request is active; 
+* `WAITING_RETRY` — No HTTP request is active. The workflow is waiting for the configured retry delay to expire;
+* `CREATED` — The server-side `DRAFT` job is confirmed and its `jobId` is stored in the current wizard context;
+* `FAILED` — Draft creation ended without a confirmed job and no automatic retry is pending. This state is terminal. The user may start a new Draft Job Creation operation or abandon the current workflow.
+
+The table below shows the state transitions of the Draft Job Creation state machine. The initial state is `IDLE`.
+
+| Current state   | Event                            | Condition                                                                 | Side effects                                                                                                            | Next state      |
+|-----------------|----------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|-----------------|
+| `IDLE`          | Draft creation requested         | No current `jobId`                                                        | Send `POST /jobs` using the current `jobType` and `sessionId`                                                           | `CREATING`      |
+| `CREATING`      | Draft creation response received | A valid `200 OK` or `201 Created` response contains the confirmed `jobId` | Store `jobId`; set the last confirmed `jobStatus` to `DRAFT`; after entering `CREATED`, emit `Draft creation confirmed` | `CREATED`       |
+| `CREATING`      | Retryable request failure        | Automatic retry attempts remain                                           | Schedule the next attempt using the configured retry delay                                                              | `WAITING_RETRY` |
+| `CREATING`      | Retryable request failure        | Automatic retry attempts are exhausted                                    | Store failure details and expose a workflow recovery action                                                             | `FAILED`        |
+| `CREATING`      | Non-retryable request failure    | —                                                                         | Store failure details and expose an operation-specific error                                                            | `FAILED`        |
+| `WAITING_RETRY` | Retry delay elapses              | The operation still belongs to the current workflow                       | Repeat `POST /jobs` using the same `jobType`, `sessionId`, and request intent                                           | `CREATING`      |
+
+
+Initial and terminal states are described in the table below.
+
+| State type | State Name          |
+|------------|---------------------|
+| Initial    | `IDLE`              |
+| Terminal   | `CREATED`, `FAILED` |
+
+Each Draft Job Creation instance owns one `sessionId`. All automatic retries within the instance reuse the same `jobType`, `sessionId`, and request intent. A new instance receives a new `sessionId`.
+Each Draft Job Creation state machine instance represents one logical draft creation operation.
+The current Draft Job Creation state machine instance remains in its terminal state until it is replaced by a new instance or discarded with the current wizard workflow.
+
+```mermaid
+stateDiagram-v2
+  [*] --> IDLE
+
+  IDLE --> CREATING: Draft<br> creation<br> requested
+
+  CREATING --> CREATED: Draft<br> creation<br> response<br> received
+
+  CREATING --> WAITING_RETRY: Retryable<br> request<br> failure<br>[attempts remain]
+  WAITING_RETRY --> CREATING: Retry<br> delay<br> elapses
+
+  CREATING --> FAILED: Retryable<br> request<br> failure<br>[attempts exhausted]
+  CREATING --> FAILED: Non-retryable<br> request<br> failure
 ```
 
 ### 8.3 Upload Manager
