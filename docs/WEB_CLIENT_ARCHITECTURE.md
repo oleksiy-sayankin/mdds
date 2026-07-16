@@ -25,12 +25,12 @@ Refer to the LICENSE file in the root directory for full license details.
     * [8.1 Wizard Navigation](#81-wizard-navigation)
     * [8.2 Draft Job Creation](#82-draft-job-creation)
     * [8.3 Upload Manager](#83-upload-manager)
-    * [8.4 Input Slot](#84-input-slot)
+    * [8.4 Input Slot Lifecycle](#84-input-slot-lifecycle)
     * [8.5 Job Parameter Update](#85-job-parameter-update)
     * [8.6 Job Submission](#86-job-submission)
     * [8.7 Job Monitor](#87-job-monitor)
     * [8.8 Job Cancellation](#88-job-cancellation)
-    * [8.9 Output Download](#89-output-download)
+    * [8.9 Output slot Lifecycle](#89-output-slot-lifecycle)
   * [9. Screen-to-state mapping](#9-screen-to-state-mapping)
     * [9.1 Screen 1: Select Job Type](#91-screen-1-select-job-type)
     * [9.2 Screen 2: Select Job Inputs](#92-screen-2-select-job-inputs)
@@ -161,17 +161,59 @@ A state diagram may be added later as an explanatory visualization of the same t
 
 ### 8.1 Wizard Navigation
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+The Wizard Navigation state machine consists of the following states:
 
-```text
-JOB_TYPE
-INPUTS
-UPLOAD
-PARAMETERS
-REVIEW
-MONITOR
-OUTPUTS
+* `JOB_TYPE` — the user selects and stores a supported job type locally;
+* `INPUTS` — the user selects a local file for every input slot; the client creates a draft job when the user proceeds to the first upload;
+* `UPLOAD` — the server-side `DRAFT` job exists and the client uploads the selected input files, displays upload progress, and allows the user to stop active uploads or retry failed input slots;
+* `PARAMETERS` — the user configures job parameters and synchronizes them with the current server-side `DRAFT` job;
+* `REVIEW` — the user reviews the selected inputs and parameters before submitting the job for execution;
+* `MONITOR` — the client monitors the submitted job, displays its current public status, and allows cancellation while supported;
+* `OUTPUTS` — the user may download the output artifacts of a successfully completed job or start a new job.
+
+The table below shows the state transitions of the Wizard Navigation state machine. The initial state is `JOB_TYPE`.
+
+| Current state | Event                           | Condition                                                                                                                                                         | Side effects                                                          | Next state   |
+|---------------|---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|--------------|
+| `JOB_TYPE`    | User presses `Next >`           | `jobType` has a valid value                                                                                                                                       | Store the selected job type                                           | `INPUTS`     |
+| `INPUTS`      | User presses `Next >`           | `draftCreationState` is one of `IDLE`, `FAILED`, or `CANCELLED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                             | Request Draft Job Creation                                            | `INPUTS`     |
+| `INPUTS`      | User presses `Next >`           | `draftCreationState` == `CREATED` and `inputSlotState` is one of `FILE_SELECTED`, `UPLOADED`, or `FAILED` for every declared input slot                           | Request the Upload Manager to upload every non-`UPLOADED` input slot  | `UPLOAD`     |
+| `INPUTS`      | Draft job creation is confirmed | `draftCreationState` == `CREATED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                                           | Request the Upload Manager to upload every input slot                 | `UPLOAD`     |
+| `INPUTS`      | User presses `< Previous`       | `draftCreationState` is one of `IDLE`, `CREATED`, `FAILED`, or `CANCELLED` and `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED`, or `STOPPED_BY_USER` | Abandon the current client workflow and clear the current job context | `JOB_TYPE`   |
+| `UPLOAD`      | User presses `Next >`           | `uploadManagerState` == `COMPLETED` and every declared input slot has `inputSlotState` == `UPLOADED`                                                              | —                                                                     | `PARAMETERS` |
+| `UPLOAD`      | User presses `< Previous`       | `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED` or `STOPPED_BY_USER`                                                                                 | —                                                                     | `INPUTS`     |
+| `PARAMETERS`  | User presses `Next >`           | `parameterUpdateState` == `UPDATED`                                                                                                                               | —                                                                     | `REVIEW`     |
+| `PARAMETERS`  | User presses `< Previous`       | `parameterUpdateState` is one of `PENDING`, `UPDATED` or `FAILED`                                                                                                 | —                                                                     | `UPLOAD`     |
+| `REVIEW`      | Job submission is confirmed     | `submissionState` == `SUBMITTED` and `jobStatus` != `DRAFT`                                                                                                       | Request the Job Monitor to start monitoring the current job           | `MONITOR`    |
+| `REVIEW`      | User presses `< Previous`       | `jobStatus` == `DRAFT` and `submissionState` is one of `IDLE`, `NOT_SUBMITTED`, `FAILED`                                                                          | —                                                                     | `PARAMETERS` |
+| `MONITOR`     | User presses `View outputs >`   | `monitorState` == `COMPLETED` and `jobStatus` == `DONE`                                                                                                           | —                                                                     | `OUTPUTS`    |
+| `MONITOR`     | User presses `[Start new job]`  | `monitorState` == `COMPLETED` and `jobStatus` is one of `ERROR` or `CANCELLED`                                                                                    | Reset the current wizard workflow and initialize a new workflow       | `JOB_TYPE`   |
+| `OUTPUTS`     | User presses `[Start new job]`  | `jobStatus` == `DONE`                                                                                                                                             | Reset the current wizard workflow and initialize a new workflow       | `JOB_TYPE`   |
+
+```mermaid
+flowchart TD
+  START([Start]) --> JOB_TYPE
+
+  JOB_TYPE -->|Next: type selected| INPUTS
+
+  INPUTS -->|Next: create draft| INPUTS
+  INPUTS -->|Draft created| UPLOAD
+  INPUTS -->|Next: reuse draft| UPLOAD
+  INPUTS -->|Previous| JOB_TYPE
+
+  UPLOAD -->|Previous: not running| INPUTS
+  UPLOAD -->|Next: all uploaded| PARAMETERS
+
+  PARAMETERS -->|Previous: not updating| UPLOAD
+  PARAMETERS -->|Next: updated| REVIEW
+
+  REVIEW -->|Previous: editable| PARAMETERS
+  REVIEW -->|Submission confirmed| MONITOR
+
+  MONITOR -->|DONE: outputs| OUTPUTS
+  MONITOR -->|ERROR or CANCELLED: new job| JOB_TYPE
+
+  OUTPUTS -->|Start new job| JOB_TYPE
 ```
 
 ### 8.2 Draft Job Creation
@@ -183,19 +225,19 @@ OUTPUTS
 IDLE
 CREATING
 WAITING_RETRY
-READY
+CREATED
 FAILED
 CANCELLED
 ```
 
 ### 8.3 Upload Manager
 
-| Current state | Event                            | Condition                     | Side effects                                                                   | Next state        |
-|---------------|----------------------------------|-------------------------------|--------------------------------------------------------------------------------|-------------------|
-| `RUNNING`     | Queue exhausted                  | —                             | —                                                                              | `COMPLETED`       |
-| `RUNNING`     | Fatal upload URL request failure | —                             | Current slot → `FAILED`; discard the remaining queue                           | `FAILED`          |
-| `RUNNING`     | User confirms stop               | —                             | Abort the active request; active slot → `PENDING`; discard the remaining queue | `STOPPED_BY_USER` |
-| `COMPLETED`   | Retry failed slots               | At least one slot is `FAILED` | Build a queue from the failed slots                                            | `RUNNING`         |
+| Current state | Event                            | Condition                     | Side effects                                                                         | Next state        |
+|---------------|----------------------------------|-------------------------------|--------------------------------------------------------------------------------------|-------------------|
+| `RUNNING`     | Queue exhausted                  | —                             | —                                                                                    | `COMPLETED`       |
+| `RUNNING`     | Fatal upload URL request failure | —                             | Current slot → `FAILED`; discard the remaining queue                                 | `FAILED`          |
+| `RUNNING`     | User confirms stop               | —                             | Abort the active request; active slot → `FILE_SELECTED`; discard the remaining queue | `STOPPED_BY_USER` |
+| `COMPLETED`   | Retry failed slots               | At least one slot is `FAILED` | Build a queue from the failed slots                                                  | `RUNNING`         |
 
 ```text
 IDLE
@@ -205,13 +247,22 @@ FAILED
 STOPPED_BY_USER
 ```
 
-### 8.4 Input Slot
+### 8.4 Input Slot Lifecycle
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+| Current state   | Event                     | Condition                        | Side effects                                             | Next state      |
+|-----------------|---------------------------|----------------------------------|----------------------------------------------------------|-----------------|
+| `EMPTY`         | User selects a file       | —                                | Store the selected local file                            | `FILE_SELECTED` |
+| `FILE_SELECTED` | User selects another file | —                                | Replace the previously selected file                     | `FILE_SELECTED` |
+| `FILE_SELECTED` | Upload starts             | —                                | Start the input slot upload workflow                     | `UPLOADING`     |
+| `UPLOADING`     | Upload succeeds           | —                                | Associate the uploaded artifact with the current `jobId` | `UPLOADED`      |
+| `UPLOADING`     | Upload fails              | —                                | Preserve the selected file for retry                     | `FAILED`        |
+| `FAILED`        | Upload retry starts       | Selected file is still available | Start another upload attempt                             | `UPLOADING`     |
+| `FAILED`        | User selects another file | —                                | Replace the selected file                                | `FILE_SELECTED` |
+| `UPLOADED`      | User selects another file | Job is still `DRAFT`             | Mark the new local file as not uploaded                  | `FILE_SELECTED` |
 
 ```text
-PENDING
+EMPTY
+FILE_SELECTED
 UPLOADING
 UPLOADED
 FAILED
@@ -223,9 +274,9 @@ FAILED
 |---------------|-------|-----------|--------------|------------|
 
 ```text
-UNSAVED
+PENDING
 UPDATING
-SYNCHRONIZED
+UPDATED
 FAILED
 ```
 
@@ -258,11 +309,15 @@ FAILED
 
 ### 8.8 Job Cancellation
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+| Current state | Event                       | Condition                    | Side effects              | Next state   |
+|---------------|-----------------------------|------------------------------|---------------------------|--------------|
+| `IDLE`        | User presses `[Cancel job]` | `jobStatus` == `IN_PROGRESS` | Open confirmation dialog  | `CONFIRMING` |
+| `CONFIRMING`  | User dismisses confirmation | —                            | Close confirmation dialog | `IDLE`       |
+| `CONFIRMING`  | User confirms cancellation  | `jobStatus` == `IN_PROGRESS` | Send cancellation request | `REQUESTING` |
 
 ```text
 IDLE
+CONFIRMING
 REQUESTING
 RECONCILING
 ACCEPTED
@@ -270,7 +325,7 @@ NOT_ACCEPTED
 FAILED
 ```
 
-### 8.9 Output Download
+### 8.9 Output slot Lifecycle
 
 | Current state | Event | Condition | Side effects | Next state |
 |---------------|-------|-----------|--------------|------------|
@@ -279,9 +334,9 @@ FAILED
 IDLE
 REQUESTING_URL
 DOWNLOADING
-COMPLETED
-FAILED
-CANCELLED
+DOWNLOADED
+FAILED_DOWNLOAD
+CANCELLED_DOWNLOAD
 ```
 
 ## 9. Screen-to-state mapping
