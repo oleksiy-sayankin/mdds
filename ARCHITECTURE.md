@@ -98,7 +98,7 @@ The Web Server is responsible for:
 
 - creating jobs and assigning job identifiers;
 - issuing pre-signed upload URLs for input artifacts;
-- validating whether a job is ready for submission. This is structural validation and means whether all required input
+- validating whether a job is ready for submission. This is structural validation and means whether all input
   slots and required parameters are present and parameter values conform to their declared types.
   Detailed semantic verification is performed by the Worker handler during execution;
 - generating the job manifest;
@@ -213,7 +213,7 @@ graph TD
 ### Lifecycle rules
 
 - A newly created job always starts in `DRAFT`.
-- A job can be submitted only after all required inputs and required parameters have been provided.
+- A job can be submitted only after all inputs and required parameters have been provided.
 - After a job is submitted, its input artifacts and parameters must be treated as immutable.
 - `POST /jobs/{jobId}/cancel` does not mean the job is already cancelled.
   It means cancellation has been requested. `CANCEL_REQUESTED` is a non-terminal
@@ -920,7 +920,7 @@ Every worker-local state transition follows this contract:
 1. acquire the per-job worker-local state lock;
 2. verify that the transition is valid for the current worker-local state;
 3. perform required transition actions for that transition;
-4. if all required actions succeed, publish status update the worker-local state, and release the lock;
+4. if all required actions succeed, publish the status update, update the worker-local state, and release the lock;
 5. if any required action fails, do not advance the worker-local state, and release the lock.
 
 The first successfully committed terminal transition wins.
@@ -1155,7 +1155,7 @@ The following rules apply:
 * `Content-Type` is not part of the signed parameters of the pre-signed URL, therefore the client may omit it or send an appropriate value;
 * while the job remains in `DRAFT`, the client may request a new upload URL for the same `inputSlot` and upload a replacement artifact;
 * the artifact currently stored under the canonical object key for that slot is used at submission time;
-* the presence of required uploaded artifacts is checked during `POST /jobs/{jobId}/submit`; semantic correctness is checked later by the Worker handler during execution.
+* the presence of uploaded artifacts is checked during `POST /jobs/{jobId}/submit`; semantic correctness is checked later by the Worker handler during execution.
 
 For browser-based deployments, the following object storage CORS requirements apply:
 
@@ -1287,16 +1287,16 @@ X-MDDS-User-Login: <user-login>
 
 Generates `manifest.json`, publishes a submitted job message to the execution queue.
 The Web Server performs structural readiness checks only.
-Structural readiness means that all required input artifacts defined by the job profile are present in object storage
+Structural readiness means that all input artifacts defined by the job profile are present in object storage
 under their canonical object keys, and all required job parameters defined by the job profile are currently set.
-For each required input slot, the server checks the presence of the artifact currently stored under the canonical object
+For each input slot, the server checks the presence of the artifact currently stored under the canonical object
 key assigned to that slot.
 If multiple structural prerequisites are missing, the server may return any one of the detected structural errors.
 If the request is accepted, the job status is updated to `SUBMITTED`.
 
 **Possible errors**
 
-- `400 Bad Request` — a required input artifact is absent in object storage;
+- `400 Bad Request` — an input artifact is absent in object storage;
 - `400 Bad Request` — a required parameter is absent;
 - `400 Bad Request` — required headers are missing;
 - `400 Bad Request` — `X-MDDS-User-Login` is blank;
@@ -1567,6 +1567,9 @@ This means that the public lifecycle API can remain the same:
 
 Only the `jobType` profile and the Worker logic need to change. Direct artifact upload via a pre-signed URL
 remains part of the client interaction flow, but is not itself a stable orchestrator endpoint.
+
+Every input and output slot declared by a job profile is mandatory.
+Optional artifact slots are not supported.
 
 ---
 
