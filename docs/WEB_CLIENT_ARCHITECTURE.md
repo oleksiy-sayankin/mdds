@@ -152,13 +152,9 @@ The Network Operation Catalog may override the default classification or require
 ### 6.4 Automatic retry
 
 Automatic retry is bounded.
-
 All attempts belonging to one operation instance reuse the same request intent and idempotency data.
-
 The retry counter and retry delay belong to the current operation instance. A new operation instance starts with a new retry budget.
-
 If the server returns Retry-After and the operation permits automatic retry, the client should respect that value.
-
 The concrete retry limit and delay strategy are implementation-defined in v1.
 
 ### 6.5 Operation reconciliation
@@ -267,7 +263,7 @@ flowchart TD
 The Draft Job Creation state machine consists of the following states:
 
 * `IDLE` — No draft creation request has started for this state machine instance;
-* `CREATING` — One `POST /jobs` request is active; 
+* `CREATING` — One `POST /jobs` request is active;
 * `WAITING_RETRY` — No HTTP request is active. The workflow is waiting for the configured retry delay to expire;
 * `CREATED` — The server-side `DRAFT` job is confirmed and its `jobId` is stored in the current wizard context;
 * `FAILED` — Draft creation ended without a confirmed job and no automatic retry is pending. This state is terminal. The user may start a new Draft Job Creation operation or abandon the current workflow.
@@ -296,18 +292,21 @@ Each Draft Job Creation state machine instance represents one logical draft crea
 The current Draft Job Creation state machine instance remains in its terminal state until it is replaced by a new instance or discarded with the current wizard workflow.
 
 ```mermaid
-stateDiagram-v2
-  [*] --> IDLE
+flowchart TD
+  START([Start]) --> IDLE
 
-  IDLE --> CREATING: Draft<br> creation<br> requested
+  IDLE -->|Draft<br> creation<br> requested| CREATING
 
-  CREATING --> CREATED: Draft<br> creation<br> response<br> received
+  CREATING -->|Draft<br> creation<br> response<br> received| CREATED
 
-  CREATING --> WAITING_RETRY: Retryable<br> request<br> failure<br>[attempts remain]
-  WAITING_RETRY --> CREATING: Retry<br> delay<br> elapses
+  CREATING -->|Retryable<br> request<br> failure:<br> attempts remain| WAITING_RETRY
+  WAITING_RETRY -->|Retry<br> delay<br> elapses| CREATING
 
-  CREATING --> FAILED: Retryable<br> request<br> failure<br>[attempts exhausted]
-  CREATING --> FAILED: Non-retryable<br> request<br> failure
+  CREATING -->|Retryable<br> request<br> failure:<br> attempts exhausted| FAILED
+  CREATING -->|Non-retryable<br> request<br> failure| FAILED
+
+  CREATED --> END([End])
+  FAILED --> END
 ```
 
 ### 8.3 Upload Manager
