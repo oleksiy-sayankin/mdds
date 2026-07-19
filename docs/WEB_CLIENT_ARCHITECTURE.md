@@ -31,7 +31,7 @@ Refer to the LICENSE file in the root directory for full license details.
     * [8.6 Job Submission](#86-job-submission)
     * [8.7 Job Monitor](#87-job-monitor)
     * [8.8 Job Cancellation](#88-job-cancellation)
-    * [8.9 Output slot Lifecycle](#89-output-slot-lifecycle)
+    * [8.9 Output Slot Lifecycle](#89-output-slot-lifecycle)
   * [9. Common Wizard Layout](#9-common-wizard-layout)
     * [9.1 Wizard Header](#91-wizard-header)
     * [9.2 Progress Indicator](#92-progress-indicator)
@@ -47,8 +47,6 @@ Refer to the LICENSE file in the root directory for full license details.
     * [10.5 Screen 5: Review Job Summary](#105-screen-5-review-job-summary)
     * [10.6 Screen 6: Monitor Job Progress](#106-screen-6-monitor-job-progress)
     * [10.7 Screen 7: Download Job Outputs](#107-screen-7-download-job-outputs)
-  * [11. Acceptance scenarios](#11-acceptance-scenarios)
-  * [12. Deferred decisions and out-of-scope behavior](#12-deferred-decisions-and-out-of-scope-behavior)
 <!-- TOC -->
 
 
@@ -194,228 +192,472 @@ A state diagram may be added later as an explanatory visualization of the same t
 
 ### 8.1 Wizard Navigation
 
+The Wizard Navigation state machine owns only the currently displayed wizard step. 
+It does not define the internal behavior of draft creation, input upload, parameter synchronization, job submission, monitoring, cancellation, or output download. Those workflows are defined by their respective state machines.
+Events not listed in this section do not change `wizardStep`, although they may start or affect another client workflow.
 The Wizard Navigation state machine consists of the following states:
 
-* `JOB_TYPE` — the user selects and stores a supported job type locally;
-* `INPUTS` — the user selects a local file for every input slot; the client creates a draft job when the user proceeds to the first upload;
-* `UPLOAD` — the server-side `DRAFT` job exists and the client uploads the selected input files, displays upload progress, and allows the user to stop active uploads or retry failed input slots;
-* `PARAMETERS` — the user configures job parameters and synchronizes them with the current server-side `DRAFT` job;
-* `REVIEW` — the user reviews the selected inputs and parameters before submitting the job for execution;
-* `MONITOR` — the client monitors the submitted job, displays its current public status, and allows cancellation while supported;
-* `OUTPUTS` — the user may download the output artifacts of a successfully completed job or start a new job.
+* `JOB_TYPE` — the user selects a supported job type;
+* `INPUTS` — the user selects the required local input files;
+* `UPLOAD` — the client displays input upload progress and available upload actions;
+* `PARAMETERS` — the user configures job parameters;
+* `REVIEW` — the user reviews the job before submission;
+* `MONITOR` — the client displays the current job execution status;
+* `OUTPUTS` — the user may download the outputs of a successfully completed job.
 
-The table below shows the state transitions of the Wizard Navigation state machine.
+The table below defines navigation between wizard steps.
 
-| Current state | Event                          | Condition                                                                                                                                           | Side effects                                                                                  | Next state   |
-|---------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|--------------|
-| `JOB_TYPE`    | User presses `Next >`          | `jobType` has a valid value                                                                                                                         | Store the selected job type                                                                   | `INPUTS`     |
-| `INPUTS`      | User presses `Next >`          | `draftCreationState` == `IDLE` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                                | Request the current Draft Job Creation instance to create a draft                             | `INPUTS`     |
-| `INPUTS`      | User presses `Next >`          | `draftCreationState` == `FAILED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                              | Discard the failed instance; create a new Draft Job Creation instance; request draft creation | `INPUTS`     |
-| `INPUTS`      | User presses `Next >`          | `draftCreationState` == `CREATED` and `inputSlotState` is one of `FILE_SELECTED`, `UPLOADED`, or `FAILED` for every declared input slot             | Request the Upload Manager to upload every non-`UPLOADED` input slot                          | `UPLOAD`     |
-| `INPUTS`      | Draft creation confirmed       | `draftCreationState` == `CREATED` and every declared input slot has `inputSlotState` == `FILE_SELECTED`                                             | Request the Upload Manager to upload every input slot                                         | `UPLOAD`     |
-| `INPUTS`      | User presses `< Previous`      | `draftCreationState` is one of `IDLE`, `CREATED` or `FAILED` and `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED`, or `STOPPED_BY_USER` | Abandon the current client workflow and clear the current job context                         | `JOB_TYPE`   |
-| `UPLOAD`      | User presses `Next >`          | `uploadManagerState` == `COMPLETED` and every declared input slot has `inputSlotState` == `UPLOADED`                                                | —                                                                                             | `PARAMETERS` |
-| `UPLOAD`      | User presses `< Previous`      | `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED` or `STOPPED_BY_USER`                                                                   | —                                                                                             | `INPUTS`     |
-| `PARAMETERS`  | User presses `Next >`          | `parameterUpdateState` == `UPDATED`                                                                                                                 | —                                                                                             | `REVIEW`     |
-| `PARAMETERS`  | User presses `< Previous`      | `parameterUpdateState` is one of `PENDING`, `UPDATED` or `FAILED`                                                                                   | —                                                                                             | `UPLOAD`     |
-| `REVIEW`      | Job submission is confirmed    | `submissionState` == `SUBMITTED` and `jobStatus` != `DRAFT`                                                                                         | Request the Job Monitor to start monitoring the current job                                   | `MONITOR`    |
-| `REVIEW`      | User presses `< Previous`      | `jobStatus` == `DRAFT` and `submissionState` is one of `IDLE`, `NOT_SUBMITTED`, `FAILED`                                                            | —                                                                                             | `PARAMETERS` |
-| `MONITOR`     | User presses `View outputs >`  | `monitorState` == `COMPLETED` and `jobStatus` == `DONE`                                                                                             | —                                                                                             | `OUTPUTS`    |
-| `MONITOR`     | User presses `[Start new job]` | `monitorState` == `COMPLETED` and `jobStatus` is one of `ERROR` or `CANCELLED`                                                                      | Reset the current wizard workflow and initialize a new workflow                               | `JOB_TYPE`   |
-| `OUTPUTS`     | User presses `[Start new job]` | `jobStatus` == `DONE`                                                                                                                               | Reset the current wizard workflow and initialize a new workflow                               | `JOB_TYPE`   |
+| Current state | Event                       | Condition                                                                     | Next state   |
+| ------------- | --------------------------- | ----------------------------------------------------------------------------- | ------------ |
+| `JOB_TYPE`    | User proceeds               | A supported job type is selected                                              | `INPUTS`     |
+| `INPUTS`      | Upload preparation is ready | A server-side draft exists and an upload run has been requested when required | `UPLOAD`     |
+| `INPUTS`      | User goes back              | Navigation is not locked                                                      | `JOB_TYPE`   |
+| `UPLOAD`      | User proceeds               | Every required input slot is uploaded                                         | `PARAMETERS` |
+| `UPLOAD`      | User goes back              | Navigation is not locked                                                      | `INPUTS`     |
+| `PARAMETERS`  | User proceeds               | Required job parameters are synchronized                                      | `REVIEW`     |
+| `PARAMETERS`  | User goes back              | Navigation is not locked                                                      | `UPLOAD`     |
+| `REVIEW`      | Job submission is confirmed | The job has left the editable draft state                                     | `MONITOR`    |
+| `REVIEW`      | User goes back              | The job is still editable                                                     | `PARAMETERS` |
+| `MONITOR`     | User opens outputs          | The job completed successfully and outputs are available                      | `OUTPUTS`    |
+| `MONITOR`     | User starts a new job       | The monitored job ended without downloadable outputs                          | `JOB_TYPE`   |
+| `OUTPUTS`     | User starts a new job       | —                                                                             | `JOB_TYPE`   |
 
-Initial and terminal states are described in the table below.
+The initial state is described below.
 
-| State type | State Name |
-|------------|------------|
+| State type | State name |
+| ---------- | ---------- |
 | Initial    | `JOB_TYPE` |
 | Terminal   | —          |
+
+The exact enablement of navigation controls is defined in the screen-to-state mapping.
+Draft creation, upload-run creation, retry behavior and queue construction are owned by their corresponding workflow state machines.
 
 
 ```mermaid
 flowchart TD
   START([Start]) --> JOB_TYPE
 
-  JOB_TYPE -->|Next: type selected| INPUTS
+  JOB_TYPE -->|User proceeds:<br>supported type selected| INPUTS
 
-  INPUTS -->|Next: create draft| INPUTS
-  INPUTS -->|Draft created| UPLOAD
-  INPUTS -->|Next: reuse draft| UPLOAD
-  INPUTS -->|Previous| JOB_TYPE
+  INPUTS -->|Upload preparation ready| UPLOAD
+  INPUTS -->|User goes back:<br>navigation not locked| JOB_TYPE
 
-  UPLOAD -->|Previous: not running| INPUTS
-  UPLOAD -->|Next: all uploaded| PARAMETERS
+  UPLOAD -->|User proceeds:<br>all inputs uploaded| PARAMETERS
+  UPLOAD -->|User goes back:<br>navigation not locked| INPUTS
 
-  PARAMETERS -->|Previous: not updating| UPLOAD
-  PARAMETERS -->|Next: updated| REVIEW
+  PARAMETERS -->|User proceeds:<br>parameters synchronized| REVIEW
+  PARAMETERS -->|User goes back:<br>navigation not locked| UPLOAD
 
-  REVIEW -->|Previous: editable| PARAMETERS
-  REVIEW -->|Submission confirmed| MONITOR
+  REVIEW -->|Submission confirmed:<br>job left draft state| MONITOR
+  REVIEW -->|User goes back:<br>job still editable| PARAMETERS
 
-  MONITOR -->|DONE: outputs| OUTPUTS
-  MONITOR -->|ERROR or CANCELLED: new job| JOB_TYPE
+  MONITOR -->|User opens outputs:<br>successful completion| OUTPUTS
+  MONITOR -->|User starts a new job:<br>no downloadable outputs| JOB_TYPE
 
-  OUTPUTS -->|Start new job| JOB_TYPE
+  OUTPUTS -->|User starts a new job| JOB_TYPE
 ```
 
 ### 8.2 Draft Job Creation
 
+The Draft Job Creation state machine owns the creation of one server-side draft job and stores the confirmed `jobId` in the current wizard context.
+It does not define low-level HTTP handling or retry timing. Request failures and automatic retries follow the common client policies and the Network Operation Catalog.
 The Draft Job Creation state machine consists of the following states:
 
-* `IDLE` — No draft creation request has started for this state machine instance;
-* `CREATING` — One `POST /jobs` request is active;
-* `WAITING_RETRY` — No HTTP request is active. The workflow is waiting for the configured retry delay to expire;
-* `CREATED` — The server-side `DRAFT` job is confirmed and its `jobId` is stored in the current wizard context;
-* `FAILED` — Draft creation ended without a confirmed job and no automatic retry is pending. This state is terminal. The user may start a new Draft Job Creation operation or abandon the current workflow.
+* `IDLE` — draft creation has not started;
+* `CREATING` — the client is creating the server-side draft job;
+* `CREATED` — the draft job is confirmed and its `jobId` is stored;
+* `FAILED` — the draft job could not be confirmed and user recovery is required.
 
-The table below shows the state transitions of the Draft Job Creation state machine. The initial state is `IDLE`.
+The table below defines the main workflow transitions.
 
-| Current state   | Event                            | Condition                                                                 | Side effects                                                                                                            | Next state      |
-|-----------------|----------------------------------|---------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|-----------------|
-| `IDLE`          | Draft creation requested         | No current `jobId`                                                        | Send `POST /jobs` using the current `jobType` and `sessionId`                                                           | `CREATING`      |
-| `CREATING`      | Draft creation response received | A valid `200 OK` or `201 Created` response contains the confirmed `jobId` | Store `jobId`; set the last confirmed `jobStatus` to `DRAFT`; after entering `CREATED`, emit `Draft creation confirmed` | `CREATED`       |
-| `CREATING`      | Retryable request failure        | Automatic retry attempts remain                                           | Schedule the next attempt using the configured retry delay                                                              | `WAITING_RETRY` |
-| `CREATING`      | Retryable request failure        | Automatic retry attempts are exhausted                                    | Store failure details and expose a workflow recovery action                                                             | `FAILED`        |
-| `CREATING`      | Non-retryable request failure    | —                                                                         | Store failure details and expose an operation-specific error                                                            | `FAILED`        |
-| `WAITING_RETRY` | Retry delay elapses              | The operation still belongs to the current workflow                       | Repeat `POST /jobs` using the same `jobType`, `sessionId`, and request intent                                           | `CREATING`      |
+| Current state | Event                             | Condition                                       | Next state |
+|---------------|-----------------------------------|-------------------------------------------------|------------|
+| `IDLE`        | Draft creation is requested       | The current wizard workflow has no `jobId`      | `CREATING` |
+| `CREATING`    | Draft creation is confirmed       | A valid draft job and its `jobId` were received | `CREATED`  |
+| `CREATING`    | Draft creation fails              | No automatic recovery remains                   | `FAILED`   |
+| `FAILED`      | Create draft after failed attempt | —                                               | `CREATING` |
 
+The initial state is described below.
 
-Initial and terminal states are described in the table below.
+| State type | State name |
+|------------|------------|
+| Initial    | `IDLE`     |
+| Terminal   | `CREATED`  |
 
-| State type | State Name          |
-|------------|---------------------|
-| Initial    | `IDLE`              |
-| Terminal   | `CREATED`, `FAILED` |
-
-Each Draft Job Creation instance owns one `sessionId`. All automatic retries within the instance reuse the same `jobType`, `sessionId`, and request intent. A new instance receives a new `sessionId`.
-Each Draft Job Creation state machine instance represents one logical draft creation operation.
-The current Draft Job Creation state machine instance remains in its terminal state until it is replaced by a new instance or discarded with the current wizard workflow.
+Automatic retries belonging to the same operation reuse its `sessionId` so that repeated requests do not create multiple draft jobs.
 
 ```mermaid
 flowchart TD
   START([Start]) --> IDLE
 
-  IDLE -->|Draft<br> creation<br> requested| CREATING
+  IDLE -->|Draft creation requested| CREATING
 
-  CREATING -->|Draft<br> creation<br> response<br> received| CREATED
+  CREATING -->|Draft creation confirmed| CREATED
+  CREATING -->|Draft creation failed| FAILED
 
-  CREATING -->|Retryable<br> request<br> failure:<br> attempts remain| WAITING_RETRY
-  WAITING_RETRY -->|Retry<br> delay<br> elapses| CREATING
-
-  CREATING -->|Retryable<br> request<br> failure:<br> attempts exhausted| FAILED
-  CREATING -->|Non-retryable<br> request<br> failure| FAILED
+  FAILED --> |Create draft after failed attempt| CREATING
 
   CREATED --> END([End])
-  FAILED --> END
 ```
 
 ### 8.3 Upload Manager
 
-| Current state | Event                            | Condition                     | Side effects                                                                         | Next state        |
-|---------------|----------------------------------|-------------------------------|--------------------------------------------------------------------------------------|-------------------|
-| `RUNNING`     | Queue exhausted                  | —                             | —                                                                                    | `COMPLETED`       |
-| `RUNNING`     | Fatal upload URL request failure | —                             | Current slot → `FAILED`; discard the remaining queue                                 | `FAILED`          |
-| `RUNNING`     | User confirms stop               | —                             | Abort the active request; active slot → `FILE_SELECTED`; discard the remaining queue | `STOPPED_BY_USER` |
-| `COMPLETED`   | Retry failed slots               | At least one slot is `FAILED` | Build a queue from the failed slots                                                  | `RUNNING`         |
+The Upload Manager coordinates one sequential upload run for the current server-side `DRAFT` job.
+It does not upload files directly. The upload of each individual file is owned by the corresponding Input Slot Lifecycle instance.
+At the start of a run, the Upload Manager receives an ordered list of input slots that still require upload. Input slots that are already uploaded are not included.
+The Upload Manager state machine consists of the following states:
 
-```text
-IDLE
-RUNNING
-COMPLETED
-FAILED
-STOPPED_BY_USER
+* `IDLE` — an upload run has not started;
+* `RUNNING` — the manager is uploading the required input files sequentially;
+* `COMPLETED` — every required input file was uploaded successfully;
+* `FAILED` — the upload run finished, but at least one required input file could not be uploaded;
+* `STOPPED_BY_USER` — the upload run was stopped by the user before normal completion.
+
+The table below defines the main workflow transitions.
+
+| Current state     | Event                     | Condition                                                      | Next state        |
+|-------------------|---------------------------|----------------------------------------------------------------|-------------------|
+| `IDLE`            | Upload run is requested   | A draft job exists and at least one input slot requires upload | `RUNNING`         |
+| `RUNNING`         | Upload run finishes       | Every required input slot is uploaded                          | `COMPLETED`       |
+| `RUNNING`         | Upload run finishes       | At least one required input slot failed to upload              | `FAILED`          |
+| `RUNNING`         | User stops the upload run | —                                                              | `STOPPED_BY_USER` |
+| `FAILED`          | Restart upload            | —                                                              | `RUNNING`         |
+| `STOPPED_BY_USER` | Restart upload            | —                                                              | `RUNNING`         |
+| `COMPLETED`       | Restart upload            | —                                                              | `RUNNING`         |
+
+The initial state is described below.
+
+| State type | State name |
+|------------|------------|
+| Initial    | `IDLE`     |
+| Terminal   | —          |
+
+The Upload Manager processes at most one Input Slot instance at a time.
+An upload run, including a restarted run, may start only when the current draft job has at least one input slot that requires upload.
+A failure of one input slot does not prevent the manager from attempting to upload the remaining slots.
+Low-level cancellation, request retry, and concurrent response handling are implementation details owned by the Input Slot Lifecycle and the common client policies.
+
+```mermaid
+flowchart TD
+  START([Start]) --> IDLE
+
+  IDLE -->|Upload run requested| RUNNING
+
+  RUNNING -->|All required inputs uploaded| COMPLETED
+  RUNNING -->|One or more inputs failed| FAILED
+  RUNNING -->|Stopped by user| STOPPED_BY_USER
+
+  COMPLETED --> RUNNING
+  FAILED --> RUNNING
+  STOPPED_BY_USER --> RUNNING
 ```
 
 ### 8.4 Input Slot Lifecycle
 
-| Current state   | Event                     | Condition                        | Side effects                                             | Next state      |
-|-----------------|---------------------------|----------------------------------|----------------------------------------------------------|-----------------|
-| `EMPTY`         | User selects a file       | —                                | Store the selected local file                            | `FILE_SELECTED` |
-| `FILE_SELECTED` | User selects another file | —                                | Replace the previously selected file                     | `FILE_SELECTED` |
-| `FILE_SELECTED` | Upload starts             | —                                | Start the input slot upload workflow                     | `UPLOADING`     |
-| `UPLOADING`     | Upload succeeds           | —                                | Associate the uploaded artifact with the current `jobId` | `UPLOADED`      |
-| `UPLOADING`     | Upload fails              | —                                | Preserve the selected file for retry                     | `FAILED`        |
-| `FAILED`        | Upload retry starts       | Selected file is still available | Start another upload attempt                             | `UPLOADING`     |
-| `FAILED`        | User selects another file | —                                | Replace the selected file                                | `FILE_SELECTED` |
-| `UPLOADED`      | User selects another file | Job is still `DRAFT`             | Mark the new local file as not uploaded                  | `FILE_SELECTED` |
+The Input Slot Lifecycle represents the state of one required input file.
+It does not define low-level upload requests, retry handling, cancellation, or concurrent response processing. Those details belong to the implementation and the common client policies.
+The Input Slot Lifecycle consists of the following states:
 
-```text
-EMPTY
-FILE_SELECTED
-UPLOADING
-UPLOADED
-FAILED
+* `EMPTY` — no local file has been selected;
+* `FILE_SELECTED` — the user has selected a local file;
+* `UPLOADING` — the selected file is being uploaded;
+* `UPLOADED` — the file was uploaded successfully;
+* `FAILED` — the file could not be uploaded.
+
+The table below defines the main workflow transitions.
+
+| Current state   | Event                     | Condition | Next state      |
+|-----------------|---------------------------|-----------|-----------------|
+| `EMPTY`         | User selects a file       | —         | `FILE_SELECTED` |
+| `FILE_SELECTED` | File upload starts        | —         | `UPLOADING`     |
+| `UPLOADING`     | File upload succeeds      | —         | `UPLOADED`      |
+| `UPLOADING`     | File upload fails         | —         | `FAILED`        |
+| `FAILED`        | Upload retry              | —         | `UPLOADING`     |
+| `FAILED`        | User selects another file | —         | `FILE_SELECTED` |
+| `UPLOADED`      | User selects another file | —         | `FILE_SELECTED` |
+
+The initial state is described below.
+
+| State type | State name |
+|------------|------------|
+| Initial    | `EMPTY`    |
+| Terminal   | —          |
+
+File selection, replacement, and upload retry are available only while the current server-side job remains editable.
+A failed input file may be selected or uploaded again. An uploaded file may be replaced while the server-side job remains editable.
+The exact retry, replacement, and cancellation behavior is defined by the implementation and screen-level controls.
+
+
+```mermaid
+flowchart TD
+  START([Start]) --> EMPTY
+
+  EMPTY -->|File selected| FILE_SELECTED
+  FILE_SELECTED -->|Upload started| UPLOADING
+
+  UPLOADING -->|Upload succeeded| UPLOADED
+  UPLOADING -->|Upload failed| FAILED
+  
+  UPLOADED --> |User selects another file| FILE_SELECTED
+  FAILED --> |Upload retry| UPLOADING
+  FAILED --> |User selects another file| FILE_SELECTED
 ```
 
 ### 8.5 Job Parameter Update
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+The Job Parameter Update state machine represents synchronization of locally selected job parameters with the current server-side draft job.
+It does not define low-level HTTP requests, automatic retries, or error classification. Those details follow the common client policies and the Network Operation Catalog.
+The Job Parameter Update state machine consists of the following states:
 
-```text
-PENDING
-UPDATING
-UPDATED
-FAILED
+* `PENDING` — the locally selected parameters have not yet been synchronized with the server;
+* `UPDATING` — the parameters are being sent to the server;
+* `UPDATED` — the parameters were synchronized successfully;
+* `FAILED` — the parameters could not be synchronized.
+
+The table below defines the main workflow transitions.
+
+| Current state | Event                        | Condition                 | Next state |
+|---------------|------------------------------|---------------------------|------------|
+| `PENDING`     | Parameter update starts      | The job is still editable | `UPDATING` |
+| `UPDATING`    | Parameter update succeeds    | —                         | `UPDATED`  |
+| `UPDATING`    | Parameter update fails       | —                         | `FAILED`   |
+| `FAILED`      | Re-update parameter          | —                         | `UPDATING` |
+| `UPDATED`     | User changes parameter value | —                         | `PENDING`  |
+
+The initial state is described below.
+
+| State type | State name |
+|------------|------------|
+| Initial    | `PENDING`  |
+| Terminal   | —          |
+
+Parameter changes and repeated update attempts are available only while the current server-side job remains editable.
+Changing a parameter after a successful update makes the parameters pending again. A failed update may be retried while the job remains editable.
+The exact retry and request-handling behavior belongs to the implementation and the common client policies.
+
+```mermaid
+flowchart TD
+  START([Start]) --> PENDING
+
+  PENDING -->|Update started| UPDATING
+
+  UPDATING -->|Update succeeded| UPDATED
+  UPDATING -->|Update failed| FAILED
+  FAILED --> |Re-update parameter| UPDATING
+  UPDATED --> PENDING
 ```
 
 ### 8.6 Job Submission
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+The Job Submission state machine represents the current draft job for execution.
+It does not define low-level HTTP handling or job status polling. Request recovery follows the common client policies and the Network Operation Catalog.
+The Job Submission state machine consists of the following states:
 
-```text
-IDLE
-SUBMITTING
-RECONCILING
-SUBMITTED
-NOT_SUBMITTED
-UNKNOWN
-FAILED
+* `IDLE` — job submission has not been requested;
+* `CONFIRMING` — the client is waiting for the user to confirm submission;
+* `REQUESTING` — the submission request is being sent;
+* `RECONCILING` — the submission result is uncertain and the client is checking the current job status;
+* `SUBMITTED` — job submission was accepted or otherwise confirmed;
+* `FAILED` — job submission could not be accepted or confirmed.
+
+The table below defines the main workflow transitions.
+
+| Current state | Event                          | Condition                             | Next state    |
+| ------------- | ------------------------------ | ------------------------------------- | ------------- |
+| `IDLE`        | User requests job submission   | The job is ready for submission       | `CONFIRMING`  |
+| `CONFIRMING`  | User dismisses confirmation    | —                                     | `IDLE`        |
+| `CONFIRMING`  | User confirms submission       | The job is still ready for submission | `REQUESTING`  |
+| `REQUESTING`  | Submission is accepted         | —                                     | `SUBMITTED`   |
+| `REQUESTING`  | Submission result is uncertain | —                                     | `RECONCILING` |
+| `REQUESTING`  | Submission fails definitively  | —                                     | `FAILED`      |
+| `RECONCILING` | Submission is confirmed        | —                                     | `SUBMITTED`   |
+| `RECONCILING` | Submission is not confirmed    | —                                     | `FAILED`      |
+| `FAILED`      | User requests submission again | The job is still ready for submission | `CONFIRMING`  |
+
+The initial and terminal states are described below.
+
+| State type | State name  |
+| ---------- | ----------- |
+| Initial    | `IDLE`      |
+| Terminal   | `SUBMITTED` |
+
+An uncertain submission request must be reconciled by observing the current job status rather than by automatically repeating the submission request.
+A submission failure does not change the last confirmed public job status.
+
+```mermaid
+flowchart TD
+  START([Start]) --> IDLE
+
+  IDLE -->|Submission requested| CONFIRMING
+
+  CONFIRMING -->|Confirmation dismissed| IDLE
+  CONFIRMING -->|Submission confirmed| REQUESTING
+
+  REQUESTING -->|Submission accepted| SUBMITTED
+  REQUESTING -->|Result uncertain| RECONCILING
+  REQUESTING -->|Request failed| FAILED
+
+  RECONCILING -->|Submission confirmed| SUBMITTED
+  RECONCILING -->|Submission not confirmed| FAILED
+
+  FAILED -->|Submission requested again| CONFIRMING
+
+  SUBMITTED --> END([End])
 ```
 
 ### 8.7 Job Monitor
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+The Job Monitor tracks the public status and progress of the current submitted job.
+It does not define low-level polling, automatic retry, or request serialization. Those details follow the common client policies and the Network Operation Catalog.
+The Job Monitor state machine consists of the following states:
 
-```text
-IDLE
-RUNNING
-COMPLETED
-FAILED
+* `IDLE` — job monitoring has not started;
+* `RUNNING` — the client is monitoring the current job;
+* `COMPLETED` — the monitored job reached a terminal public status;
+* `FAILED` — the client could not continue monitoring the job and user recovery is required.
+
+The table below defines the main workflow transitions.
+
+| Current state | Event                         | Condition                      | Next state  |
+| ------------- | ----------------------------- | ------------------------------ | ----------- |
+| `IDLE`        | Job monitoring starts         | A submitted job exists         | `RUNNING`   |
+| `RUNNING`     | Job reaches a terminal status | —                              | `COMPLETED` |
+| `RUNNING`     | Job monitoring fails          | No automatic recovery remains  | `FAILED`    |
+| `FAILED`      | Job monitoring is retried     | The submitted job still exists | `RUNNING`   |
+
+The initial and terminal states are described below.
+
+| State type | State name  |
+| ---------- | ----------- |
+| Initial    | `IDLE`      |
+| Terminal   | `COMPLETED` |
+
+A monitoring failure does not change the public status of the job. The user may retry monitoring the same submitted job.
+
+```mermaid
+flowchart TD
+  START([Start]) --> IDLE
+
+  IDLE -->|Monitoring started| RUNNING
+
+  RUNNING -->|Job reached terminal status| COMPLETED
+  RUNNING -->|Monitoring failed| FAILED
+
+  FAILED -->|Monitoring retried| RUNNING
+
+  COMPLETED --> END([End])
 ```
 
 ### 8.8 Job Cancellation
 
-| Current state | Event                       | Condition                    | Side effects              | Next state   |
-|---------------|-----------------------------|------------------------------|---------------------------|--------------|
-| `IDLE`        | User presses `[Cancel job]` | `jobStatus` == `IN_PROGRESS` | Open confirmation dialog  | `CONFIRMING` |
-| `CONFIRMING`  | User dismisses confirmation | —                            | Close confirmation dialog | `IDLE`       |
-| `CONFIRMING`  | User confirms cancellation  | `jobStatus` == `IN_PROGRESS` | Send cancellation request | `REQUESTING` |
+The Job Cancellation state machine represents a user request to cancel the current running job.
+It does not define low-level HTTP handling or status polling. Request recovery follows the common client policies and the Network Operation Catalog.
+The Job Cancellation state machine consists of the following states:
 
-```text
-IDLE
-CONFIRMING
-REQUESTING
-RECONCILING
-ACCEPTED
-NOT_ACCEPTED
-FAILED
+* `IDLE` — job cancellation has not been requested;
+* `CONFIRMING` — the client is waiting for the user to confirm cancellation;
+* `REQUESTING` — the cancellation request is being sent;
+* `RECONCILING` — the request result is uncertain and the client is checking the current job status;
+* `ACCEPTED` — job cancellation was accepted or otherwise confirmed;
+* `FAILED` — job cancellation could not be accepted or confirmed.
+
+The table below defines the main workflow transitions.
+
+| Current state | Event                                   | Condition                        | Next state    |
+| ------------- | --------------------------------------- | -------------------------------- | ------------- |
+| `IDLE`        | User requests job cancellation          | The job is currently cancellable | `CONFIRMING`  |
+| `CONFIRMING`  | User dismisses confirmation             | —                                | `IDLE`        |
+| `CONFIRMING`  | User confirms cancellation              | The job is still cancellable     | `REQUESTING`  |
+| `REQUESTING`  | Cancellation is accepted                | —                                | `ACCEPTED`    |
+| `REQUESTING`  | Cancellation result is uncertain        | —                                | `RECONCILING` |
+| `REQUESTING`  | Cancellation request fails definitively | —                                | `FAILED`      |
+| `RECONCILING` | Cancellation is confirmed               | —                                | `ACCEPTED`    |
+| `RECONCILING` | Cancellation cannot be confirmed        | —                                | `FAILED`      |
+| `FAILED`      | User requests cancellation again        | The job is still cancellable     | `CONFIRMING`  |
+
+The initial and terminal states are described below.
+
+| State type | State name |
+| ---------- | ---------- |
+| Initial    | `IDLE`     |
+| Terminal   | `ACCEPTED` |
+
+An uncertain cancellation request must be reconciled by observing the current job status rather than by repeating the cancellation request automatically.
+A cancellation failure does not change the last confirmed public job status.
+
+```mermaid
+flowchart TD
+  START([Start]) --> IDLE
+
+  IDLE -->|Cancellation requested| CONFIRMING
+
+  CONFIRMING -->|Confirmation dismissed| IDLE
+  CONFIRMING -->|Cancellation confirmed| REQUESTING
+
+  REQUESTING -->|Cancellation accepted| ACCEPTED
+  REQUESTING -->|Result uncertain| RECONCILING
+  REQUESTING -->|Request failed| FAILED
+
+  RECONCILING -->|Cancellation confirmed| ACCEPTED
+  RECONCILING -->|Cancellation not confirmed| FAILED
+
+  FAILED -->|Cancellation requested again| CONFIRMING
+
+  ACCEPTED --> END([End])
 ```
 
-### 8.9 Output slot Lifecycle
+### 8.9 Output Slot Lifecycle
 
-| Current state | Event | Condition | Side effects | Next state |
-|---------------|-------|-----------|--------------|------------|
+The Output Slot Lifecycle represents the download state of one job output file.
+It does not define low-level URL requests, browser download behavior, automatic retries, or cancellation mechanics. Those details follow the common client policies and the Network Operation Catalog.
+The Output Slot Lifecycle consists of the following states:
 
-```text
-IDLE
-REQUESTING_URL
-DOWNLOADING
-DOWNLOADED
-FAILED_DOWNLOAD
-CANCELLED_DOWNLOAD
+* `IDLE` — no download has been requested;
+* `REQUESTING_URL` — the client is requesting a download URL for the output file;
+* `DOWNLOADING` — the output file is being downloaded;
+* `DOWNLOADED` — the output file was downloaded successfully;
+* `FAILED_DOWNLOAD` — the output file could not be downloaded;
+* `CANCELLED_DOWNLOAD` — the download was cancelled by the user.
+
+The table below defines the main workflow transitions.
+
+| Current state        | Event                                            | Condition                     | Next state           |
+| -------------------- | ------------------------------------------------ | ----------------------------- | -------------------- |
+| `IDLE`               | User requests the file download                  | The output is available       | `REQUESTING_URL`     |
+| `REQUESTING_URL`     | Download URL is obtained and the download starts | —                             | `DOWNLOADING`        |
+| `REQUESTING_URL`     | Download preparation fails                       | —                             | `FAILED_DOWNLOAD`    |
+| `DOWNLOADING`        | File download succeeds                           | —                             | `DOWNLOADED`         |
+| `DOWNLOADING`        | File download fails                              | —                             | `FAILED_DOWNLOAD`    |
+| `DOWNLOADING`        | User cancels the download                        | —                             | `CANCELLED_DOWNLOAD` |
+| `FAILED_DOWNLOAD`    | User requests the file download again            | The output is still available | `REQUESTING_URL`     |
+| `CANCELLED_DOWNLOAD` | User requests the file download again            | The output is still available | `REQUESTING_URL`     |
+| `DOWNLOADED`         | User requests the file download again            | The output is still available | `REQUESTING_URL`     |
+
+The initial state is described below.
+
+| State type | State name |
+| ---------- | ---------- |
+| Initial    | `IDLE`     |
+| Terminal   | —          |
+
+A failed, cancelled, or completed download may be started again while the output remains available.
+
+```mermaid
+flowchart TD
+  START([Start]) --> IDLE
+
+  IDLE -->|Download requested| REQUESTING_URL
+
+  REQUESTING_URL -->|Download started| DOWNLOADING
+  REQUESTING_URL -->|Preparation failed| FAILED_DOWNLOAD
+
+  DOWNLOADING -->|Download succeeded| DOWNLOADED
+  DOWNLOADING -->|Download failed| FAILED_DOWNLOAD
+  DOWNLOADING -->|Cancelled by user| CANCELLED_DOWNLOAD
+
+  FAILED_DOWNLOAD -->|Download requested again| REQUESTING_URL
+  CANCELLED_DOWNLOAD -->|Download requested again| REQUESTING_URL
+  DOWNLOADED -->|Download requested again| REQUESTING_URL
 ```
 
 ## 9. Common Wizard Layout
@@ -586,9 +828,13 @@ recovery policies.
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-> `(Retry failed uploads)` is disabled since there is no failed file uploads.
+| Control                  | Enabled when                                                                                         |
+|--------------------------|------------------------------------------------------------------------------------------------------|
+| `(Stop uploading)`       | `uploadManagerState` == `RUNNING`                                                                    |
+| `(Retry failed uploads)` | `uploadManagerState` == `FAILED` and there is at least one `inputSlotState` == `FAILED`              |
+| `< Previous`             | `uploadManagerState` is one of `IDLE`, `COMPLETED`, `FAILED` or `STOPPED_BY_USER`                    |
+| `Next >`                 | `uploadManagerState` == `COMPLETED` and every declared input slot has `inputSlotState` == `UPLOADED` |
 
-> `< Previous` and `Next >` are disabled while uploads are running.
 
 ```text
 ┌────────────────────────────────────────────────┐
@@ -642,8 +888,8 @@ recovery policies.
 │  │  solving_slae                                                    │  │
 │  │                                                                  │  │
 │  │  Inputs                                                          │  │
-│  │  ✓ Matrix    matrix.csv                                          │  │
-│  │  ✓ RHS       rhs.csv                                             │  │
+│  │  ✓ Matrix    matrix.csv                                         │  │
+│  │  ✓ RHS       rhs.csv                                            │  │
 │  │                                                                  │  │
 │  │  Parameters                                                      │  │
 │  │  Solving method    numpy_exact_solver                            │  │
@@ -713,15 +959,8 @@ recovery policies.
 │  ├──────────────────────────────────────────────────────────────────┤  │
 │  │                                                                  │  │
 │  └──────────────────────────────────────────────────────────────────┘  │
-│                                                    [Start new job]     │
+│                                                       [Start new job]  │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 
-## 11. Acceptance scenarios
-
-| Given                                         | When                                  | Then                                                                                                                   |
-|-----------------------------------------------|---------------------------------------|------------------------------------------------------------------------------------------------------------------------|
-| The current `submissionState` is `SUBMITTING` | `POST /jobs/{jobId}/submit` times out | The client must not repeat the submit request; it must enter `RECONCILING`; it must request `GET /jobs/{jobId}/status` |
-
-## 12. Deferred decisions and out-of-scope behavior
