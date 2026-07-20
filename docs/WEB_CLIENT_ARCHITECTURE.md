@@ -259,46 +259,10 @@ flowchart TD
 
 ### 8.2 Draft Job Creation
 
-The Draft Job Creation state machine owns the creation of one server-side draft job and stores the confirmed `jobId` in the current wizard context.
-It does not define low-level HTTP handling or retry timing. Request failures and automatic retries follow the common client policies and the Network Operation Catalog.
-The Draft Job Creation state machine consists of the following states:
-
-* `IDLE` — draft creation has not started;
-* `CREATING` — the client is creating the server-side draft job;
-* `CREATED` — the draft job is confirmed and its `jobId` is stored;
-* `FAILED` — the draft job could not be confirmed and user recovery is required.
-
-The table below defines the main workflow transitions.
-
-| Current state | Event                             | Condition                                       | Next state |
-|---------------|-----------------------------------|-------------------------------------------------|------------|
-| `IDLE`        | Draft creation is requested       | The current wizard workflow has no `jobId`      | `CREATING` |
-| `CREATING`    | Draft creation is confirmed       | A valid draft job and its `jobId` were received | `CREATED`  |
-| `CREATING`    | Draft creation fails              | No automatic recovery remains                   | `FAILED`   |
-| `FAILED`      | Create draft after failed attempt | —                                               | `CREATING` |
-
-The initial state is described below.
-
-| State type | State name |
-|------------|------------|
-| Initial    | `IDLE`     |
-| Terminal   | `CREATED`  |
-
-Automatic retries belonging to the same operation reuse its `sessionId` so that repeated requests do not create multiple draft jobs.
-
-```mermaid
-flowchart TD
-  START([Start]) --> IDLE
-
-  IDLE -->|Draft creation requested| CREATING
-
-  CREATING -->|Draft creation confirmed| CREATED
-  CREATING -->|Draft creation failed| FAILED
-
-  FAILED --> |Create draft after failed attempt| CREATING
-
-  CREATED --> END([End])
-```
+Draft creation is an internal preparation phase of the Upload Manager workflow.
+When the Upload step starts and no draft job is currently associated with the wizard session, the Upload Manager calls createOrReuseDraftJob before requesting input upload URLs.
+Draft creation failure moves the Upload Manager to `FAILED`.
+The user retries the overall upload workflow from the Upload step; the workflow recreates or reuses the draft as needed before retrying input transfers.
 
 ### 8.3 Upload Manager
 
