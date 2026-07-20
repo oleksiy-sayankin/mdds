@@ -1,0 +1,301 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+name: mdds-main-demo
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7.4
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  grpc-server:
+    image: mddsproject/grpc-server:0.1.0
+    environment:
+      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc-server
+      MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
+    ports:
+      - "50051:50051"
+    healthcheck:
+      test: [ "CMD", "grpc_health_probe", "-addr=grpc-server:50051" ]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  executor:
+    image: mddsproject/executor:0.1.0
+    command: ["java", "-jar", "/opt/mdds/mdds-executor/mdds-executor.jar"]
+    depends_on:
+      grpc-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MDDS_EXECUTOR_HOST: executor
+      MDDS_EXECUTOR_PORT: 35232
+      MDDS_EXECUTOR_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-executor
+      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc-server
+      MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
+      MDDS_RABBITMQ_HOST: rabbitmq
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
+    ports:
+      - "35232:35232"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://executor:35232/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  python-worker-solving-slae:
+    image: mddsproject/python-worker-solving-slae:0.1.0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "12457:12457"
+    environment:
+      MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT : http://minio:9000
+      MDDS_OBJECT_STORAGE_BUCKET: mdds
+      MDDS_OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      MDDS_OBJECT_STORAGE_SECRET_KEY: minioadmin123
+      MDDS_RABBITMQ_HOST: rabbitmq
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:12457/health" ]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+
+  web-app:
+    image: mddsproject/web-app:0.1.0
+    command: ["java", "-jar", "/opt/mdds/mdds-web-server/mdds-web-server.jar"]
+    depends_on:
+      python-worker-solving-slae:
+        condition: service_healthy
+      executor:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+    environment:
+      MDDS_SERVER_HOST: web-app
+      MDDS_SERVER_PORT: 8000
+      MDDS_SERVER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-web-server/web-app
+      MDDS_WEB_CLIENT_LOCATION: file:/opt/mdds/web-client/
+      MDDS_RABBITMQ_HOST: rabbitmq
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
+      MDDS_REDIS_HOST: redis
+      MDDS_REDIS_PORT: 6379
+      MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres:5432/mdds
+      MDDS_METADATA_STORAGE_USER: mdds
+      MDDS_METADATA_STORAGE_PASSWORD: mdds123 # NOSONAR local demo-only credential, not used outside demo
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  result-consumer:
+    image: mddsproject/result-consumer:0.1.0
+    command: ["java", "-jar", "/opt/mdds/mdds-result-consumer/mdds-result-consumer.jar"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MDDS_RESULT_CONSUMER_HOST: result-consumer
+      MDDS_RESULT_CONSUMER_PORT: 8863
+      MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-result-consumer
+      MDDS_RABBITMQ_HOST: rabbitmq
+      MDDS_RABBITMQ_PORT: 5672
+      MDDS_RABBITMQ_USER: guest
+      MDDS_RABBITMQ_PASSWORD: guest
+      MDDS_REDIS_HOST: redis
+      MDDS_REDIS_PORT: 6379
+    ports:
+      - "8863:8863"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://result-consumer:8863/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  loki:
+    build:
+      context: ../deployment/observability/loki
+      dockerfile: Dockerfile
+    image: mddsproject/loki:0.1.0
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    user: root
+    volumes:
+      - loki-data:/var/lib/loki
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  alloy:
+    build:
+      context: ../deployment/observability/alloy
+      dockerfile: Dockerfile
+    image: mddsproject/alloy:0.1.0
+    environment:
+      MDDS_COMPOSE_PROJECT_NAME: mdds-main-demo
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      loki:
+        condition: service_healthy
+    ports:
+      - "12345:12345"
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-qO-", "http://localhost:12345/-/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  grafana:
+    build:
+      context: ../deployment/observability/grafana
+      dockerfile: Dockerfile
+    image: mddsproject/grafana:0.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      loki:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    user: root
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_REGION_NAME: us-east-1
+    ports:
+      - "9000:9000"
+      - "9002:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        set -eu
+        mc alias set mdds http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+        mc mb --ignore-existing mdds/mdds
+        mc anonymous set none mdds/mdds
+    restart: "no"
+
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: mdds
+      POSTGRES_USER: mdds
+      POSTGRES_PASSWORD: mdds123 # NOSONAR local demo-only credential, not used outside demo
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18+ Docker image uses PGDATA=/var/lib/postgresql/18/docker
+      # and declares VOLUME /var/lib/postgresql.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+
+volumes:
+  loki-data:
+  grafana-data:
+  alloy-data:
+  minio-data:
+  postgres-data:

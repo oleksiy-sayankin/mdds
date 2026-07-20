@@ -334,6 +334,23 @@ push_web_server_docker_image:
 
 
 #
+# Build Docker image for Web Application
+#
+build_web_app_docker_image:
+	$(call log_info,"Building Docker image for Web Application...")
+	docker buildx build -f deployment/web-app/Dockerfile --progress=plain --tag $(USER_NAME)/web-app:$(PROJECT_VERSION) .
+	$(call log_done,"Building Docker image for Web Application completed.")
+
+#
+# Push Web Application Docker image
+#
+push_web_app_docker_image:
+	$(call log_info,"Pushing web-app Docker image ...")
+	docker push $(USER_NAME)/web-app:$(PROJECT_VERSION)
+	$(call log_done,"Pushing web-app Docker image completed.")
+
+
+#
 # Build Docker image for result-consumer
 #
 build_result_consumer_docker_image:
@@ -379,6 +396,29 @@ test_common_web_client_coverage:
 	@test -s $(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info
 	$(call log_done,"Common Web Client tests with TypeScript coverage completed.")
 
+#
+# Build Common Web Client
+#
+build_common_web_client:
+	$(call log_info,"Building Common Web Client...")
+	cd $(COMMON_WEB_CLIENT_ROOT) && npm run build
+	@test -f $(COMMON_WEB_CLIENT_ROOT)/target/common-web-client-dist/index.html
+	$(call log_done,"Building Common Web Client completed.")
+
+#
+# Package Common Web Client
+#
+package_common_web_client:
+	$(call log_info,"Packaging Common Web Client...")
+	tar --create \
+		--gzip \
+		--file $(COMMON_WEB_CLIENT_ROOT)/target/mdds-common-web-client.tar.gz \
+		--directory $(COMMON_WEB_CLIENT_ROOT)/target/common-web-client-dist \
+		.
+	@test -s $(COMMON_WEB_CLIENT_ROOT)/target/mdds-common-web-client.tar.gz
+	$(call log_done,"Packaging Common Web Client completed.")
+
+
 .PHONY: \
 	build_alloy_docker_image \
 	push_alloy_docker_image \
@@ -397,6 +437,10 @@ test_common_web_client_coverage:
 	check_common_web_client_code_style \
 	test_common_web_client \
 	test_coverage \
+	build_common_web_client \
+	package_common_web_client \
+	build_web_app_docker_image \
+	push_web_app_docker_image \
 	test_common_web_client_coverage
 
 

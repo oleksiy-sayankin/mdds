@@ -27,6 +27,10 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
+  web:
+    resources:
+      static-locations: ${MDDS_WEB_CLIENT_LOCATION:classpath:/static/}
+
 server:
   address: ${SERVER_ADDRESS:0.0.0.0}
   port: ${SERVER_PORT:8000}
