@@ -6,9 +6,12 @@
  * into the root HTML element.
  */
 
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./MddsWebClient";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
+import MddsWebClient from "./MddsWebClient";
+
+const theme = createTheme();
 
 // Global styles from MUI
 import "@fontsource/roboto/300.css";
@@ -16,12 +19,17 @@ import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 
-const root = ReactDOM.createRoot(
-  document.getElementById("root") as HTMLElement,
-);
+const rootElement = document.getElementById("root");
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+if (!rootElement) {
+  throw new Error("Root element was not found.");
+}
+
+createRoot(rootElement).render(
+  <StrictMode>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <MddsWebClient />
+    </ThemeProvider>
+  </StrictMode>,
 );

@@ -5,8 +5,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { HttpError } from "./HttpError";
 import { MddsRestClient } from "./MddsRestClient";
+import { HttpError } from "@/api/HttpError";
 
 /**
  * These tests exercise MddsRestClient as a thin REST adapter.

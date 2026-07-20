@@ -8,3 +8,24 @@
  * header area, and content container. It should not contain job lifecycle
  * or REST API logic.
  */
+
+import type { PropsWithChildren } from "react";
+import { Box, Container } from "@mui/material";
+
+export function AppLayout({ children }: Readonly<PropsWithChildren>) {
+  return (
+    <Box
+      component="main"
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "background.default",
+        py: {
+          xs: 2,
+          sm: 4,
+        },
+      }}
+    >
+      <Container maxWidth="md">{children}</Container>
+    </Box>
+  );
+}

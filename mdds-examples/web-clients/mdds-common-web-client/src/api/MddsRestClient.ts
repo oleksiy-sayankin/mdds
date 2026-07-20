@@ -3,7 +3,7 @@
  * Refer to the LICENSE file in the root directory for full license details.
  */
 
-import { HttpError } from "./HttpError";
+import type { MddsApiClient } from "./MddsApiClient";
 import type {
   CancelJobResponseDTO,
   CreateJobRequestDTO,
@@ -15,6 +15,7 @@ import type {
   PatchJobParamsRequest,
   SubmitJobResponseDTO,
 } from "./MddsRestTypes";
+import { HttpError } from "@/api/HttpError";
 
 /**
  * Client-side wrapper around the MDDS REST v1 API.
@@ -26,7 +27,7 @@ import type {
  * Direct object-storage uploads and downloads through pre-signed URLs are not
  * part of the Web Server REST API and should be handled separately.
  */
-export class MddsRestClient {
+export class MddsRestClient implements MddsApiClient {
   private readonly baseUrl: string;
   private readonly userLogin: string;
   private readonly fetchFn: typeof fetch;

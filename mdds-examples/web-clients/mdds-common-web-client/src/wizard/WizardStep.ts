@@ -9,11 +9,25 @@
  */
 
 export enum WizardStep {
-  Job = "job",
+  JobType = "job-type",
   Inputs = "inputs",
   Upload = "upload",
-  Params = "params",
-  ReviewSubmit = "review-submit",
-  Run = "run",
+  Parameters = "parameters",
+  Review = "review",
+  Monitor = "monitor",
   Outputs = "outputs",
+}
+
+export const WIZARD_STEP_ORDER = [
+  WizardStep.JobType,
+  WizardStep.Inputs,
+  WizardStep.Upload,
+  WizardStep.Parameters,
+  WizardStep.Review,
+  WizardStep.Monitor,
+  WizardStep.Outputs,
+] as const;
+
+export function getWizardStepIndex(step: WizardStep): number {
+  return WIZARD_STEP_ORDER.indexOf(step);
 }
