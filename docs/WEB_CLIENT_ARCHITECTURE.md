@@ -413,8 +413,9 @@ flowchart TD
 
 ### 8.6 Job Submission
 
-The Job Submission state machine represents the current draft job for execution.
-It does not define low-level HTTP handling or job status polling. Request recovery follows the common client policies and the Network Operation Catalog.
+The Job Submission state machine represents submission of the current draft job for execution.
+It does not define low-level HTTP handling or continuous job status polling.
+Request recovery follows the common client policies and the Network Operation Catalog.
 The Job Submission state machine consists of the following states:
 
 * `IDLE` — job submission has not been requested;
@@ -422,21 +423,24 @@ The Job Submission state machine consists of the following states:
 * `REQUESTING` — the submission request is being sent;
 * `RECONCILING` — the submission result is uncertain and the client is checking the current job status;
 * `SUBMITTED` — job submission was accepted or otherwise confirmed;
-* `FAILED` — job submission could not be accepted or confirmed.
+* `FAILED` — the client has definitively established that the job was not submitted;
+* `UNCONFIRMED` — the client could not determine whether the submission request was accepted and must reconcile the result before another submission request may be sent.
 
 The table below defines the main workflow transitions.
 
-| Current state | Event                          | Condition                             | Next state    |
-| ------------- | ------------------------------ | ------------------------------------- | ------------- |
-| `IDLE`        | User requests job submission   | The job is ready for submission       | `CONFIRMING`  |
-| `CONFIRMING`  | User dismisses confirmation    | —                                     | `IDLE`        |
-| `CONFIRMING`  | User confirms submission       | The job is still ready for submission | `REQUESTING`  |
-| `REQUESTING`  | Submission is accepted         | —                                     | `SUBMITTED`   |
-| `REQUESTING`  | Submission result is uncertain | —                                     | `RECONCILING` |
-| `REQUESTING`  | Submission fails definitively  | —                                     | `FAILED`      |
-| `RECONCILING` | Submission is confirmed        | —                                     | `SUBMITTED`   |
-| `RECONCILING` | Submission is not confirmed    | —                                     | `FAILED`      |
-| `FAILED`      | User requests submission again | The job is still ready for submission | `CONFIRMING`  |
+| Current state | Event                              | Condition                                      | Next state    |
+| ------------- | ---------------------------------- | ---------------------------------------------- | ------------- |
+| `IDLE`        | User requests job submission       | The job is ready for submission                | `CONFIRMING`  |
+| `CONFIRMING`  | User dismisses confirmation        | —                                              | `IDLE`        |
+| `CONFIRMING`  | User confirms submission           | The job is still ready for submission          | `REQUESTING`  |
+| `REQUESTING`  | Submission is accepted             | —                                              | `SUBMITTED`   |
+| `REQUESTING`  | Submission result is uncertain     | —                                              | `RECONCILING` |
+| `REQUESTING`  | Submission fails definitively      | —                                              | `FAILED`      |
+| `RECONCILING` | Submission is confirmed            | The observed job status is post-`DRAFT`        | `SUBMITTED`   |
+| `RECONCILING` | Submission is not confirmed        | The observed job status is `DRAFT`             | `FAILED`      |
+| `RECONCILING` | Reconciliation result is uncertain | The current job status could not be determined | `UNCONFIRMED` |
+| `FAILED`      | User requests submission again     | The job is still ready for submission          | `CONFIRMING`  |
+| `UNCONFIRMED` | User retries status reconciliation | —                                              | `RECONCILING` |
 
 The initial and terminal states are described below.
 
@@ -445,8 +449,11 @@ The initial and terminal states are described below.
 | Initial    | `IDLE`      |
 | Terminal   | `SUBMITTED` |
 
-An uncertain submission request must be reconciled by observing the current job status rather than by automatically repeating the submission request.
-A submission failure does not change the last confirmed public job status.
+An uncertain submission request must be reconciled by observing the current job status rather than by repeating the submission request.
+If reconciliation confirms a post-`DRAFT` public job status, submission is considered successful and the state machine moves to `SUBMITTED`.
+If reconciliation confirms that the job remains in `DRAFT`, the original submission request is considered unsuccessful and the state machine moves to `FAILED`. A new submission request may then be initiated by the user.
+If reconciliation cannot determine the current job status, the state machine moves to `UNCONFIRMED`. From `UNCONFIRMED`, the client must retry status reconciliation and must not send another submission request until the previous submission result has been resolved.
+A submission failure or an unconfirmed submission result does not change the last confirmed public job status.
 
 ```mermaid
 flowchart TD
@@ -459,12 +466,15 @@ flowchart TD
 
   REQUESTING -->|Submission accepted| SUBMITTED
   REQUESTING -->|Result uncertain| RECONCILING
-  REQUESTING -->|Request failed| FAILED
+  REQUESTING -->|Request failed definitively| FAILED
 
-  RECONCILING -->|Submission confirmed| SUBMITTED
-  RECONCILING -->|Submission not confirmed| FAILED
+  RECONCILING -->|Post-DRAFT status observed| SUBMITTED
+  RECONCILING -->|DRAFT status observed| FAILED
+  RECONCILING -->|Status remains unknown| UNCONFIRMED
 
   FAILED -->|Submission requested again| CONFIRMING
+
+  UNCONFIRMED -->|Status reconciliation retried| RECONCILING
 
   SUBMITTED --> END([End])
 ```
