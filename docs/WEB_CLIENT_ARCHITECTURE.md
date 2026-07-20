@@ -811,11 +811,15 @@ recovery policies.
 
 
 ```text
-┌────────────────────────────────────────────────┐
-│  Stop uploading and return to file selection?  │
-│                                                │
-│    [Continue uploading]     [Stop upload]      │
-└────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Stop uploading?                                             │
+│                                                              │
+│  The current upload operation will stop. Files that have     │
+│  already been uploaded will remain uploaded.                 │
+│  You can return to file selection using Previous.            │
+│                                                              │
+│          [Continue uploading]          [Stop upload]         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### 10.4 Screen 4: Set Job Parameters
