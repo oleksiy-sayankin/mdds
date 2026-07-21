@@ -6,18 +6,17 @@
  *
  * It is the composition root for UI layout and infrastructure adapters.
  */
-import { MockMddsRestClient } from "./api/MockMddsRestClient";
 import { AppLayout } from "./app/AppLayout";
-import { MockArtifactTransferClient } from "./artifacts/MockArtifactTransferClient";
 import { JobWizard } from "./wizard/JobWizard";
+import { FetchArtifactTransferClient } from "@/artifacts/FetchArtifactTransferClient";
+import { MddsRestClient } from "@/api/MddsRestClient";
 
-const apiClient = new MockMddsRestClient({
-  delayMs: 350,
+const apiClient = new MddsRestClient({
+  baseUrl: window.location.origin,
+  userLogin: "guest",
 });
 
-const artifactTransferClient = new MockArtifactTransferClient({
-  delayMs: 500,
-});
+const artifactTransferClient = new FetchArtifactTransferClient();
 
 export default function MddsWebClient() {
   return (

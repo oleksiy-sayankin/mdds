@@ -69,4 +69,29 @@ describe("FetchArtifactTransferClient", () => {
       "Artifact download failed: HTTP 404 Not Found",
     );
   });
+
+  it("binds the default fetch implementation to globalThis", async () => {
+    const fetchMock = vi.fn(function (this: unknown) {
+      expect(this).toBe(globalThis);
+
+      return Promise.resolve(new Response(null, { status: 200 }));
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const client = new FetchArtifactTransferClient();
+      const file = new File(["matrix"], "matrix.csv");
+
+      await client.upload("https://storage/upload", file);
+
+      expect(fetchMock).toHaveBeenCalledWith("https://storage/upload", {
+        method: "PUT",
+        body: file,
+        signal: undefined,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

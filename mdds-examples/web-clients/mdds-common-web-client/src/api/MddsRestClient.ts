@@ -35,7 +35,7 @@ export class MddsRestClient implements MddsApiClient {
   constructor(config: MddsRestClientConfig) {
     this.baseUrl = normalizeBaseUrl(config.baseUrl ?? "");
     this.userLogin = config.userLogin;
-    this.fetchFn = config.fetchFn ?? fetch;
+    this.fetchFn = config.fetchFn ?? getDefaultFetch();
   }
 
   createOrReuseDraftJob(
@@ -231,4 +231,12 @@ function isObjectWithNonBlankString(
   const fieldValue = (value as Record<string, unknown>)[key];
 
   return typeof fieldValue === "string" && fieldValue.trim() !== "";
+}
+
+function getDefaultFetch(): typeof fetch {
+  if (typeof globalThis.fetch !== "function") {
+    throw new TypeError("The Fetch API is not available.");
+  }
+
+  return globalThis.fetch.bind(globalThis);
 }

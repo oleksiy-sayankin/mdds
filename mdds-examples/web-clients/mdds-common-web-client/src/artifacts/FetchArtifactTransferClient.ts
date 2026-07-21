@@ -7,11 +7,7 @@ import type { ArtifactTransferClient } from "./ArtifactTransferClient";
 
 /** Performs real PUT and GET transfers against pre-signed object URLs. */
 export class FetchArtifactTransferClient implements ArtifactTransferClient {
-  private readonly fetchFn: typeof fetch;
-
-  constructor(fetchFn: typeof fetch = fetch) {
-    this.fetchFn = fetchFn;
-  }
+  constructor(private readonly fetchFn: typeof fetch = getDefaultFetch()) {}
 
   async upload(url: string, file: File, signal?: AbortSignal): Promise<void> {
     const response = await this.fetchFn(url, {
@@ -47,4 +43,12 @@ function buildTransferError(
     `Artifact ${operation} failed: HTTP ${response.status} ` +
       response.statusText,
   );
+}
+
+function getDefaultFetch(): typeof fetch {
+  if (typeof globalThis.fetch !== "function") {
+    throw new TypeError("The Fetch API is not available.");
+  }
+
+  return globalThis.fetch.bind(globalThis);
 }

@@ -11,11 +11,10 @@ import { HttpError } from "@/api/HttpError";
 /**
  * These tests exercise MddsRestClient as a thin REST adapter.
  *
- * They do not start the real MDDS Web Server. Instead, each test injects a
- * mocked fetch implementation that returns a prepared Response object. This
- * allows the tests to verify that the client builds the correct REST v1 URL,
- * HTTP method, headers, and request body, and that it correctly parses
- * successful responses or converts non-2xx responses into HttpError.
+ * They do not start the real MDDS Web Server. The tests use mocked fetch
+ * implementations, either injected through the constructor or installed as
+ * the global default, to verify request construction, response parsing, and
+ * HTTP error conversion.
  */
 describe("MddsRestClient", () => {
   it("creates or reuses a draft job", async () => {
@@ -279,6 +278,36 @@ describe("MddsRestClient", () => {
       responseBody: undefined,
       message: "HTTP 404 Not Found",
     });
+  });
+
+  it("binds the default fetch implementation to globalThis", async () => {
+    const originalFetch = globalThis.fetch;
+
+    const fetchMock = vi.fn(function (this: unknown) {
+      expect(this).toBe(globalThis);
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ jobId: "job-1" }), {
+          status: 201,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      );
+    });
+
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      const client = new MddsRestClient({
+        baseUrl: "http://localhost:8000",
+        userLogin: "guest",
+      });
+
+      await client.createOrReuseDraftJob("solving_slae", "upload-session-1");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

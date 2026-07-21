@@ -130,6 +130,13 @@ services:
       MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres:5432/mdds
       MDDS_METADATA_STORAGE_USER: mdds
       MDDS_METADATA_STORAGE_PASSWORD: mdds123 # NOSONAR local demo-only credential, not used outside demo
+      MDDS_OBJECT_STORAGE_BUCKET: mdds
+      MDDS_OBJECT_STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+      MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT: http://minio:9000
+      MDDS_OBJECT_STORAGE_REGION: us-east-1
+      MDDS_OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      MDDS_OBJECT_STORAGE_SECRET_KEY: minioadmin123
+      MDDS_OBJECT_STORAGE_PATH_STYLE_ACCESS_ENABLED: "true"
     ports:
       - "8000:8000"
     healthcheck:
