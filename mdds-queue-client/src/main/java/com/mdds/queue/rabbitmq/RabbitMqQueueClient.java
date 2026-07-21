@@ -30,20 +30,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 
-/** QueueClient that delivers jobs to Executors. */
+/** QueueClient that delivers jobs to Workers. */
 @Slf4j
 public class RabbitMqQueueClient implements QueueClient {
   private final @Nonnull Channel channel;
   private final @Nonnull Connection connection;
-
-  public RabbitMqQueueClient(@Nonnull RabbitMqProperties conf) {
-    this(
-        conf.getHost(),
-        conf.getPort(),
-        conf.getUser(),
-        conf.getPassword(),
-        conf.getMaxInboundMessageBodySize());
-  }
 
   public RabbitMqQueueClient(@Nonnull RabbitMqProperties conf, Duration timeOut) {
     this(

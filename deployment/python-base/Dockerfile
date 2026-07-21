@@ -21,8 +21,7 @@ COPY deployment/python-base/requirements.lock.txt /tmp/requirements.lock.txt
 # Copy package version constraints
 COPY deployment/python-base/build-constraints.txt /tmp/build-constraints.txt
 
-# Create application user, install system and Python dependencies,
-# and install grpc_health_probe binary.
+# Create application user, install system and Python dependencies
 RUN groupadd --gid "$MDDS_GROUP_ID" "$MDDS_GROUP" && \
     useradd --uid "$MDDS_USER_ID" --gid "$MDDS_GROUP_ID" -m -s /bin/bash "$MDDS_USER" && \
     apt-get update && \
@@ -32,13 +31,6 @@ RUN groupadd --gid "$MDDS_GROUP_ID" "$MDDS_GROUP" && \
         gcc \
         libblas-dev \
         liblapack-dev && \
-    curl --fail --silent --show-error --location \
-        --proto "=https" \
-        --proto-redir "=https" \
-        --tlsv1.2 \
-        https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.41/grpc_health_probe-linux-amd64 \
-        -o /usr/local/bin/grpc_health_probe && \
-    chmod +x /usr/local/bin/grpc_health_probe && \
     python -m pip install \
         --upgrade \
         --only-binary=:all: \

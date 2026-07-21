@@ -10,12 +10,9 @@ pandas==3.0.3
 python-multipart==0.0.32
 pytest==9.0.3
 black==26.5.1
-pyyaml==6.0.3
 requests==2.34.2
-redis==8.0.0
 pytest-cov==7.1.0
 coverage==7.14.1
-grpcio-tools==1.75.1
 boto3==1.43.21
 pydantic==2.13.4
 testcontainers[minio,rabbitmq]==4.14.2

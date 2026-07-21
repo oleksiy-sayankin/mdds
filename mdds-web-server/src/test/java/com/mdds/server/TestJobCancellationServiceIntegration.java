@@ -13,7 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CancelJobDTO;
+import com.mdds.dto.rest.v1.CancelJobRequestDTO;
 import com.mdds.queue.QueueClient;
 import com.mdds.server.jpa.JobsRepository;
 import com.mdds.server.support.JobTestFixture;
@@ -104,7 +104,7 @@ class TestJobCancellationServiceIntegration {
             eq(queueName),
             argThat(
                 message ->
-                    message.payload().equals(new CancelJobDTO(jobId))
+                    message.payload().equals(new CancelJobRequestDTO(jobId))
                         && message.headers().isEmpty()));
   }
 

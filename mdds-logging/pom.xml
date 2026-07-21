@@ -9,4 +9,5 @@
     <version>1.0-SNAPSHOT</version>
   </parent>
   <artifactId>mdds-logging</artifactId>
+  <name>MDDS Logging</name>
 </project>

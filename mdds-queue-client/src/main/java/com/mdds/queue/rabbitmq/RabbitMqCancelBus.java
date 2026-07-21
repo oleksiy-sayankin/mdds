@@ -4,7 +4,7 @@
  */
 package com.mdds.queue.rabbitmq;
 
-import com.mdds.dto.CancelJobDTO;
+import com.mdds.dto.rest.v1.CancelJobRequestDTO;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.CancelDestinationResolver;
 import com.mdds.queue.Message;
@@ -15,7 +15,7 @@ import jakarta.annotation.Nonnull;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 
-/** Bus for cancelling a job running on an executor. */
+/** Bus for cancelling a job running on a Worker. */
 @Slf4j
 public class RabbitMqCancelBus implements CancelBus {
 
@@ -28,14 +28,14 @@ public class RabbitMqCancelBus implements CancelBus {
   }
 
   @Override
-  public void sendCancel(@NonNull String executorId, @NonNull Message<CancelJobDTO> message) {
-    cancelQueueClient.publish(resolver.destinationFor(executorId), message);
+  public void sendCancel(@NonNull String workerId, @NonNull Message<CancelJobRequestDTO> message) {
+    cancelQueueClient.publish(resolver.destinationFor(workerId), message);
   }
 
   @Override
   public Subscription subscribe(
-      @Nonnull String executorId, @Nonnull MessageHandler<CancelJobDTO> handler) {
+      @Nonnull String workerId, @Nonnull MessageHandler<CancelJobRequestDTO> handler) {
     return cancelQueueClient.subscribe(
-        resolver.destinationFor(executorId), CancelJobDTO.class, handler);
+        resolver.destinationFor(workerId), CancelJobRequestDTO.class, handler);
   }
 }

@@ -11,15 +11,9 @@
   <description>Modeling of the Dynamic od Distributed Systems</description>
   <modules>
     <module>mdds-core</module>
-    <module>mdds-executor</module>
     <module>mdds-queue-client</module>
-    <module>mdds-result-consumer</module>
     <module>mdds-web-server</module>
-    <module>mdds-storage</module>
     <module>mdds-dto</module>
-    <module>mdds-data-sources</module>
-    <module>mdds-tests</module>
-    <module>mdds-grpc-client</module>
     <module>mdds-logging</module>
     <module>mdds-python-worker-runtime</module>
     <module>mdds-examples</module>
@@ -30,7 +24,6 @@
     <jackson-databind.version>2.20.0</jackson-databind.version>
     <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     <argLine>--add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
-    <grpc.version>1.75.0</grpc.version>
     <protobuf-java.version>3.25.1</protobuf-java.version>
     <maven-assembly-plugin.version>3.7.1</maven-assembly-plugin.version>
     <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
@@ -82,37 +75,6 @@
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>url-connection-client</artifactId>
         <version>${software.amazon.awssdk.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>com.github.codemonstur</groupId>
-        <artifactId>embedded-redis</artifactId>
-        <version>1.4.3</version>
-        <scope>test</scope>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-api</artifactId>
-        <version>${grpc.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-protobuf</artifactId>
-        <version>${grpc.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-stub</artifactId>
-        <version>${grpc.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-netty</artifactId>
-        <version>${grpc.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-services</artifactId>
-        <version>${grpc.version}</version>
       </dependency>
       <dependency>
         <groupId>net.logstash.logback</groupId>

@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -27,21 +27,21 @@
         "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
-        "h": 8,
+        "h": 18,
         "w": 12,
         "x": 0,
         "y": 0
       },
-      "id": 4,
+      "id": 1,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
-        "prettifyLogMessage": false,
+        "prettifyLogMessage": true,
         "showCommonLabels": false,
         "showLabels": false,
-        "showTime": false,
+        "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": true
       },
       "targets": [
         {
@@ -49,44 +49,7 @@
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "editorMode": "builder",
-          "expr": "{service=\"gRPC Server\"}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "gRPC Server",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "id": 3,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": false,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "builder",
+          "editorMode": "code",
           "expr": "{service=\"web-server\"}",
           "queryType": "range",
           "refId": "A"
@@ -101,21 +64,21 @@
         "uid": "P8E80F9AEF21F6940"
       },
       "gridPos": {
-        "h": 8,
+        "h": 18,
         "w": 12,
-        "x": 0,
-        "y": 16
+        "x": 12,
+        "y": 0
       },
       "id": 2,
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
-        "prettifyLogMessage": false,
+        "prettifyLogMessage": true,
         "showCommonLabels": false,
         "showLabels": false,
-        "showTime": false,
+        "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": true
       },
       "targets": [
         {
@@ -123,55 +86,22 @@
             "type": "loki",
             "uid": "P8E80F9AEF21F6940"
           },
-          "editorMode": "builder",
-          "expr": "{service=\"Result Consumer\"}",
+          "editorMode": "code",
+          "expr": "{service=\"mdds-python-worker-runtime\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Result Consumer",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
-      "id": 1,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": false,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
-          },
-          "editorMode": "builder",
-          "expr": "{service=\"Executor\"}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Executor",
+      "title": "SLAE Worker",
       "type": "logs"
     }
   ],
+  "refresh": "5s",
   "schemaVersion": 39,
-  "tags": [],
+  "tags": [
+    "mdds",
+    "logs"
+  ],
   "templating": {
     "list": []
   },
@@ -183,6 +113,6 @@
   "timezone": "browser",
   "title": "Main Dashboard",
   "uid": "afdq3nfh79rswe",
-  "version": 4,
+  "version": 6,
   "weekStart": ""
 }

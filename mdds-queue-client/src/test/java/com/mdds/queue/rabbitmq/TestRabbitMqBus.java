@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
 
-import com.mdds.dto.CancelJobDTO;
+import com.mdds.dto.rest.v1.CancelJobRequestDTO;
 import com.mdds.queue.CancelDestinationResolver;
 import com.mdds.queue.Message;
 import com.mdds.queue.MessageHandler;
@@ -51,36 +51,36 @@ class TestRabbitMqBus {
   @Test
   void testSendCancel() {
     var jobId = "test_job_id";
-    var executorId = "test_executor_id";
-    var cancelJobDTO = new CancelJobDTO(jobId);
+    var workerId = "test_worker_id";
+    var cancelJobDTO = new CancelJobRequestDTO(jobId);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(cancelJobDTO, headers, BASE_EVENT_TIME);
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       var bus = new RabbitMqCancelBus(queue, new CancelDestinationResolver());
-      assertThatCode(() -> bus.sendCancel(executorId, message)).doesNotThrowAnyException();
+      assertThatCode(() -> bus.sendCancel(workerId, message)).doesNotThrowAnyException();
     }
   }
 
   @Test
   void testSubscribe() {
     var jobId = "test_job_id";
-    var executorId = "test_executor_id";
-    var cancelJobDTO = new CancelJobDTO(jobId);
+    var workerId = "test_worker_id";
+    var cancelJobDTO = new CancelJobRequestDTO(jobId);
     Map<String, Object> headers = new HashMap<>();
     var message = new Message<>(cancelJobDTO, headers, BASE_EVENT_TIME);
 
     try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
       var bus = new RabbitMqCancelBus(queue, new CancelDestinationResolver());
-      bus.sendCancel(executorId, message);
+      bus.sendCancel(workerId, message);
       var actualJob = new AtomicReference<>();
 
-      MessageHandler<CancelJobDTO> messageHandler =
+      MessageHandler<CancelJobRequestDTO> messageHandler =
           (receivedMessage, ack) -> {
             actualJob.set(receivedMessage.payload());
             ack.ack(); // Mark message as processed for the queue
           };
 
-      try (var ignore = bus.subscribe(executorId, messageHandler)) {
+      try (var ignore = bus.subscribe(workerId, messageHandler)) {
         await()
             .atMost(Duration.ofSeconds(2))
             .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(cancelJobDTO));

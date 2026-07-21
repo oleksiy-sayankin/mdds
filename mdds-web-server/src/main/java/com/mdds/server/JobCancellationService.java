@@ -5,7 +5,7 @@
 package com.mdds.server;
 
 import com.mdds.domain.JobStatus;
-import com.mdds.dto.CancelJobDTO;
+import com.mdds.dto.rest.v1.CancelJobRequestDTO;
 import com.mdds.persistence.entity.JobEntity;
 import com.mdds.queue.CancelBus;
 import com.mdds.queue.Message;
@@ -99,7 +99,8 @@ public class JobCancellationService {
 
     cancelBus.sendCancel(
         existingJobWorkerId,
-        new Message<>(new CancelJobDTO(existingJobId), Collections.emptyMap(), clock.instant()));
+        new Message<>(
+            new CancelJobRequestDTO(existingJobId), Collections.emptyMap(), clock.instant()));
 
     log.info(
         "Published cancel request for job '{}' and worker '{}'",

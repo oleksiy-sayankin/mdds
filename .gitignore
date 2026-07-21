@@ -8,9 +8,7 @@ mdds-e2e-tests/newman/env.json
 mdds-e2e-tests/newman/output/
 .sonar_token
 target/
-mdds_grpc_core/generated
 *.iml
-mdds-web-server/src/main/resources/static/
 .coverage
 *.egg-info/
 build/

@@ -19,63 +19,38 @@ services:
       retries: 10
       start_period: 5s
 
-  redis:
-    image: redis:7.4
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 3s
-      timeout: 2s
-      retries: 10
-      start_period: 5s
-
-  grpc-server:
-    image: mddsproject/grpc-server:0.1.0
-    environment:
-      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc-server
-      MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
-    ports:
-      - "50051:50051"
-    healthcheck:
-      test: [ "CMD", "grpc_health_probe", "-addr=grpc-server:50051" ]
-      interval: 3s
-      timeout: 2s
-      retries: 10
-      start_period: 5s
-
-  executor:
-    image: mddsproject/executor:0.1.0
-    command: ["java", "-jar", "/opt/mdds/mdds-executor/mdds-executor.jar"]
+  python-worker-solving-slae:
+    image: mddsproject/python-worker-solving-slae:0.1.0
     depends_on:
-      grpc-server:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "12457:12457"
     environment:
-      MDDS_EXECUTOR_HOST: executor
-      MDDS_EXECUTOR_PORT: 35232
-      MDDS_EXECUTOR_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-executor
-      MDDS_EXECUTOR_GRPC_SERVER_HOST: grpc-server
-      MDDS_EXECUTOR_GRPC_SERVER_PORT: 50051
+      MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT : http://minio:9000
+      MDDS_OBJECT_STORAGE_BUCKET: mdds
+      MDDS_OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      MDDS_OBJECT_STORAGE_SECRET_KEY: minioadmin123
       MDDS_RABBITMQ_HOST: rabbitmq
       MDDS_RABBITMQ_PORT: 5672
       MDDS_RABBITMQ_USER: guest
       MDDS_RABBITMQ_PASSWORD: guest
-    ports:
-      - "35232:35232"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://executor:35232/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:12457/health" ]
       interval: 3s
       timeout: 2s
       retries: 10
       start_period: 5s
 
-  web-server:
-    image: mddsproject/web-server:0.1.0
+  web-app:
+    image: mddsproject/web-app:0.1.0
     command: ["java", "-jar", "/opt/mdds/mdds-web-server/mdds-web-server.jar"]
     depends_on:
-      executor:
+      python-worker-solving-slae:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -86,49 +61,27 @@ services:
       minio-init:
         condition: service_completed_successfully
     environment:
-      MDDS_SERVER_HOST: web-server
+      MDDS_SERVER_HOST: web-app
       MDDS_SERVER_PORT: 8000
-      MDDS_SERVER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-web-server/web-app
+      MDDS_WEB_CLIENT_LOCATION: file:/opt/mdds/web-client/
       MDDS_RABBITMQ_HOST: rabbitmq
       MDDS_RABBITMQ_PORT: 5672
       MDDS_RABBITMQ_USER: guest
       MDDS_RABBITMQ_PASSWORD: guest
-      MDDS_REDIS_HOST: redis
-      MDDS_REDIS_PORT: 6379
       MDDS_METADATA_STORAGE_JDBC_URL: jdbc:postgresql://postgres:5432/mdds
       MDDS_METADATA_STORAGE_USER: mdds
       MDDS_METADATA_STORAGE_PASSWORD: mdds123 # NOSONAR local demo-only credential, not used outside demo
+      MDDS_OBJECT_STORAGE_BUCKET: mdds
+      MDDS_OBJECT_STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+      MDDS_OBJECT_STORAGE_INTERNAL_ENDPOINT: http://minio:9000
+      MDDS_OBJECT_STORAGE_REGION: us-east-1
+      MDDS_OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      MDDS_OBJECT_STORAGE_SECRET_KEY: minioadmin123
+      MDDS_OBJECT_STORAGE_PATH_STYLE_ACCESS_ENABLED: "true"
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://web-server:8000/health"]
-      interval: 3s
-      timeout: 2s
-      retries: 10
-      start_period: 5s
-
-  result-consumer:
-    image: mddsproject/result-consumer:0.1.0
-    command: ["java", "-jar", "/opt/mdds/mdds-result-consumer/mdds-result-consumer.jar"]
-    depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      MDDS_RESULT_CONSUMER_HOST: result-consumer
-      MDDS_RESULT_CONSUMER_PORT: 8863
-      MDDS_RESULT_CONSUMER_WEBAPP_DIR_LOCATION: /opt/mdds/mdds-result-consumer
-      MDDS_RABBITMQ_HOST: rabbitmq
-      MDDS_RABBITMQ_PORT: 5672
-      MDDS_RABBITMQ_USER: guest
-      MDDS_RABBITMQ_PASSWORD: guest
-      MDDS_REDIS_HOST: redis
-      MDDS_REDIS_PORT: 6379
-    ports:
-      - "8863:8863"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://result-consumer:8863/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 3s
       timeout: 2s
       retries: 10
@@ -151,7 +104,23 @@ services:
       timeout: 2s
       retries: 20
 
+  alloy-init:
+    image: busybox:1.37.0
+    user: "0:0"
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /var/lib/alloy
+        chown -R 473:473 /var/lib/alloy
+        chmod -R u+rwX /var/lib/alloy
+    volumes:
+        - alloy-data:/var/lib/alloy
+    restart: "no"
+
   alloy:
+    group_add:
+      - "${DOCKER_GID:-119}"
     build:
       context: ../deployment/observability/alloy
       dockerfile: Dockerfile
@@ -169,6 +138,8 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+      alloy-init:
+        condition: service_completed_successfully
     ports:
       - "12345:12345"
     healthcheck:
@@ -221,7 +192,6 @@ services:
       timeout: 2s
       retries: 20
 
-
   minio-init:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     environment:
@@ -259,7 +229,6 @@ services:
       timeout: 2s
       retries: 20
       start_period: 10s
-
 
 volumes:
   loki-data:

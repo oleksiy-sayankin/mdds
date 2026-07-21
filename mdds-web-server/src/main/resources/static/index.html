@@ -1,0 +1,92 @@
+<!--
+  Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin.
+  All Rights Reserved.
+  Refer to the LICENSE file in the root directory for full license details.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>MDDS Web Server</title>
+  <style>
+    :root {
+      font-family: Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #1f2937;
+      background: #f3f4f6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(100%, 640px);
+      padding: 40px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      background: #ffffff;
+      box-shadow: 0 8px 24px rgb(0 0 0 / 8%);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 2rem;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    p + p {
+      margin-top: 12px;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #e5e7eb;
+      font-family: "Roboto Mono", "Courier New", monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color: #e5e7eb;
+        background: #111827;
+      }
+
+      main {
+        border-color: #374151;
+        background: #1f2937;
+        box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+      }
+
+      code {
+        background: #374151;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>MDDS Web Server</h1>
+
+  <p>The server is running.</p>
+
+  <p>
+    The Web Client is not configured for this deployment. Set
+    <code>MDDS_WEB_CLIENT_LOCATION</code> to serve an external Web Client.
+  </p>
+</main>
+</body>
+</html>

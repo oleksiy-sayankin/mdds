@@ -4,23 +4,12 @@
  */
 package com.mdds.queue;
 
-import static com.mdds.domain.SlaeSolver.NUMPY_EXACT_SOLVER;
 import static com.mdds.queue.rabbitmq.RabbitMqHelper.readFromResources;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 
-import com.mdds.dto.JobDTO;
 import com.mdds.queue.rabbitmq.RabbitMqConnectionException;
-import com.mdds.queue.rabbitmq.RabbitMqProperties;
 import com.mdds.queue.rabbitmq.RabbitMqQueueClient;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -29,28 +18,12 @@ import org.testcontainers.utility.MountableFile;
 
 @Testcontainers
 class TestQueueClientFactory {
-  private static final String JOB_QUEUE_NAME = "job_queue";
-  private static final Instant BASE_EVENT_TIME = Instant.parse("2026-01-01T00:00:00Z");
 
   @Container
   private static final RabbitMQContainer rabbitMq =
       new RabbitMQContainer("rabbitmq:3.12-management")
           .withRabbitMQConfig(MountableFile.forClasspathResource("rabbitmq.conf"))
           .withExposedPorts(5672, 15672);
-
-  private static String host;
-  private static int port;
-  private static String user;
-  private static String password;
-  private static int maxInboundMessageBodySize = 67_108_864;
-
-  @BeforeAll
-  static void init() {
-    host = rabbitMq.getHost();
-    port = rabbitMq.getAmqpPort();
-    user = rabbitMq.getAdminUsername();
-    password = rabbitMq.getAdminPassword();
-  }
 
   @Test
   void testNoConfFileExists() {
@@ -83,127 +56,5 @@ class TestQueueClientFactory {
             })
         .isInstanceOf(RabbitMqConnectionException.class)
         .hasMessageContaining("Failed to connect to rabbitmq://wrong.host:7974");
-  }
-
-  @Test
-  void testPublish() {
-    var jobId = "test_id";
-    var expectedJob = new JobDTO();
-    expectedJob.setRhs(new double[] {3.4, 4.6});
-    expectedJob.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
-    expectedJob.setId(jobId);
-    expectedJob.setDateTime(BASE_EVENT_TIME);
-    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
-    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
-      queue.publish(JOB_QUEUE_NAME, message);
-      assertThatCode(() -> queue.publish(JOB_QUEUE_NAME, message)).doesNotThrowAnyException();
-    }
-  }
-
-  @Test
-  void testDeleteQueue() {
-    var jobId = "test_id";
-    var expectedJob = new JobDTO();
-    expectedJob.setRhs(new double[] {3.4, 4.6});
-    expectedJob.setMatrix(new double[][] {{3.7, 5.6}, {2.9, 4.5}});
-    expectedJob.setId(jobId);
-    expectedJob.setDateTime(BASE_EVENT_TIME);
-    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
-    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
-      queue.publish(JOB_QUEUE_NAME, message);
-      assertThatCode(() -> queue.deleteQueue(JOB_QUEUE_NAME)).doesNotThrowAnyException();
-    }
-  }
-
-  @Test
-  void testRegisterConsumer() {
-    var jobId = "test_id";
-    var expectedJob = new JobDTO();
-    expectedJob.setRhs(new double[] {1.1, 2.2});
-    expectedJob.setMatrix(new double[][] {{3.3, 4.4}, {5.5, 7.7}});
-    expectedJob.setId(jobId);
-    expectedJob.setDateTime(BASE_EVENT_TIME);
-    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
-    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
-      queue.publish(JOB_QUEUE_NAME, message);
-      var actualJob = new AtomicReference<>();
-
-      MessageHandler<JobDTO> messageHandler =
-          (receivedMessage, ack) -> {
-            actualJob.set(receivedMessage.payload());
-            ack.ack(); // Mark message as processed for the queue
-          };
-
-      try (var subscription = queue.subscribe(JOB_QUEUE_NAME, JobDTO.class, messageHandler)) {
-        await()
-            .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(expectedJob));
-      }
-    }
-  }
-
-  @Test
-  void testRegisterConsumerWithoutReadingFromFile() {
-    var jobId = "test_id";
-    var expectedJob = new JobDTO();
-    expectedJob.setRhs(new double[] {3.5, 2.21});
-    expectedJob.setMatrix(new double[][] {{55.3, 8.4}, {5.5, 7.6}});
-    expectedJob.setId(jobId);
-    expectedJob.setDateTime(BASE_EVENT_TIME);
-    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
-    var properties = new RabbitMqProperties(host, port, user, password, maxInboundMessageBodySize);
-    try (var queue = new RabbitMqQueueClient(properties)) {
-      queue.publish(JOB_QUEUE_NAME, message);
-      var actualJob = new AtomicReference<>();
-
-      MessageHandler<JobDTO> messageHandler =
-          (receivedMessage, ack) -> {
-            actualJob.set(receivedMessage.payload());
-            ack.ack(); // Mark message as processed for the queue
-          };
-
-      try (var subscription = queue.subscribe(JOB_QUEUE_NAME, JobDTO.class, messageHandler)) {
-        await()
-            .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(expectedJob));
-      }
-    }
-  }
-
-  @Test
-  void testRegisterConsumerConstructorWithParams() {
-    var jobId = "test_id";
-    var expectedJob = new JobDTO();
-    expectedJob.setRhs(new double[] {561.1, 52.287});
-    expectedJob.setMatrix(new double[][] {{23.3, 147.44}, {5.5, 7.7}});
-    expectedJob.setId(jobId);
-    expectedJob.setDateTime(BASE_EVENT_TIME);
-    expectedJob.setSlaeSolvingMethod(NUMPY_EXACT_SOLVER);
-    Map<String, Object> headers = new HashMap<>();
-    var message = new Message<>(expectedJob, headers, BASE_EVENT_TIME);
-    try (var queue = new RabbitMqQueueClient(host, port, user, password)) {
-      queue.publish(JOB_QUEUE_NAME, message);
-      var actualJob = new AtomicReference<>();
-
-      MessageHandler<JobDTO> messageHandler =
-          (receivedMessage, ack) -> {
-            actualJob.set(receivedMessage.payload());
-            ack.ack(); // Mark message as processed for the queue
-          };
-
-      try (var subscription = queue.subscribe(JOB_QUEUE_NAME, JobDTO.class, messageHandler)) {
-        await()
-            .atMost(Duration.ofSeconds(2))
-            .untilAsserted(() -> assertThat(actualJob.get()).isEqualTo(expectedJob));
-      }
-    }
   }
 }

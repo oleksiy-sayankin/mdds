@@ -28,7 +28,6 @@ from testcontainers.minio import MinioContainer
 
 _RABBITMQ_IMAGE = "rabbitmq:3.13-management"
 _POSTGRES_IMAGE = "postgres:18"
-_REDIS_IMAGE = "redis:7.4"
 _WEB_SERVER_IMAGE = "mddsproject/web-server:0.1.0"
 _SLAE_WORKER_IMAGE = "mddsproject/python-worker-solving-slae:0.1.0"
 _MINIO_IMAGE = "minio/minio:RELEASE.2022-12-02T19-19-22Z"
@@ -36,7 +35,6 @@ _MINIO_IMAGE = "minio/minio:RELEASE.2022-12-02T19-19-22Z"
 _WEB_SERVER_NETWORK_ALIAS = "web-server"
 _RABBITMQ_NETWORK_ALIAS = "rabbitmq"
 _POSTGRES_NETWORK_ALIAS = "postgres"
-_REDIS_NETWORK_ALIAS = "redis"
 _MINIO_NETWORK_ALIAS = "minio"
 
 _WEB_SERVER_INTERNAL_PORT = 8000
@@ -44,7 +42,6 @@ _WORKER_HEALTH_PORT = 12457
 _RABBITMQ_INTERNAL_PORT = 5672
 _RABBITMQ_MANAGEMENT_PORT = 15672
 _POSTGRES_INTERNAL_PORT = 5432
-_REDIS_INTERNAL_PORT = 6379
 
 _RABBITMQ_USER = "guest"
 _RABBITMQ_PASSWORD = "guest"
@@ -127,43 +124,31 @@ def e2e_environment() -> Iterator[E2eEnvironment]:
                     timeout_seconds=_INFRASTRUCTURE_TIMEOUT_SECONDS,
                 )
 
-                with _new_redis_container(e2e_network) as redis_container:
-                    _wait_for_tcp_endpoint(
-                        _host_port_endpoint(redis_container, _REDIS_INTERNAL_PORT),
-                        description="Redis TCP readiness",
-                        timeout_seconds=_INFRASTRUCTURE_TIMEOUT_SECONDS,
+                with _new_minio_container(e2e_network) as minio_container:
+                    s3_client, _s3_endpoint = _create_s3_client_and_endpoint(
+                        minio_container
                     )
-
-                    with _new_minio_container(e2e_network) as minio_container:
-                        s3_client, _s3_endpoint = _create_s3_client_and_endpoint(
-                            minio_container
+                    _create_bucket_if_absent(s3_client, _S3_BUCKET)
+                    _wait_for_s3_bucket(s3_client)
+                    with _new_web_server_container(e2e_network) as web_server_container:
+                        web_server_url = _web_server_url(web_server_container)
+                        _wait_for_web_server_health(
+                            web_server_url,
+                            web_server_container,
                         )
-                        _create_bucket_if_absent(s3_client, _S3_BUCKET)
-                        _wait_for_s3_bucket(s3_client)
-
-                        with _new_web_server_container(
+                        with _new_cancellable_slae_worker_container(
                             e2e_network
-                        ) as web_server_container:
-                            web_server_url = _web_server_url(web_server_container)
-                            _wait_for_web_server_health(
-                                web_server_url,
-                                web_server_container,
+                        ) as worker_container:
+                            worker_health_url = _worker_health_url(worker_container)
+                            _wait_for_worker_health(
+                                worker_health_url,
+                                worker_container,
                             )
-
-                            with _new_cancellable_slae_worker_container(
-                                e2e_network
-                            ) as worker_container:
-                                worker_health_url = _worker_health_url(worker_container)
-                                _wait_for_worker_health(
-                                    worker_health_url,
-                                    worker_container,
-                                )
-
-                                yield E2eEnvironment(
-                                    web_server_url=web_server_url,
-                                    web_server_container=web_server_container,
-                                    minio_container=minio_container,
-                                )
+                            yield E2eEnvironment(
+                                web_server_url=web_server_url,
+                                web_server_container=web_server_container,
+                                minio_container=minio_container,
+                            )
 
 
 def test_slae_rest_v1_web_server_to_worker_flow_reports_cancelled_when_job_is_cancelled(
@@ -385,15 +370,6 @@ def _new_postgres_container(e2e_network: Network) -> DockerContainer:
     )
 
 
-def _new_redis_container(e2e_network: Network) -> DockerContainer:
-    return (
-        DockerContainer(_REDIS_IMAGE)
-        .with_network(e2e_network)
-        .with_network_aliases(_REDIS_NETWORK_ALIAS)
-        .with_exposed_ports(_REDIS_INTERNAL_PORT)
-    )
-
-
 def _new_minio_container(e2e_network: Network) -> MinioContainer:
     return (
         MinioContainer(
@@ -414,16 +390,10 @@ def _new_web_server_container(e2e_network: Network) -> DockerContainer:
         .with_command("java -jar /opt/mdds/mdds-web-server/mdds-web-server.jar")
         .with_env("MDDS_SERVER_HOST", _WEB_SERVER_NETWORK_ALIAS)
         .with_env("MDDS_SERVER_PORT", str(_WEB_SERVER_INTERNAL_PORT))
-        .with_env(
-            "MDDS_SERVER_WEBAPP_DIR_LOCATION",
-            "/opt/mdds/mdds-web-server/web-app",
-        )
         .with_env("MDDS_RABBITMQ_HOST", _RABBITMQ_NETWORK_ALIAS)
         .with_env("MDDS_RABBITMQ_PORT", str(_RABBITMQ_INTERNAL_PORT))
         .with_env("MDDS_RABBITMQ_USER", _RABBITMQ_USER)
         .with_env("MDDS_RABBITMQ_PASSWORD", _RABBITMQ_PASSWORD)
-        .with_env("MDDS_REDIS_HOST", _REDIS_NETWORK_ALIAS)
-        .with_env("MDDS_REDIS_PORT", str(_REDIS_INTERNAL_PORT))
         .with_env(
             "MDDS_METADATA_STORAGE_JDBC_URL",
             (

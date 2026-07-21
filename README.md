@@ -93,17 +93,14 @@ scipy_gmres_solver   — SciPy GMRES iterative solver
 The demo stack contains:
 
 ```text
-web-server        — HTTP API and static web UI
-executor          — consumes and executes submitted jobs
-result-consumer   — consumes execution results and stores them
-grpc-server       — numerical computation service
-rabbitmq          — job and result queues
-redis             — result/progress storage
-postgres          — metadata storage
-minio             — S3-compatible object storage
-loki              — log storage
-alloy             — log collector
-grafana           — dashboards and log UI
+web-app                    — HTTP API and Common Web Client
+python-worker-solving-slae — consumes and solves submitted SLAE jobs
+rabbitmq                   — job, status, and cancellation queues
+postgres                   — job metadata storage
+minio                      — S3-compatible artifact storage
+loki                       — log storage
+alloy                      — Docker log collection
+grafana                    — log visualization
 ```
 
 For more details see:
@@ -259,16 +256,14 @@ cd mdds
 The quick start expects the MDDS application images under the `mddsproject/*:0.1.0` namespace to be available either locally or in the Docker registry:
 
 ```text
-mddsproject/grpc-server:0.1.0
-mddsproject/executor:0.1.0
-mddsproject/web-server:0.1.0
-mddsproject/result-consumer:0.1.0
+mddsproject/web-app:0.1.0
+mddsproject/python-worker-solving-slae:0.1.0
 ```
 
 Local source-based image builds are covered in the Development section.
 
 ```bash
-docker compose -f mdds-demo/compose.demo.yml up -d --build --wait --wait-timeout 120
+DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)" docker compose -f mdds-demo/compose.demo.yml up -d --build --wait --wait-timeout 120
 ```
 
 This command pulls or uses the prebuilt MDDS application images, builds the local observability images required by the demo stack, starts all services, and waits until services with health checks become healthy.
@@ -307,11 +302,13 @@ Create `rhs.csv`:
 
 In the web UI:
 
-1. Upload `matrix.csv`.
-2. Upload `rhs.csv`.
-3. Select solving method.
-4. Click `Solve`.
-5. Click `Download solution`.
+1. Select Job Type.
+2. Select Job Inputs.
+3. Upload Job Inputs.
+4. Set Job Parameters.
+5. Review Job Summary.
+6. Monitor Job Progress.
+7. Download Job Outputs
 
 The expected solution vector is approximately:
 
@@ -325,13 +322,6 @@ Grafana is available at:
 
 ```text
 http://localhost:3000
-```
-
-Useful endpoints:
-
-```text
-http://localhost:3100/ready
-http://localhost:12345
 ```
 
 You can also inspect logs from the command line:
@@ -362,11 +352,11 @@ The development container provides the project toolchain required for building, 
 
 ### Development environment model
 
-| Layer                          | Responsibility                                                                                                       |
-|--------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| Host system                    | Stores the Git checkout and runs the Docker daemon                                                                   |
-| Development container          | Provides the MDDS build and test toolchain                                                                           |
-| Demo/e2e Docker Compose stacks | Run MDDS runtime services such as web-server, executor, RabbitMQ, Redis, PostgreSQL, MinIO, Loki, Alloy, and Grafana |
+| Layer                          | Responsibility                                                                                                    |
+|--------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| Host system                    | Stores the Git checkout and runs the Docker daemon                                                                |
+| Development container          | Provides the MDDS build and test toolchain                                                                        |
+| Demo/e2e Docker Compose stacks | Run the Web App or API-only Web Server, Python SLAE Worker, RabbitMQ, PostgreSQL, MinIO, Loki, Alloy, and Grafana |
 
 Docker commands executed inside the development container use the host Docker daemon through the mounted Docker socket.
 
@@ -445,25 +435,16 @@ docker exec -it mdds-dev-shell bash
 
 After this step, build and test commands are executed inside the development container.
 
-### 4. Build MDDS images
+### 4. Rebuild and verify the complete project
+
+This target cleans generated artifacts, reformats and checks all supported source files, rebuilds project packages and Docker images, runs coverage and end-to-end tests, and submits the unified SonarQube analysis.
+Because formatting is applied automatically, this command may modify tracked source files.
 
 ```bash
-make build_release_images
+make run_all
 ```
 
-This target builds all MDDS release images from the current source tree, including base, application, and observability images.
-
-### 5. Run tests
-
-```bash
-make test_all
-```
-
-This target runs the Python tests, Java tests, and end-to-end tests.
-
-The end-to-end tests start their own isolated Docker Compose stack and remove it automatically after the tests complete.
-
-### 6. Start the demo stack
+### 5. Start the demo stack
 
 ```bash
 make start_mdds_demo
@@ -471,7 +452,7 @@ make start_mdds_demo
 
 This target starts the demo stack from `mdds-demo/compose.demo.yml` and waits until services with health checks become healthy.
 
-### 7. Open the demo UI from the host browser
+### 6. Open the demo UI from the host browser
 
 ```text
 http://localhost:8000
@@ -483,13 +464,13 @@ Grafana is available at:
 http://localhost:3000
 ```
 
-### 8. Stop the demo stack
+### 7. Stop the demo stack
 
 ```bash
 make stop_mdds_demo
 ```
 
-### 9. Stop the development container
+### 8. Stop the development container
 
 From the host shell:
 

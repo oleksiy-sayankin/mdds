@@ -12,7 +12,7 @@ public class CancelDestinationResolver {
   @Value("${mdds.cancel.destination-prefix:cancel.queue-}")
   private String prefix;
 
-  public String destinationFor(String executorId) {
-    return prefix + executorId;
+  public String destinationFor(String workerId) {
+    return prefix + workerId;
   }
 }

@@ -7,15 +7,7 @@ PYTHON_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
 NODE_MODULES := node_modules
 BUILD := build
 TARGET := target
-ROOT_PACKAGE_JSON := package.json
-ROOT_PACKAGE_LOCK := package-lock.json
-ROOT_NODE_MODULES_LOCK := $(NODE_MODULES)/.package-lock.json
 MDDS_WEB_SERVER := mdds-web-server
-MDDS_WEB_CLIENT := mdds-web-client
-WEB_CLIENT_PACKAGE_JSON := $(MDDS_WEB_CLIENT)/package.json
-WEB_CLIENT_PACKAGE_LOCK := $(MDDS_WEB_CLIENT)/package-lock.json
-WEB_CLIENT_NODE_MODULES_LOCK := $(MDDS_WEB_CLIENT)/$(NODE_MODULES)/.package-lock.json
-PYTHON_GENERATED_SOURCES := mdds_grpc_core/generated
 PROJECT_ROOT := .
 PROJECT_NAME := mdds
 PROJECT_VERSION := 0.1.0
@@ -48,10 +40,12 @@ PYTHON_BASE_REQUIREMENTS_LOCK := deployment/python-base/requirements.lock.txt
 
 
 COMMON_WEB_CLIENT_ROOT := ./mdds-examples/web-clients/mdds-common-web-client
+COMMON_WEB_CLIENT_PACKAGE_JSON := $(COMMON_WEB_CLIENT_ROOT)/package.json
+COMMON_WEB_CLIENT_PACKAGE_LOCK := $(COMMON_WEB_CLIENT_ROOT)/package-lock.json
+COMMON_WEB_CLIENT_NODE_MODULES_LOCK := \
+	$(COMMON_WEB_CLIENT_ROOT)/$(NODE_MODULES)/.package-lock.json
 
 WEB_APP_DIR := $(PROJECT_ROOT)/$(MDDS_WEB_SERVER)/src/main/resources/static
-TS_ROOT := src
-JS_ROOT := src
 JAVA_ROOT := $(PROJECT_ROOT)
 VENV_DIR := $(PYTHON_ENV_HOME)/$(PROJECT_NAME)
 USER_NAME := mddsproject
@@ -107,25 +101,142 @@ endef
 define log_error_sh
 	echo "[${RED}${BOLD}ERROR${NC}] ❌ $(1)"
 endef
-#
-# Run server and tests with existing python env
-#
-run_all: reformat_and_check_all test_and_run
+
 
 #
-# Reformat and check all code
+# Comprehensive local project verification.
 #
-reformat_and_check_all: check_license build_and_push_main_images reformat_python check_python_code_style reformat_bash check_bash_code_style reformat_java reformat_xml sonar_scan
+# Rebuilds all project artifacts from clean source directories, builds all
+# release Docker images, runs formatting, static checks, coverage, E2E tests
+# and SonarQube analysis.
+#
+.PHONY: \
+	clean_build_artifacts \
+	reformat_all \
+	check_all \
+	validate_compose_files \
+	build_all_packages \
+	build_all_images \
+	verify_all_from_scratch \
+	run_all
+
+
+#
+# Backward-compatible alias for the main verification target.
+#
+run_all: verify_all_from_scratch
+
+#
+# Remove generated project artifacts.
+#
+# Dependency caches and Docker layer caches are intentionally preserved.
+#
+clean_build_artifacts:
+	$(call log_info,"Cleaning all generated project artifacts...")
+	mvn clean
+	rm -rf \
+		target \
+		$(WORKER_RUNTIME_ROOT)/build \
+		$(WORKER_RUNTIME_ROOT)/target \
+		$(WORKER_RUNTIME_ROOT)/src/main/python/*.egg-info \
+		$(WORKER_SLAE_ROOT)/build \
+		$(WORKER_SLAE_ROOT)/target \
+		$(WORKER_SLAE_ROOT)/src/main/python/*.egg-info \
+		$(E2E_TESTS_ROOT)/target \
+		$(COMMON_WEB_CLIENT_ROOT)/target \
+		$(COMMON_WEB_CLIENT_ROOT)/$(NODE_MODULES)
+	$(call log_done,"Cleaning all generated project artifacts completed.")
+
+
+#
+# Reformat all supported source files.
+#
+reformat_all:
+	@$(MAKE) reformat_java
+	@$(MAKE) reformat_xml
+	@$(MAKE) reformat_python
+	@$(MAKE) reformat_common_web_client
+	@$(MAKE) reformat_bash
+
+
+#
+# Validate Docker Compose files.
+#
+validate_compose_files:
+	$(call log_info,"Validating Docker Compose files...")
+	DOCKER_GID=$(DOCKER_GID) docker compose \
+		--progress=plain \
+		-f $(DEMO_HOME)/compose.demo.yml \
+		config --quiet
+	$(E2E_TESTS_COMPOSE) config --quiet
+	$(call log_done,"Docker Compose files are valid.")
+
+
+#
+# Run all static checks.
+#
+check_all:
+	@$(MAKE) check_license
+	@$(MAKE) check_python_code_style
+	@$(MAKE) check_common_web_client_code_style
+	@$(MAKE) check_bash_code_style
+	@$(MAKE) validate_compose_files
+	git diff --check
+
+
+#
+# Build all project packages without building Docker images.
+#
+build_all_packages:
+	@$(MAKE) build_jars_ci
+	@$(MAKE) package_python_workers
+	@$(MAKE) package_common_web_client
+
+
+#
+# Build all project Docker images.
+#
+# The demo stack uses these same Web App and SLAE Worker images; there is no
+# separate category of custom "demo images".
+#
+build_all_images:
+	@$(MAKE) build_java_base_docker_image
+	@$(MAKE) build_python_base_docker_image
+	@$(MAKE) build_web_server_docker_image
+	@$(MAKE) build_web_app_docker_image
+	@$(MAKE) build_python_worker_runtime_docker_image
+	@$(MAKE) build_python_worker_solving_slae_docker_image
+	@$(MAKE) build_observability_images
+
+
+#
+# Rebuild and verify the complete project.
+#
+verify_all_from_scratch:
+	$(call log_info,"Starting complete MDDS rebuild and verification...")
+	@$(MAKE) clean_build_artifacts
+	@$(MAKE) reformat_all
+	@$(MAKE) check_all
+	@$(MAKE) build_all_packages
+	@$(MAKE) build_all_images
+	@$(MAKE) test_coverage
+	@$(MAKE) test_e2e
+	@SONAR_QUALITYGATE_WAIT=false $(MAKE) sonar_scan
+	$(call log_done,"Complete MDDS rebuild and verification passed.")
+
 
 #
 # Run tests and start server
 #
-test_and_run: test_all start_mdds_env
+test_and_run: test_all \
+	start_mdds_env
 
 #
 # Run all tests
 #
-test_all: test_python test_java test_e2e
+test_all: test_python \
+	test_java \
+	test_e2e
 
 #
 # Run CVE scan for Java jars
@@ -282,38 +393,6 @@ stop_dev_shell:
 dev_shell: start_dev_shell
 	@docker exec -it mdds-dev-shell bash
 
-#
-# Build gRPC server Docker image for others
-#
-build_grpc_server_docker_image:
-	$(call log_info,"Building gRPC server Docker image...")
-	docker buildx build -f deployment/grpc-server/Dockerfile --progress=plain --tag $(USER_NAME)/grpc-server:$(PROJECT_VERSION) .
-	$(call log_done,"Building gRPC server Docker image completed.")
-
-#
-# Push gRPC server Docker image
-#
-push_grpc_server_docker_image:
-	$(call log_info,"Pushing gRPC server Docker image...")
-	docker push $(USER_NAME)/grpc-server:$(PROJECT_VERSION)
-	$(call log_done,"Pushing gRPC server Docker image completed.")
-
-#
-# Build Docker image for executor
-#
-build_executor_docker_image:
-	$(call log_info,"Building Docker image for executor...")
-	docker buildx build -f deployment/executor/Dockerfile --progress=plain --tag $(USER_NAME)/executor:$(PROJECT_VERSION) .
-	$(call log_done,"Building Docker image for executor completed.")
-
-
-#
-# Push executor Docker image
-#
-push_executor_docker_image:
-	$(call log_info,"Pushing executor Docker image...")
-	docker push $(USER_NAME)/executor:$(PROJECT_VERSION)
-	$(call log_done,"Pushing executor Docker image completed.")
 
 
 #
@@ -349,48 +428,52 @@ push_web_app_docker_image:
 	docker push $(USER_NAME)/web-app:$(PROJECT_VERSION)
 	$(call log_done,"Pushing web-app Docker image completed.")
 
+#
+# Install Common Web Client dependencies
+#
+$(COMMON_WEB_CLIENT_NODE_MODULES_LOCK): \
+		$(COMMON_WEB_CLIENT_PACKAGE_JSON) \
+		$(COMMON_WEB_CLIENT_PACKAGE_LOCK)
+	$(call log_info,"Installing Common Web Client dependencies...")
+	npm ci \
+		--prefix $(COMMON_WEB_CLIENT_ROOT) \
+		--include=dev \
+		--ignore-scripts \
+		--no-audit \
+		--no-fund
+	$(call log_done,"Common Web Client dependencies installed.")
 
-#
-# Build Docker image for result-consumer
-#
-build_result_consumer_docker_image:
-	$(call log_info,"Building Docker image for result-consumer...")
-	docker buildx build -f deployment/result-consumer/Dockerfile --progress=plain --tag $(USER_NAME)/result-consumer:$(PROJECT_VERSION) .
-	$(call log_done,"Building Docker image for result-consumer completed.")
 
-#
-# Push result-consumer Docker image
-#
-push_result_consumer_docker_image:
-	$(call log_info,"Pushing result-consumer Docker image...")
-	docker push $(USER_NAME)/result-consumer:$(PROJECT_VERSION)
-	$(call log_done,"Pushing result-consumer Docker image completed.")
+.PHONY: install_common_web_client_dependencies
+install_common_web_client_dependencies: \
+	$(COMMON_WEB_CLIENT_NODE_MODULES_LOCK)
+
 
 
 #
 # Reformat Common Web Client
 #
-reformat_common_web_client:
+reformat_common_web_client: install_common_web_client_dependencies
 	cd $(COMMON_WEB_CLIENT_ROOT) && npm run format
 
 
 #
 # Check code style
 #
-check_common_web_client_code_style:
+check_common_web_client_code_style: install_common_web_client_dependencies
 	cd $(COMMON_WEB_CLIENT_ROOT) && npm run code:check
 
 #
 # Run Common Web Client tests
 #
-test_common_web_client:
+test_common_web_client: install_common_web_client_dependencies
 	cd $(COMMON_WEB_CLIENT_ROOT) && npm test
 
 
 #
 # Run Common Web Client tests with TypeScript coverage.
 #
-test_common_web_client_coverage:
+test_common_web_client_coverage: install_common_web_client_dependencies
 	$(call log_info,"Running Common Web Client tests with TypeScript coverage...")
 	cd $(COMMON_WEB_CLIENT_ROOT) && npm run test:coverage
 	@test -s $(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info
@@ -399,7 +482,7 @@ test_common_web_client_coverage:
 #
 # Build Common Web Client
 #
-build_common_web_client:
+build_common_web_client: install_common_web_client_dependencies
 	$(call log_info,"Building Common Web Client...")
 	cd $(COMMON_WEB_CLIENT_ROOT) && npm run build
 	@test -f $(COMMON_WEB_CLIENT_ROOT)/target/common-web-client-dist/index.html
@@ -408,7 +491,7 @@ build_common_web_client:
 #
 # Package Common Web Client
 #
-package_common_web_client:
+package_common_web_client: build_common_web_client
 	$(call log_info,"Packaging Common Web Client...")
 	tar --create \
 		--gzip \
@@ -433,7 +516,7 @@ package_common_web_client:
 	build_release_images_ci \
 	push_release_images \
 	build_and_push_release_images \
-	format_common_web_client \
+	reformat_common_web_client \
 	check_common_web_client_code_style \
 	test_common_web_client \
 	test_coverage \
@@ -557,7 +640,8 @@ push_release_images: \
 #
 # Build and push all release Docker images
 #
-build_and_push_release_images: build_release_images push_release_images
+build_and_push_release_images: build_release_images \
+	push_release_images
 
 #
 # Build and push all observability Docker images
@@ -569,77 +653,72 @@ build_and_push_observability_images: \
 #
 # Build main images. Here we do not build base Java and Python docker images since they are rarely changed.
 #
-build_main_images: build_jars build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_workers build_python_worker_runtime_docker_image build_python_worker_solving_slae_docker_image
+build_main_images: build_jars \
+	build_web_server_docker_image \
+	build_common_web_client \
+	package_common_web_client \
+	build_web_app_docker_image \
+	package_python_workers \
+	build_python_worker_runtime_docker_image \
+	build_python_worker_solving_slae_docker_image
 
 
 #
 # Build main Docker images without formatting or auto-fixing sources.
 # Intended for CI and reproducible builds.
 #
-build_main_images_ci: build_jars_ci build_grpc_server_docker_image build_executor_docker_image build_web_server_docker_image build_result_consumer_docker_image package_python_workers build_python_worker_runtime_docker_image build_python_worker_solving_slae_docker_image
+build_main_images_ci: build_jars_ci \
+	build_web_server_docker_image \
+	build_common_web_client \
+	package_common_web_client \
+	build_web_app_docker_image \
+	package_python_workers \
+	build_python_worker_runtime_docker_image \
+	build_python_worker_solving_slae_docker_image
 
 
 #
 # Push main images.
 #
-push_main_images: push_grpc_server_docker_image push_executor_docker_image push_web_server_docker_image push_result_consumer_docker_image push_python_worker_runtime_docker_image push_python_worker_solving_slae_docker_image
+push_main_images: push_web_server_docker_image \
+	push_web_app_docker_image \
+	push_python_worker_runtime_docker_image \
+	push_python_worker_solving_slae_docker_image
 
 #
 # Build and push main images.
 #
-build_and_push_main_images: build_main_images push_main_images
-
-#
-# Build web-client and copy binaries to web-app folder of web-server
-#
-build_and_copy_web_client: reformat_ts check_js_code_style
-	$(call log_info,"Building web-client and copying to web-app folder of web-server...")
-	cd $(MDDS_WEB_CLIENT) && npm run build
-	$(call log_done,"Building web-client and copying to web-app folder of web-server completed.")
-
-
-#
-# Build web-client without formatting or auto-fixing sources.
-# Intended for CI and reproducible builds.
-#
-build_and_copy_web_client_ci: install_js_dependencies
-	$(call log_info,"Building web-client for CI...")
-	cd $(MDDS_WEB_CLIENT) && npm run build
-	$(call log_done,"Building web-client for CI completed.")
+build_and_push_main_images: build_main_images \
+	push_main_images
 
 #
 # Reformat all Python code
 #
-reformat_python: reformat_worker_runtime reformat_worker_slae reformat_e2e_tests
+reformat_python: reformat_worker_runtime \
+	reformat_worker_slae \
+	reformat_e2e_tests
 
 #
 # Check code style for all Python code
 #
-check_python_code_style: check_worker_runtime_code_style check_worker_slae_code_style check_e2e_code_style
+check_python_code_style: check_worker_runtime_code_style \
+	check_worker_slae_code_style \
+	check_e2e_code_style
 
 #
 # Test all Python code
 #
-test_python_coverage: test_worker_runtime_coverage test_worker_slae_coverage
-
-
-#
-# Reformat web client files
-#
-reformat_ts: install_js_dependencies
-	$(call log_info,"Reformatting web client sources...")
-	cd $(MDDS_WEB_CLIENT) && \
-		./$(NODE_MODULES)/.bin/prettier --write $(TS_ROOT)/*
-	$(call log_done,"Reformatting web client sources completed.")
+test_python_coverage: test_worker_runtime_coverage \
+	test_worker_slae_coverage
 
 #
 # Check worker runtime code style
 #
 check_worker_runtime_code_style:
 	$(call log_info,"Checking worker runtime code style...")
-	pycodestyle $(WORKER_RUNTIME_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	pycodestyle $(WORKER_RUNTIME_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES) --ignore=E501,W503
 	ruff check $(WORKER_RUNTIME_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
 	$(call log_done,"Checking worker runtime code style completed.")
 
 
@@ -648,9 +727,9 @@ check_worker_runtime_code_style:
 #
 check_worker_slae_code_style:
 	$(call log_info,"Checking worker slae style...")
-	pycodestyle $(WORKER_SLAE_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	pycodestyle $(WORKER_SLAE_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES) --ignore=E501,W503
 	ruff check $(WORKER_SLAE_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
 	$(call log_done,"Checking worker slae style completed.")
 
 
@@ -659,30 +738,18 @@ check_worker_slae_code_style:
 #
 check_e2e_code_style:
 	$(call log_info,"Checking e2e sources style...")
-	pycodestyle $(E2E_TESTS_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES),*$(PYTHON_GENERATED_SOURCES)* --ignore=E501,W503
+	pycodestyle $(E2E_TESTS_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES) --ignore=E501,W503
 	ruff check $(E2E_TESTS_ROOT) --fix --force-exclude --respect-gitignore
-	PYTHONPATH=$(abspath $(E2E_TESTS_MAIN)):$(E2E_TESTS_MAIN):$(E2E_TESTS_TEST):$$PYTHONPATH pylint $(E2E_TESTS_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES),$(PYTHON_GENERATED_SOURCES) --errors-only
+	PYTHONPATH=$(abspath $(E2E_TESTS_MAIN)):$(E2E_TESTS_MAIN):$(E2E_TESTS_TEST):$$PYTHONPATH pylint $(E2E_TESTS_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
 	$(call log_done,"Checking e2e sources completed.")
 
-#
-# Check JavaScript code style
-#
-check_js_code_style: install_js_dependencies
-	$(call log_info,"Checking JavaScript code style...")
-	cd $(MDDS_WEB_CLIENT) && \
-		../$(NODE_MODULES)/.bin/eslint \
-			$(JS_ROOT) \
-			--debug \
-			--fix \
-			--no-error-on-unmatched-pattern
-	$(call log_done,"Checking JavaScript code style completed.")
 
 #
 # Reformat worker runtime code
 #
 reformat_worker_runtime:
 	$(call log_info,"Reformating worker runtime sources...")
-	black $(WORKER_RUNTIME_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
+	black $(WORKER_RUNTIME_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
 	$(call log_done,"Reformating worker runtime sources completed.")
 
 
@@ -691,7 +758,7 @@ reformat_worker_runtime:
 #
 reformat_worker_slae:
 	$(call log_info,"Reformating worker slae sources...")
-	black $(WORKER_SLAE_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
+	black $(WORKER_SLAE_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
 	$(call log_done,"Reformating worker slae sources completed.")
 
 
@@ -700,7 +767,7 @@ reformat_worker_slae:
 #
 reformat_e2e_tests:
 	$(call log_info,"Reformating e2e tests Python sources...")
-	black $(E2E_TESTS_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET)|$(PYTHON_GENERATED_SOURCES))/' --verbose
+	black $(E2E_TESTS_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
 	$(call log_done,"Reformating e2e tests Python sources completed.")
 
 
@@ -925,7 +992,7 @@ sonar_scan:
 	  -Dsonar.coverage.jacoco.xmlReportPaths="$$JAVA_COVERAGE_FILES" \
 	  -Dsonar.python.coverage.reportPaths="$$PYTHON_COVERAGE_FILES" \
 	  -Dsonar.javascript.lcov.reportPaths="$$JS_COVERAGE_FILES" \
-	  -Dsonar.exclusions='mdds_grpc_core/**,mdds-web-client/**,**/src/test/**,**/node_modules/**,**/target/**,**/build/**,**/dist/**,**/generated/**,**/__pycache__/**,**/.pytest_cache/**,**/.venv/**,**/venv/**' \
+	  -Dsonar.exclusions='**/src/test/**,**/node_modules/**,**/target/**,**/build/**,**/dist/**,**/generated/**,**/__pycache__/**,**/.pytest_cache/**,**/.venv/**,**/venv/**' \
 	  -Dsonar.test.inclusions='**/*Test.java,**/Test*.java,**/test_*.py,**/*_test.py,**/*.test.ts,**/*.test.tsx' \
 	  -Dsonar.qualitygate.wait=$${SONAR_QUALITYGATE_WAIT:-false} \
 	  -Dsonar.issue.ignore.multicriteria=e1 \
@@ -976,7 +1043,7 @@ test_java:
 #
 # Build Jars
 #
-build_jars: build_and_copy_web_client
+build_jars:
 	$(call log_info,"Building jars...")
 	@if ! mvn clean install -DskipTests=true; then \
         $(call log_error_sh, "Building jars failed"); \
@@ -984,36 +1051,6 @@ build_jars: build_and_copy_web_client
     fi
 	$(call log_done,"Building jars completed")
 
-
-#
-# Install root JavaScript dependencies
-#
-$(ROOT_NODE_MODULES_LOCK): $(ROOT_PACKAGE_JSON) $(ROOT_PACKAGE_LOCK)
-	$(call log_info,"Installing root JavaScript dependencies...")
-	npm ci --include=dev --no-audit --no-fund
-	$(call log_done,"Root JavaScript dependencies installed.")
-
-#
-# Install web-client JavaScript dependencies
-#
-$(WEB_CLIENT_NODE_MODULES_LOCK): \
-		$(WEB_CLIENT_PACKAGE_JSON) \
-		$(WEB_CLIENT_PACKAGE_LOCK)
-	$(call log_info,"Installing web-client JavaScript dependencies...")
-	npm ci \
-		--prefix $(MDDS_WEB_CLIENT) \
-		--include=dev \
-		--no-audit \
-		--no-fund
-	$(call log_done,"Web-client JavaScript dependencies installed.")
-
-#
-# Install all JavaScript dependencies
-#
-.PHONY: install_js_dependencies
-install_js_dependencies: \
-		$(ROOT_NODE_MODULES_LOCK) \
-		$(WEB_CLIENT_NODE_MODULES_LOCK)
 
 #
 # Package all Python workers
@@ -1064,7 +1101,7 @@ package_python_worker_solving_slae:
 # Build jars without formatting or auto-fixing sources.
 # Intended for CI and reproducible builds.
 #
-build_jars_ci: build_and_copy_web_client_ci
+build_jars_ci:
 	$(call log_info,"Building jars for CI...")
 	@if ! mvn clean install -DskipTests=true; then \
         $(call log_error_sh, "Building jars for CI failed"); \
@@ -1077,7 +1114,7 @@ build_jars_ci: build_and_copy_web_client_ci
 #
 start_mdds_demo:
 	$(call log_info,"Starting MDDS demo environment...")
-	@docker compose --progress=plain -f $(DEMO_HOME)/compose.demo.yml up -d --build --wait --wait-timeout 120
+	@DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)" docker compose --progress=plain -f $(DEMO_HOME)/compose.demo.yml up -d --build --wait --wait-timeout 120
 	$(call log_done,"Starting MDDS demo environment completed. MDDS environment is up!")
 
 #
@@ -1193,7 +1230,6 @@ check_license:
 		-not -path "*/.git/*" \
 		-not -path "./logs/*" \
 		-not -path "./*target/*" \
-		-not -path "*/$(PYTHON_GENERATED_SOURCES)/*" \
 		-not -path "*$(WEB_APP_DIR)/*" \
 		-not -path "*.egg-info/*" \
 		-not -name "*.csv" \
@@ -1206,6 +1242,8 @@ check_license:
 		-not -name "*.dockerignore" \
 		-not -name "*.json" \
 		-not -name "*.env" \
+		-not -name "requirements.lock.txt" \
+		-not -name "uv.lock" \
 		-not -name "*.coverage" \
 		-not -name "*.iml" \
 		-not -name "__init__.py"); \

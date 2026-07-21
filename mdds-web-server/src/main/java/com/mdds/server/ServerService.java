@@ -5,7 +5,6 @@
 package com.mdds.server;
 
 import com.mdds.queue.QueueClient;
-import com.mdds.storage.DataStorage;
 import jakarta.annotation.PreDestroy;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -17,23 +16,18 @@ import org.springframework.stereotype.Service;
 @Getter
 @Service
 public class ServerService implements AutoCloseable {
-  private final DataStorage dataStorage;
   private final QueueClient jobQueueClient;
 
   @Autowired
-  public ServerService(
-      DataStorage dataStorage, @Qualifier("jobQueueClient") QueueClient jobQueueClient) {
-    this.dataStorage = dataStorage;
+  public ServerService(@Qualifier("jobQueueClient") QueueClient jobQueueClient) {
     this.jobQueueClient = jobQueueClient;
-    log.info(
-        "Constructed Server Service with job queue {} and storage {}", jobQueueClient, dataStorage);
+    log.info("Constructed Server Service with job queue {}", jobQueueClient);
   }
 
   @PreDestroy
   @Override
   public void close() {
     jobQueueClient.close();
-    dataStorage.close();
     log.info("Web Server Service shut down cleanly");
   }
 }
