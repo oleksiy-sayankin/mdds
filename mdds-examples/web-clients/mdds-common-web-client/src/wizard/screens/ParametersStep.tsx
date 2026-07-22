@@ -83,7 +83,7 @@ export function ParametersStep({
   onRetryParameterUpdate,
 }: Readonly<ParametersStepProps>) {
   const handleChange = (event: SelectChangeEvent<SolvingMethod>) => {
-    onSolvingMethodChange(event.target.value as SolvingMethod);
+    onSolvingMethodChange(event.target.value);
   };
 
   return (

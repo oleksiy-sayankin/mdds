@@ -32,15 +32,17 @@ const SOLUTION_FILE_NAME = "solution.csv";
 const SOLUTION_OUTPUT_SLOT = "solution";
 const MONITOR_POLL_INTERVAL_MS = 700;
 
+type TimerId = ReturnType<typeof globalThis.setTimeout>;
+
 interface PendingDelay {
-  timerId: number;
+  timerId: TimerId;
   resolve: (completed: boolean) => void;
 }
 
 function useCancellableDelay() {
   const pendingDelaysRef = useRef<PendingDelay[]>([]);
 
-  const removePendingDelay = useCallback((timerId: number) => {
+  const removePendingDelay = useCallback((timerId: TimerId) => {
     pendingDelaysRef.current = pendingDelaysRef.current.filter(
       (pendingDelay) => pendingDelay.timerId !== timerId,
     );
@@ -49,7 +51,7 @@ function useCancellableDelay() {
   const wait = useCallback(
     (delayMs: number) =>
       new Promise<boolean>((resolve) => {
-        const timerId = window.setTimeout(() => {
+        const timerId = globalThis.setTimeout(() => {
           removePendingDelay(timerId);
           resolve(true);
         }, delayMs);
@@ -67,7 +69,7 @@ function useCancellableDelay() {
     pendingDelaysRef.current = [];
 
     for (const pendingDelay of pendingDelays) {
-      window.clearTimeout(pendingDelay.timerId);
+      globalThis.clearTimeout(pendingDelay.timerId);
       pendingDelay.resolve(false);
     }
   }, []);
@@ -901,7 +903,7 @@ function triggerFileDownload(blob: Blob, fileName: string): void {
   anchor.click();
   anchor.remove();
 
-  window.setTimeout(() => {
+  globalThis.setTimeout(() => {
     URL.revokeObjectURL(objectUrl);
   }, 0);
 }

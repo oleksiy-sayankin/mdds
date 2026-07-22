@@ -12,7 +12,7 @@ import { FetchArtifactTransferClient } from "@/artifacts/FetchArtifactTransferCl
 import { MddsRestClient } from "@/api/MddsRestClient";
 
 const apiClient = new MddsRestClient({
-  baseUrl: window.location.origin,
+  baseUrl: globalThis.location.origin,
   userLogin: "guest",
 });
 

@@ -49,9 +49,9 @@ export function getPreviousStep(state: WizardState): WizardStep | null {
         : null;
 
     case WizardStep.Parameters:
-      return state.parameterUpdateState !== "UPDATING"
-        ? WizardStep.Upload
-        : null;
+      return state.parameterUpdateState === "UPDATING"
+        ? null
+        : WizardStep.Upload;
 
     case WizardStep.Review:
       return state.submissionState === "IDLE" ||
