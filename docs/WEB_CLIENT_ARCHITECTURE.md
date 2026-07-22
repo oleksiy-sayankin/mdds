@@ -133,7 +133,11 @@ The Web Client does not redefine that lifecycle. It stores and renders the last 
 
 ### 6.1 Asynchronous operation ownership
 
+Each asynchronous operation is owned by the workflow instance that started it. Only that owner may process the operation result, retry it, cancel it, or update the corresponding local workflow state.
+
 ### 6.2 Request serialization
+
+A workflow instance must not start a new HTTP request while it already owns an active request. Job Monitor status requests are single-flight: the next polling request may start only after the previous request has completed and the polling delay has elapsed.
 
 ### 6.3 Request failure classification
 
@@ -157,13 +161,23 @@ The concrete retry limit and delay strategy are implementation-defined in v1.
 
 ### 6.5 Operation reconciliation
 
+When the result of a non-repeatable state-changing request is ambiguous, the client must not repeat the original request. It must determine the outcome through the observational operation defined in the Network Operation Catalog and keep the original workflow blocked until reconciliation succeeds or reaches a defined unresolved state.
+
 ### 6.6 User-initiated cancellation
+
+Cancelling a client-side operation stops or abandons only the corresponding local request, upload, or download workflow. It does not imply that a server-side operation was rolled back; cancellation of a running job is performed only through the Job Cancellation state machine.
 
 ### 6.7 Stale and late response handling
 
+Each asynchronous operation must have an identity associated with its owning workflow instance and current job context. A response may update client state only while that identity is still current; responses from replaced, cancelled, reset, or abandoned operations must be ignored.
+
 ### 6.8 Navigation locking
 
+Navigation is locked while leaving the current step could abandon an active workflow or make the displayed state inconsistent with the current job context. Navigation locking must not disable an explicit stop, cancel, retry, or reconciliation action provided by the owning workflow.
+
 ### 6.9 Warning and error presentation
+
+Warnings and errors are owned by the workflow that produced them and are displayed in the common Feedback and Notification Region. A failure must not remove the last successfully confirmed job status, progress, or data, and its message remains visible until the workflow is retried, reset, or successfully recovered.
 
 ### 6.10 Workflow reset and abandonment
 
