@@ -12,7 +12,6 @@ import com.mdds.queue.Message;
 import com.mdds.server.jpa.JobsRepository;
 import java.time.Clock;
 import java.util.Collections;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -116,7 +115,6 @@ public class JobCancellationService {
   }
 
   private static boolean isInTerminalState(JobEntity jobEntity) {
-    return Set.of(JobStatus.DONE, JobStatus.CANCELLED, JobStatus.ERROR, JobStatus.VALIDATION_FAILED)
-        .contains(jobEntity.getStatus());
+    return jobEntity.getStatus().isTerminal();
   }
 }

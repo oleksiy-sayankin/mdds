@@ -109,8 +109,7 @@ class TestJobCancellationServiceIntegration {
   }
 
   private static Stream<JobStatus> jobTerminalStatusValues() {
-    return Stream.of(
-        JobStatus.CANCELLED, JobStatus.DONE, JobStatus.ERROR, JobStatus.VALIDATION_FAILED);
+    return Stream.of(JobStatus.CANCELLED, JobStatus.DONE, JobStatus.ERROR);
   }
 
   @ParameterizedTest

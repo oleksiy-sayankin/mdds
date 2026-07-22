@@ -9,9 +9,9 @@ import static com.mdds.domain.JobStatus.CANCEL_REQUESTED;
 import static com.mdds.domain.JobStatus.DONE;
 import static com.mdds.domain.JobStatus.DRAFT;
 import static com.mdds.domain.JobStatus.ERROR;
+import static com.mdds.domain.JobStatus.INPUTS_PREPARED;
 import static com.mdds.domain.JobStatus.IN_PROGRESS;
 import static com.mdds.domain.JobStatus.SUBMITTED;
-import static com.mdds.domain.JobStatus.VALIDATION_FAILED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
@@ -77,7 +77,7 @@ class TestJobStatusUpdateServiceIntegration {
     var userId = userLookupService.findUserId(login);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
     var workerId = newWorkerId();
     var eventTime = BASE_EVENT_TIME;
     var progress = 1;
@@ -108,7 +108,7 @@ class TestJobStatusUpdateServiceIntegration {
     var userId = userLookupService.findUserId(login);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
     var workerId = newWorkerId();
     var startedTime = BASE_EVENT_TIME;
 
@@ -156,7 +156,7 @@ class TestJobStatusUpdateServiceIntegration {
     var userId = userLookupService.findUserId(login);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
     var workerId = newWorkerId();
     var startedTime = BASE_EVENT_TIME;
 
@@ -206,7 +206,7 @@ class TestJobStatusUpdateServiceIntegration {
     var userId = userLookupService.findUserId(login);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
     var workerId = newWorkerId();
     var startedTime = BASE_EVENT_TIME;
 
@@ -252,7 +252,7 @@ class TestJobStatusUpdateServiceIntegration {
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
     var jobId = createOrReuseDraftJob(userId, sessionId, jobType).jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
 
     var workerId = newWorkerId();
     var firstEventTime = BASE_EVENT_TIME;
@@ -469,23 +469,64 @@ class TestJobStatusUpdateServiceIntegration {
 
     assertThatExceptionOfType(IllegalJobStatusUpdateException.class)
         .isThrownBy(() -> jobStatusUpdateService.apply(update))
-        .withMessage("workerId is required for IN_PROGRESS status update.");
+        .withMessage("workerId is required for 'IN_PROGRESS' status update.");
   }
 
   private record Transition(JobStatus from, JobStatus to, int progress) {}
+
+  private static Stream<Transition> jobValidStateTransitions() {
+    return Stream.of(
+        new Transition(SUBMITTED, INPUTS_PREPARED, 0),
+        new Transition(SUBMITTED, ERROR, 0),
+        new Transition(INPUTS_PREPARED, IN_PROGRESS, 1),
+        new Transition(INPUTS_PREPARED, ERROR, 0),
+        new Transition(CANCEL_REQUESTED, CANCELLED, 25),
+        new Transition(CANCEL_REQUESTED, DONE, 100),
+        new Transition(CANCEL_REQUESTED, ERROR, 25));
+  }
+
+  @ParameterizedTest
+  @MethodSource("jobValidStateTransitions")
+  void testApplyValidStateTransition(Transition transition) {
+    var sessionId = newSessionId();
+    var jobType = "solving_slae";
+    var userId = userLookupService.findUserId(GUEST);
+    var jobId = createOrReuseDraftJob(userId, sessionId, jobType).jobId();
+    var workerId = newWorkerId();
+    var from = transition.from;
+    jobFixture.forceStatus(jobId, from);
+    if (from == INPUTS_PREPARED || from == CANCEL_REQUESTED) {
+      jobFixture.forceWorkerId(jobId, workerId);
+    }
+
+    var to = transition.to;
+    var progress = transition.progress;
+    var message = "Worker published status transition.";
+    var update =
+        new JobStatusUpdateDTO(jobId, workerId, to.getCode(), progress, message, BASE_EVENT_TIME);
+
+    var result = jobStatusUpdateService.apply(update);
+
+    assertThat(result.jobId()).isEqualTo(jobId);
+    assertThat(result.userId()).isEqualTo(userId);
+    assertThat(result.status()).isEqualTo(to);
+    var job = jobsRepository.findById(jobId).orElseThrow();
+    assertThat(job.getStatus()).isEqualTo(to);
+    assertThat(job.getProgress()).isEqualTo(progress);
+    assertThat(job.getMessage()).isEqualTo(message);
+    assertThat(job.getWorkerId()).isEqualTo(workerId);
+  }
 
   private static Stream<Transition> jobInvalidStateTransitions() {
     return Stream.of(
         new Transition(DRAFT, IN_PROGRESS, 10),
         new Transition(IN_PROGRESS, CANCELLED, 10),
-        new Transition(IN_PROGRESS, VALIDATION_FAILED, 10),
-        new Transition(SUBMITTED, DONE, 100),
-        new Transition(VALIDATION_FAILED, ERROR, 10));
+        new Transition(SUBMITTED, DONE, 100));
   }
 
   @ParameterizedTest
   @MethodSource("jobInvalidStateTransitions")
-  void testApplyStateTransition(Transition transition) {
+  void testApplyInvalidStateTransition(Transition transition) {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
@@ -521,7 +562,7 @@ class TestJobStatusUpdateServiceIntegration {
     var userId = userLookupService.findUserId(GUEST);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
     var firstWorkerId = newWorkerId();
     var eventTime = BASE_EVENT_TIME;
     var progress = 1;
@@ -555,7 +596,7 @@ class TestJobStatusUpdateServiceIntegration {
 
   @ParameterizedTest
   @MethodSource("jobInvalidWorkerIdValues")
-  void testApplyInvalidWorkerOwnership(String workerId) {
+  void testApplyNullOrBlankWorkerIdForCancelledStatus(String workerId) {
     var sessionId = newSessionId();
     var jobType = "solving_slae";
     var userId = userLookupService.findUserId(GUEST);
@@ -578,8 +619,7 @@ class TestJobStatusUpdateServiceIntegration {
 
     assertThatExceptionOfType(IllegalJobStatusUpdateException.class)
         .isThrownBy(() -> jobStatusUpdateService.apply(update))
-        .withMessage(
-            "workerId is required because job '" + jobId + "' is already owned by worker.");
+        .withMessage("workerId is required for 'CANCELLED' status update.");
   }
 
   private static String newSessionId() {

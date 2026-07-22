@@ -154,7 +154,7 @@ class TestJobOutputsRestApiIntegration {
         JobStatus.IN_PROGRESS,
         JobStatus.CANCELLED,
         JobStatus.ERROR,
-        JobStatus.VALIDATION_FAILED,
+        JobStatus.INPUTS_PREPARED,
         JobStatus.CANCEL_REQUESTED);
   }
 

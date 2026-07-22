@@ -4,8 +4,8 @@
  */
 package com.mdds.server;
 
+import static com.mdds.domain.JobStatus.INPUTS_PREPARED;
 import static com.mdds.domain.JobStatus.IN_PROGRESS;
-import static com.mdds.domain.JobStatus.SUBMITTED;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mdds.common.CommonProperties;
@@ -94,7 +94,7 @@ class TestStatusManagerQueueIntegration {
     var userId = userLookupService.findUserId(login);
     var response = createOrReuseDraftJob(userId, sessionId, jobType);
     var jobId = response.jobId();
-    jobFixture.forceStatus(jobId, SUBMITTED);
+    jobFixture.forceStatus(jobId, INPUTS_PREPARED);
     var workerId = newWorkerId();
     var eventTime = BASE_EVENT_TIME;
     var progress = 10;

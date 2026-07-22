@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 public enum JobStatus {
   DRAFT("DRAFT"),
   SUBMITTED("SUBMITTED"),
-  VALIDATION_FAILED("VALIDATION_FAILED"),
+  INPUTS_PREPARED("INPUTS_PREPARED"),
   IN_PROGRESS("IN_PROGRESS"),
   DONE("DONE"),
   ERROR("ERROR"),
@@ -25,20 +25,21 @@ public enum JobStatus {
   public boolean canSwitchTo(JobStatus newStatus) {
     return switch (this) {
       case DRAFT -> newStatus == SUBMITTED;
-      case SUBMITTED -> newStatus == IN_PROGRESS || newStatus == VALIDATION_FAILED;
+      case SUBMITTED -> newStatus == INPUTS_PREPARED || newStatus == ERROR;
+      case INPUTS_PREPARED -> newStatus == IN_PROGRESS || newStatus == ERROR;
       case IN_PROGRESS ->
           newStatus == IN_PROGRESS
               || newStatus == DONE
               || newStatus == ERROR
               || newStatus == CANCEL_REQUESTED;
-      case CANCEL_REQUESTED -> newStatus == CANCELLED;
-      case VALIDATION_FAILED, DONE, ERROR, CANCELLED -> false;
+      case CANCEL_REQUESTED -> newStatus == CANCELLED || newStatus == DONE || newStatus == ERROR;
+      case DONE, ERROR, CANCELLED -> false;
     };
   }
 
   public boolean isTerminal() {
     return switch (this) {
-      case VALIDATION_FAILED, DONE, ERROR, CANCELLED -> true;
+      case DONE, ERROR, CANCELLED -> true;
       default -> false;
     };
   }

@@ -56,14 +56,12 @@ public class JobStatusUpdateService {
     job.setProgress(newProgress);
     job.setMessage(update.message());
 
-    if (newStatus == IN_PROGRESS) {
-      if (job.getWorkerId() == null || job.getWorkerId().isBlank()) {
-        job.setWorkerId(newWorkerId);
-      }
+    if (job.getWorkerId() == null || job.getWorkerId().isBlank()) {
+      job.setWorkerId(newWorkerId);
+    }
 
-      if (job.getStartedAt() == null) {
-        job.setStartedAt(eventTime);
-      }
+    if (newStatus == IN_PROGRESS && job.getStartedAt() == null) {
+      job.setStartedAt(eventTime);
     }
 
     if (newStatus.isTerminal()) {
@@ -81,9 +79,10 @@ public class JobStatusUpdateService {
       throw new IllegalJobStatusUpdateException(
           "Worker is not allowed to publish status '" + newStatus.getCode() + "'.");
     }
-    if (newStatus == IN_PROGRESS && (workerId == null || workerId.isBlank())) {
+
+    if (workerId == null || workerId.isBlank()) {
       throw new IllegalJobStatusUpdateException(
-          "workerId is required for IN_PROGRESS status update.");
+          "workerId is required for '" + newStatus.getCode() + "' status update.");
     }
   }
 
@@ -97,11 +96,6 @@ public class JobStatusUpdateService {
       String existingWorkerId, String newWorkerId, String jobId) {
     if (existingWorkerId == null || existingWorkerId.isBlank()) {
       return;
-    }
-
-    if (newWorkerId == null || newWorkerId.isBlank()) {
-      throw new IllegalJobStatusUpdateException(
-          "workerId is required because job '" + jobId + "' is already owned by worker.");
     }
 
     if (!existingWorkerId.equals(newWorkerId)) {
