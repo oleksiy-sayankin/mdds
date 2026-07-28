@@ -1,0 +1,25 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+services:
+  mdds-argo-demo:
+    image: "${MDDS_ARGO_DEMO_IMAGE}"
+    hostname: mdds-argo-demo
+    privileged: true
+    ports:
+      - "127.0.0.1:2746:32746"
+    tmpfs:
+      - /run
+      - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    volumes:
+      - argo-k3s-data:/var/lib/rancher/k3s
+    restart: unless-stopped
+    stop_grace_period: 1m
+
+volumes:
+  argo-k3s-data:

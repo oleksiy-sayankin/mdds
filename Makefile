@@ -68,6 +68,10 @@ SONAR_ADMIN_LOGIN ?= admin
 SONAR_DEFAULT_ADMIN_PASSWORD ?= admin
 SONAR_ADMIN_PASSWORD ?= MddsLocalSonarAdmin2026_A9xQ7mZ2
 SONAR_TOKEN_NAME ?= mdds-local-sonar-token
+
+MDDS_ARGO_DEMO_IMAGE := $(USER_NAME)/mdds-argo-demo:$(PROJECT_VERSION)
+export MDDS_ARGO_DEMO_IMAGE
+
 CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved."
 
 # Colors for output text.
@@ -164,10 +168,8 @@ reformat_all:
 #
 validate_compose_files:
 	$(call log_info,"Validating Docker Compose files...")
-	DOCKER_GID=$(DOCKER_GID) docker compose \
-		--progress=plain \
-		-f $(DEMO_HOME)/compose.demo.yml \
-		config --quiet
+	DOCKER_GID=$(DOCKER_GID) docker compose --progress=plain -f $(DEMO_HOME)/compose.demo.yml config --quiet
+	docker compose --progress=plain -f $(DEMO_HOME)/mdds.argo.demo.yml config --quiet
 	$(E2E_TESTS_COMPOSE) config --quiet
 	$(call log_done,"Docker Compose files are valid.")
 
@@ -410,6 +412,25 @@ push_web_server_docker_image:
 	$(call log_info,"Pushing web-server Docker image...")
 	docker push $(USER_NAME)/web-server:$(PROJECT_VERSION)
 	$(call log_done,"Pushing web-server Docker image completed.")
+
+
+
+#
+# Build Docker image for MDDS Argo demo
+#
+build_argo_demo_docker_image:
+	$(call log_info,"Building Docker image for MDDS Argo demo...")
+	docker buildx build -f mdds-deployment/argo-demo/Dockerfile --progress=plain --load --tag $(MDDS_ARGO_DEMO_IMAGE) .
+	$(call log_done,"Building Docker image for MDDS Argo demo completed.")
+
+#
+# Push MDDS Argo demo Docker image
+#
+push_argo_demo_docker_image:
+	$(call log_info,"Pushing MDDS Argo demo Docker image ...")
+	docker push $(MDDS_ARGO_DEMO_IMAGE)
+	$(call log_done,"Pushing MDDS Argo demo Docker image completed.")
+
 
 
 #
@@ -1125,6 +1146,32 @@ stop_mdds_demo:
 	@docker compose --progress=plain -f $(DEMO_HOME)/compose.demo.yml down
 	$(call log_done,"Stopping MDDS demo environment completed.")
 
+
+#
+# Start MDDS Argo demo environment with all Docker containers
+#
+start_mdds_argo_demo:
+	$(call log_info,"Starting MDDS Argo demo environment...")
+	@docker compose --progress=plain -f $(DEMO_HOME)/mdds.argo.demo.yml up -d --wait --wait-timeout 600
+	$(call log_done,"Starting MDDS Argo demo environment completed. MDDS environment is up!")
+
+#
+# Stop MDDS Argo demo environment with all Docker containers
+#
+stop_mdds_argo_demo:
+	$(call log_info,"Stopping MDDS Argo demo environment...")
+	@docker compose --progress=plain -f $(DEMO_HOME)/mdds.argo.demo.yml down
+	$(call log_done,"Stopping MDDS Argo demo environment completed.")
+
+
+#
+# Reset MDDS Argo demo after changing one-time bootstrap manifests.
+# This removes persistent K3s state, including all MinIO data.
+#
+reset_mdds_argo_demo:
+	$(call log_info,"Resetting MDDS Argo demo environment...")
+	@docker compose --progress=plain -f $(DEMO_HOME)/mdds.argo.demo.yml down --volumes --remove-orphans
+	$(call log_done,"Resetting MDDS Argo demo environment completed.")
 
 #
 # Start MDDS environment with all Docker containers

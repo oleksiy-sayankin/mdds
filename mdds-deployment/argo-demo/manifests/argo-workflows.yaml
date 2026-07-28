@@ -1,0 +1,50 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+# K3s Helm Controller installs chart 1.0.21, whose application version is
+# Argo Workflows 4.0.8.
+# Define a K3s HelmChart resource that installs and manages Argo Workflows.
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argo-workflows
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-workflows
+  version: 1.0.21
+  targetNamespace: argo
+  createNamespace: true
+  # Allow each Helm install or upgrade operation to run for up to ten minutes.
+  timeout: 10m
+  # Pass these overrides to the chart as an inline values.yaml file.
+  valuesContent: |-
+    # Install the cluster-wide Argo custom resource definitions, including
+    # Workflow, and preserve them if the Helm release is later removed.
+    crds:
+      install: true
+      keep: true
+
+    # Watch and manage Workflows only in the argo namespace.
+    singleNamespace: true
+
+    # Create a dedicated ServiceAccount and namespaced permissions for Workflow
+    # Pods. Each generated Workflow must set serviceAccountName: argo-workflow.
+    workflow:
+      serviceAccount:
+        create: true
+        name: argo-workflow
+      rbac:
+        create: true
+
+    # Run the Argo Server API and UI for use by the local demo.
+    server:
+      enabled: true
+      # Use the Argo Server ServiceAccount when calling the Kubernetes API.
+      authModes:
+        - server
+      # Serve plain HTTP; TLS termination is intentionally omitted in this demo.
+      secure: false
+      # Expose Argo Server on every Kubernetes node at a fixed NodePort.
+      serviceType: NodePort
+      serviceNodePort: 32746

@@ -1,0 +1,26 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: argo-hello-world-
+  namespace: argo
+  labels:
+    app.kubernetes.io/name: argo-hello-world
+    app.kubernetes.io/component: smoke-test
+    app.kubernetes.io/part-of: mdds-demo
+    workflows.argoproj.io/archive-strategy: "false"
+spec:
+  entrypoint: hello-world
+  serviceAccountName: argo-workflow
+  templates:
+    - name: hello-world
+      container:
+        image: docker.io/library/busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+        imagePullPolicy: IfNotPresent
+        command:
+          - sh
+          - -c
+        args:
+          - echo "Hello from Argo Workflows"

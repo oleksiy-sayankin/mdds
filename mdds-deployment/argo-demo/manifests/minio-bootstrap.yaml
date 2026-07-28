@@ -1,0 +1,196 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+# Grant the MDDS platform identity only the object-storage operations required
+# for input staging, intermediate artifacts, and final result publication.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-bootstrap-policy
+  namespace: mdds-storage
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: bootstrap
+    app.kubernetes.io/part-of: mdds-demo
+data:
+  policy.json: |-
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "ReadInputsBucket",
+          "Effect": "Allow",
+          "Action": [
+            "s3:GetBucketLocation",
+            "s3:ListBucket"
+          ],
+          "Resource": "arn:aws:s3:::mdds-inputs"
+        },
+        {
+          "Sid": "ReadInputsObjects",
+          "Effect": "Allow",
+          "Action": [
+            "s3:GetObject"
+          ],
+          "Resource": "arn:aws:s3:::mdds-inputs/*"
+        },
+        {
+          "Sid": "ManageRunBucket",
+          "Effect": "Allow",
+          "Action": [
+            "s3:GetBucketLocation",
+            "s3:ListBucket",
+            "s3:ListBucketMultipartUploads"
+          ],
+          "Resource": "arn:aws:s3:::mdds-runs"
+        },
+        {
+          "Sid": "ManageRunObjects",
+          "Effect": "Allow",
+          "Action": [
+            "s3:AbortMultipartUpload",
+            "s3:DeleteObject",
+            "s3:GetObject",
+            "s3:ListMultipartUploadParts",
+            "s3:PutObject"
+          ],
+          "Resource": "arn:aws:s3:::mdds-runs/*"
+        },
+        {
+          "Sid": "WriteResultsBucket",
+          "Effect": "Allow",
+          "Action": [
+            "s3:GetBucketLocation",
+            "s3:ListBucket",
+            "s3:ListBucketMultipartUploads"
+          ],
+          "Resource": "arn:aws:s3:::mdds-results"
+        },
+        {
+          "Sid": "WriteResultsObjects",
+          "Effect": "Allow",
+          "Action": [
+            "s3:AbortMultipartUpload",
+            "s3:ListMultipartUploadParts",
+            "s3:PutObject"
+          ],
+          "Resource": "arn:aws:s3:::mdds-results/*"
+        }
+      ]
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bootstrap
+  namespace: mdds-storage
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: bootstrap
+    app.kubernetes.io/part-of: mdds-demo
+spec:
+  activeDeadlineSeconds: 600
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+        app.kubernetes.io/component: bootstrap
+        app.kubernetes.io/part-of: mdds-demo
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: minio-bootstrap
+          image: docker.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+              ephemeral-storage: 16Mi
+            limits:
+              memory: 512Mi
+              ephemeral-storage: 64Mi
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -eu
+
+              mc_command() {
+                  mc --config-dir /tmp/mc "$@"
+              }
+
+              until mc_command alias set mdds "${MINIO_ENDPOINT}" \
+                  "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}" \
+                  >/dev/null 2>&1; do
+                  sleep 2
+              done
+
+              mc_command mb --ignore-existing mdds/mdds-inputs
+              mc_command mb --ignore-existing mdds/mdds-runs
+              mc_command mb --ignore-existing mdds/mdds-results
+
+              mc_command admin policy create \
+                  mdds mdds-artifact-access /policy/policy.json
+
+              if mc_command admin user info \
+                  mdds "${MDDS_ACCESS_KEY}" >/dev/null 2>&1; then
+                  mc_command admin user remove mdds "${MDDS_ACCESS_KEY}"
+              fi
+
+              mc_command admin user add \
+                  mdds "${MDDS_ACCESS_KEY}" "${MDDS_SECRET_KEY}"
+              mc_command admin policy attach \
+                  mdds mdds-artifact-access --user "${MDDS_ACCESS_KEY}"
+          env:
+            # SECURITY REVIEW (kubernetes:S5332):
+            # Plain HTTP is intentional for this local single-node demo.
+            # MinIO is exposed only through a cluster-internal ClusterIP Service,
+            # its ports are not published by Docker Compose, and the environment
+            # supports only trusted workloads. Production, multi-node, or
+            # untrusted-workload deployments must enable TLS.
+            - name: MINIO_ENDPOINT
+              value: http://minio.mdds-storage.svc.cluster.local:9000
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root-credentials
+                  key: rootUser
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root-credentials
+                  key: rootPassword
+            - name: MDDS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mdds-object-storage-credentials
+                  key: accessKey
+            - name: MDDS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mdds-object-storage-credentials
+                  key: secretKey
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: policy
+              mountPath: /policy
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: policy
+          configMap:
+            name: minio-bootstrap-policy
+        - name: temporary
+          emptyDir: {}
