@@ -34,9 +34,13 @@ MDDS creates the DAG Run when the user starts the DAG. The DAG Run is an immutab
 
 #### Data sources and storages
 
-DataSource — user write, trusted platform read for input staging;
-RunArtifactStorage — trusted platform read/write;
-ResultStorage — trusted platform write, user read.
+* DataSource — user write, trusted platform read for input staging;
+* RunArtifactStorage — trusted platform read/write;
+* ResultStorage — trusted platform write, user read.
+
+Stored in files:
+
+Example of `data-sources.yaml`
 
 ```yaml
 dataSources:
@@ -45,13 +49,21 @@ dataSources:
     bucket: mdds-inputs
     accessMode: read-only-for-execution
     credentialSecretRef: ...
+```
 
+Example of `run-artifact-storages.yaml`
+
+```yaml
 runArtifactStorages:
   - id: internal-runs
     type: s3
     bucket: mdds-runs
     accessMode: platform-read-write
     credentialSecretRef: ...
+```
+
+Example of `result-storages.yaml`
+```yaml
 
 resultStorages:
   - id: default-results
@@ -112,11 +124,11 @@ Example of `job-implementations.yaml`:
 job-implementations:
   - id: solving-slae-python
     jobProfileId: solving-slae
-    ociImageReference: mddsproject/slae-python@sha256:<sha256-digest>
+    ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
 
   - id: vector-sum-python
     jobProfileId: vector-sum
-    ociImageReference: mddsproject/vector-sum-python@sha256:<sha256-digest>
+    ociImageReference: mddsproject/python-worker-vector-sum@sha256:<sha256-digest>
 ```
 
 #### DAG Node
@@ -305,7 +317,7 @@ dag-runs:
         jobImplementation:
           id: solving-slae-python
           jobProfileId: solving-slae
-          ociImageReference: mddsproject/slae-python@sha256:<sha256-digest>
+          ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
 
         inputBindings:
           matrix:
@@ -341,7 +353,7 @@ dag-runs:
         jobImplementation:
           id: solving-slae-python
           jobProfileId: solving-slae
-          ociImageReference: mddsproject/slae-python@sha256:<sha256-digest>
+          ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
 
         inputBindings:
           matrix:
@@ -373,7 +385,7 @@ dag-runs:
         jobImplementation:
           id: vector-sum-python
           jobProfileId: vector-sum
-          ociImageReference: mddsproject/vector-sum-python@sha256:<sha256-digest>
+          ociImageReference: mddsproject/python-worker-vector-sum@sha256:<sha256-digest>
 
         inputBindings:
           vector-a:
@@ -575,6 +587,71 @@ class JobHandler:
 The runtime is responsible for reading the job manifest, preparing `JobExecutionContext`, invoking the handler, validating outputs, writing diagnostic information, handling termination signals, and converting the result into the appropriate process exit code.
 
 A user may implement the Atomic Worker Image Contract directly without using a language-specific MDDS runtime.
+
+### Job handler data access pattern
+
+A concrete `JobHandler` must access job inputs, parameters, and outputs only through `JobExecutionContext`.
+
+The handler must use logical input slots declared in `manifest.inputs` to read input artifacts:
+
+```python
+input_bytes = context.inputs.read("inputSlot")
+```
+
+For large input artifacts, or when a library expects a file path, the handler should use the local input path instead of loading the full artifact into memory:
+
+```python
+input_path = context.inputs.path("inputSlot")
+```
+
+If artifact metadata is required, the handler may access it through:
+
+```python
+input_artifact = context.inputs.get("inputSlot")
+input_format = input_artifact.format
+```
+
+Execution parameters must be read through `context.params`:
+
+```python
+required_value = context.params.required("requiredParameter")
+optional_value = context.params.get("optionalParameter", default_value)
+```
+
+Output artifacts must be written through logical output slots declared in `manifest.outputs`:
+
+```python
+context.outputs.write("outputSlot", output_bytes)
+```
+
+If a library needs to write directly to a file path, the handler may resolve the runtime-managed local output path:
+
+```python
+output_path = context.outputs.path("outputSlot")
+```
+
+The Worker Runtime resolves logical input and output slots declared in the job manifest to runtime-managed local filesystem paths. It reads inputs from and writes outputs to those local paths only.
+
+After the Worker process terminates successfully, the Argo `wait` container uploads the output artifacts declared in the generated Workflow specification to attempt-specific locations in RunArtifactStorage. The Worker Runtime does not access object storage directly or publish an authoritative terminal node state.
+
+Conceptually, a job handler follows this structure:
+
+```python
+class ExampleJobHandler:
+    def execute(self, context: JobExecutionContext) -> None:
+        input_a = context.inputs.read("inputSlotA")
+        input_b_path = context.inputs.path("inputSlotB")
+        required_parameter = context.params.required("requiredParameter")
+
+        # Execute job-specific business logic.
+        output_bytes = run_job_specific_logic(
+            input_a,
+            input_b_path,
+            required_parameter,
+        )
+
+        context.outputs.write("outputSlot", output_bytes)
+```
 
 ### Data flow
 
