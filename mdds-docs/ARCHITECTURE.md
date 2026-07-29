@@ -43,6 +43,8 @@ Stored in files:
 Example of `data-sources.yaml`
 
 ```yaml
+apiVersion: mdds/v1
+kind: DataSources
 dataSources:
   - id: default-inputs
     type: s3
@@ -54,6 +56,8 @@ dataSources:
 Example of `run-artifact-storages.yaml`
 
 ```yaml
+apiVersion: mdds/v1
+kind: RunArtifactStorages
 runArtifactStorages:
   - id: internal-runs
     type: s3
@@ -64,7 +68,8 @@ runArtifactStorages:
 
 Example of `result-storages.yaml`
 ```yaml
-
+apiVersion: mdds/v1
+kind: ResultStorages
 resultStorages:
   - id: default-results
     type: s3
@@ -80,6 +85,8 @@ A Job Profile defines the input slots, output slots, and parameters of an atomic
 Example of `job-profiles.yaml`:
 
 ```yaml
+apiVersion: mdds/v1
+kind: JobProfiles
 job-profiles:
   # Solves a system of linear algebraic equations.
   - id: solving-slae
@@ -121,6 +128,8 @@ A Job Implementation connects a Job Profile to an OCI image. This binding declar
 Example of `job-implementations.yaml`:
 
 ```yaml
+apiVersion: mdds/v1
+kind: JobImplementations
 job-implementations:
   - id: solving-slae-python
     jobProfileId: solving-slae
@@ -144,6 +153,8 @@ A DAG Definition is an editable logical description of a computational graph. It
 Example of `dags.yaml`:
 
 ```yaml
+apiVersion: mdds/v1
+kind: Dags
 dags:
   - dagId: example-dag
 
@@ -152,12 +163,16 @@ dags:
     #
     inputs:
       matrix-a:
+        artifactType: numeric-matrix
         format: csv
       rhs-a:
+        artifactType: numeric-vector
         format: csv
       matrix-b:
+        artifactType: numeric-matrix
         format: csv
       rhs-b:
+        artifactType: numeric-vector
         format: csv
 
     #
@@ -259,8 +274,11 @@ Subsequent modifications to the original Job Profiles, Job Implementations, or D
 Example of `dag-runs.yaml`:
 
 ```yaml
+apiVersion: mdds/v1
+kind: DagRuns
 dag-runs:
   - dagRunId: run-123
+    userId: 12345
     dagId: example-dag
 
     #
@@ -277,18 +295,26 @@ dag-runs:
       matrix-a:
         dataSourceId: default-inputs
         objectKey: my-data/matrix-a.csv
+        artifactType: numeric-matrix
+        format: csv
 
       rhs-a:
         dataSourceId: default-inputs
         objectKey: my-data/rhs-a.csv
+        artifactType: numeric-vector
+        format: csv
 
       matrix-b:
         dataSourceId: default-inputs
         objectKey: my-data/matrix-b.csv
+        artifactType: numeric-matrix
+        format: csv
 
       rhs-b:
         dataSourceId: default-inputs
         objectKey: my-data/rhs-b.csv
+        artifactType: numeric-vector
+        format: csv
 
     #
     # Frozen node configurations
@@ -303,8 +329,10 @@ dag-runs:
           id: solving-slae
           inputs:
             - name: matrix
+              artifactType: numeric-matrix
               format: csv
             - name: rhs
+              artifactType: numeric-vector
               format: csv
           params:
             - name: tolerance
@@ -312,6 +340,7 @@ dag-runs:
               required: false
           outputs:
             - name: solution
+              artifactType: numeric-vector
               format: csv
 
         jobImplementation:
@@ -339,8 +368,10 @@ dag-runs:
           id: solving-slae
           inputs:
             - name: matrix
+              artifactType: numeric-matrix
               format: csv
             - name: rhs
+              artifactType: numeric-vector
               format: csv
           params:
             - name: tolerance
@@ -348,6 +379,7 @@ dag-runs:
               required: false
           outputs:
             - name: solution
+              artifactType: numeric-vector
               format: csv
 
         jobImplementation:
@@ -375,11 +407,14 @@ dag-runs:
           id: vector-sum
           inputs:
             - name: vector-a
+              artifactType: numeric-vector
               format: csv
             - name: vector-b
+              artifactType: numeric-vector
               format: csv
           outputs:
             - name: solution
+              artifactType: numeric-vector
               format: csv
 
         jobImplementation:
@@ -409,6 +444,7 @@ dag-runs:
           nodeOutput:
             nodeId: sum-a-b
             outputSlot: solution
+            format: csv
 
         destination:
           resultStorageId: default-results
@@ -425,7 +461,7 @@ dag-runs/run-123/nodes/sum-a-b/attempts/{attemptId}/outputs/solution
 
 These internal locations are not selected by the user.
 
-After all computational DAG nodes complete successfully, the system-generated `publish-results` DAG node publishes all declared DAG outputs from RunArtifactStorage to their configured ResultStorage destinations. The Argo Workflow succeeds only after `publish-results` completes successfully.
+After all computational DAG nodes complete successfully, the system-generated `publish-results` Argo DAG task publishes all declared DAG outputs from RunArtifactStorage to their configured ResultStorage destinations. The Argo Workflow succeeds only after `publish-results` completes successfully.
 
 
 ## Atomic Worker Image Contract
@@ -457,6 +493,84 @@ The executable may be implemented in any programming language. It may be a nativ
 
 The Argo Workflow specification explicitly defines this command and does not depend on an image-specific entrypoint.
 
+### Python Worker Runtime Configuration
+
+The Worker Image defines `MDDS_WORKER_NAME`, `MDDS_WORKER_VERSION`, and `MDDS_WORKER_HANDLER`. The generated Argo Workflow supplies `MDDS_ARGO_RETRY_INDEX` for each concrete attempt.
+
+| Variable Name           | Required | Default Value | Meaning                                                                                                                | Example                                              |
+| ----------------------- | -------: | ------------: | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `MDDS_WORKER_NAME`      |      Yes |             — | Stable name of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                  | `mdds-python-worker-solving-slae-numpy-exact-solver` |
+| `MDDS_WORKER_VERSION`   |      Yes |             — | Version of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                      | `0.1.0`                                              |
+| `MDDS_WORKER_HANDLER`   |      Yes |             — | Python import path of the concrete job handler.                                                                        | `mdds_slae_worker.handler:SlaeJobHandler`            |
+| `MDDS_ARGO_RETRY_INDEX` |      Yes |             — | Zero-based index of the current Argo-managed attempt: `0` for the initial attempt, `1` for the first retry, and so on. | `0`                                                  |
+
+
+### Manifest
+
+A Node Run is the execution of one DAG Node within one DAG Run and is identified by `dagRunId` and `nodeId`. Argo may create one or more Node Attempts for a Node Run. A Node Attempt is identified by `dagRunId`, `nodeId`, and the Argo retry index.
+The Worker Manifest describes one Node Run. It remains unchanged between attempts. The Worker Runtime derives the current Node Attempt identifier from `MDDS_ARGO_RETRY_INDEX`, for example `attempt-0`, `attempt-1`, and so on.
+This is `worker-manifest.json` example for job profile with `id` = `solving-slae` for `nodeId` = `solve-a`:
+
+```json
+{
+  "apiVersion": "mdds/v1",
+  "kind": "WorkerManifest",
+  "execution": {
+    "userId": 12345,
+    "dagRunId": "<dag-run-id>",
+    "nodeId": "solve-a"
+  },
+  "inputs": {
+    "matrix": {
+      "path": "/opt/mdds/inputs/matrix",
+      "format": "csv"
+    },
+    "rhs": {
+      "path": "/opt/mdds/inputs/rhs",
+      "format": "csv"
+    }
+  },
+  "params": {},
+  "outputs": {
+    "solution": {
+      "path": "/opt/mdds/outputs/solution",
+      "format": "csv"
+    }
+  }
+}
+```
+
+This is `worker-manifest.json` example for job profile with `id` = `vector-sum` for `nodeId` = `sum-a-b`:
+
+```json
+{
+  "apiVersion": "mdds/v1",
+  "kind": "WorkerManifest",
+  "execution": {
+    "userId": 12345,
+    "dagRunId": "<dag-run-id>",
+    "nodeId": "sum-a-b"
+  },
+  "inputs": {
+    "vector-a": {
+      "path": "/opt/mdds/inputs/vector-a",
+      "format": "csv"
+    },
+    "vector-b": {
+      "path": "/opt/mdds/inputs/vector-b",
+      "format": "csv"
+    }
+  },
+  "params": {},
+  "outputs": {
+    "solution": {
+      "path": "/opt/mdds/outputs/solution",
+      "format": "csv"
+    }
+  }
+}
+```
+
 ### Filesystem Layout
 
 The worker must use the following filesystem layout:
@@ -476,13 +590,13 @@ Input and output slots are mapped to filesystem paths by slot name:
 /opt/mdds/outputs/{outputSlotName}
 ```
 
-The exact paths and artifact metadata are also provided in the job manifest.
+The exact paths and artifact metadata are also provided in the Worker Manifest.
 
 ### Input Artifacts
 
 Argo Workflows retrieves input artifacts from the configured artifact repository and places them at the paths declared in the generated Workflow specification.
 
-The worker must read input data only from the paths defined in the job manifest. The worker must not interact directly with S3 or any other object storage. Argo artifact containers and trusted MDDS platform components perform all object-storage transfers.
+The worker must read input data only from the paths defined in the Worker Manifest. The worker must not interact directly with S3 or any other object storage. Argo artifact containers and trusted MDDS platform components perform all object-storage transfers.
 
 ### Parameters
 
@@ -584,7 +698,7 @@ class JobHandler:
         ...
 ```
 
-The runtime is responsible for reading the job manifest, preparing `JobExecutionContext`, invoking the handler, validating outputs, writing diagnostic information, handling termination signals, and converting the result into the appropriate process exit code.
+The runtime is responsible for reading the Worker Manifest, preparing `JobExecutionContext`, invoking the handler, validating outputs, writing diagnostic information, handling termination signals, and converting the result into the appropriate process exit code.
 
 A user may implement the Atomic Worker Image Contract directly without using a language-specific MDDS runtime.
 
@@ -630,7 +744,7 @@ If a library needs to write directly to a file path, the handler may resolve the
 output_path = context.outputs.path("outputSlot")
 ```
 
-The Worker Runtime resolves logical input and output slots declared in the job manifest to runtime-managed local filesystem paths. It reads inputs from and writes outputs to those local paths only.
+The Worker Runtime resolves logical input and output slots declared in the Worker Manifest to runtime-managed local filesystem paths. It reads inputs from and writes outputs to those local paths only.
 
 After the Worker process terminates successfully, the Argo `wait` container uploads the output artifacts declared in the generated Workflow specification to attempt-specific locations in RunArtifactStorage. The Worker Runtime does not access object storage directly or publish an authoritative terminal node state.
 
@@ -662,13 +776,13 @@ In Argo Workflows 4.0, each computational task normally creates a Pod containing
 * the `wait` container uploads the declared output artifacts after the main container completes.
 
 
-| DAG node or stage               | Artifact source    | Artifact destination |
-|---------------------------------|--------------------|----------------------|
-| System stage-inputs DAG node    | DataSource         | RunArtifactStorage   |
-| Initial DAG node(s)             | RunArtifactStorage | RunArtifactStorage   |
-| Intermediate DAG node           | RunArtifactStorage | RunArtifactStorage   |
-| Final computational DAG node(s) | RunArtifactStorage | RunArtifactStorage   |
-| System publish-results DAG node | RunArtifactStorage | ResultStorage        |
+| DAG node or stage                                | Artifact source    | Artifact destination |
+|--------------------------------------------------|--------------------|----------------------|
+| System-generated `stage-inputs` Argo DAG task    | DataSource         | RunArtifactStorage   |
+| Initial DAG node(s)                              | RunArtifactStorage | RunArtifactStorage   |
+| Intermediate DAG node                            | RunArtifactStorage | RunArtifactStorage   |
+| Final computational DAG node(s)                  | RunArtifactStorage | RunArtifactStorage   |
+| System-generated `publish-results` Argo DAG task | RunArtifactStorage | ResultStorage        |
 
 **RunArtifactStorage** is a run-scoped S3 artifact repository used by Argo to store staged DAG inputs and computational node outputs. Artifacts from different DAG Runs must use isolated storage keys.
 
@@ -679,7 +793,7 @@ flowchart TD
     DATA_SOURCE(["DataSource"])
     RUN_STORAGE(["RunArtifactStorage"])
 
-    subgraph STAGE_INPUTS["System stage-inputs DAG node"]
+    subgraph STAGE_INPUTS["System-generated `stage-inputs` Argo DAG task"]
         STAGER_INPUTS["/opt/mdds/inputs/"]
         STAGER["Trusted Input Stager Process"]
         STAGER_OUTPUTS["/opt/mdds/outputs/"]
@@ -737,7 +851,7 @@ flowchart TD
         WORKER -->|"Writes local files"| OUTPUTS
     end
 
-    subgraph PUBLISH_NODE["System publish-results DAG node"]
+    subgraph PUBLISH_NODE["System-generated `publish-results` Argo DAG task"]
         PUBLISH_INPUTS["/opt/mdds/inputs/"]
         PUBLISHER["Trusted Result Publisher Process"]
         PUBLISH_OUTPUTS["/opt/mdds/outputs/"]
@@ -755,11 +869,14 @@ The diagram shows one output-producing computational node. A DAG Run may contain
 
 ## Argo Workflow Observer
 
-periodic REST polling
-* reconciliation on server startup
-* reconciliation after uncertain submission
+The Argo Workflow Observer periodically reads the authoritative Workflow state through the Argo Server REST API and reconciles it with the MDDS DAG Run state.
+The initial observer strategy includes:
 
-## Workflow Submission Pipeline
+* periodic REST polling;
+* reconciliation on server startup;
+* reconciliation after uncertain submission.
+
+## End-to-End Artifact Flow
 
 
 ```mermaid
@@ -844,9 +961,11 @@ The responsibilities are distributed as follows:
 
 * **ADR-1**: MDDS uses the Argo Server REST API as its only execution-platform API. Communication uses HTTPS and JSON. gRPC is not used in MDDS v1.
 * **ADR-2**: User-provided Worker Images never receive direct write access to either DataSource or ResultStorage. Workers operate only on local input and output paths. Argo and trusted MDDS platform components transfer artifacts between local paths and object storage.
-* **ADR-3**: Intermediate artifacts are written only to run-specific, attempt-specific namespaces. After all computational DAG nodes complete successfully, the system-generated `publish-results` DAG node publishes all declared DAG outputs from RunArtifactStorage to their configured ResultStorage destinations. The Workflow succeeds only after result publication succeeds.
+* **ADR-3**: Intermediate artifacts are written only to run-specific, attempt-specific namespaces. After all computational DAG nodes complete successfully, the system-generated `publish-results` Argo DAG task publishes all declared DAG outputs from RunArtifactStorage to their configured ResultStorage destinations. The Workflow succeeds only after result publication succeeds.
 * **ADR-4**: Storage credentials are mounted only into trusted artifact-transfer or publication components. They are never included in the Worker Manifest or mounted into the user-provided Worker container.
 * **ADR-5**: An OCI Worker Image does not contain input data and does not receive input data during the image build process.
 * **ADR-6**: Argo stages input artifacts into the running Worker Pod before the Worker Process starts.
 * **ADR-7**: The Worker operates only on local filesystem paths under `/opt/mdds` and does not interact directly with object storage.
 * **ADR-8**: Each generated Argo template explicitly declares all input and output artifacts together with their corresponding local filesystem paths.
+* **ADR-9**: Argo Workflows is the sole owner of automatic Node Attempt retries. The generated Workflow defines retry eligibility and exposes Argo’s retry index to both artifact-location templates and the Worker Runtime. The canonical MDDS attempt identifier is derived from that index.
+* **ADR-10**: Every standalone MDDS configuration and runtime document declares its contract through the top-level `apiVersion` and `kind` fields. `apiVersion` identifies the versioned schema and semantics, while `kind` identifies the document type. Embedded objects inherit the contract of the enclosing document and do not repeat these fields.
