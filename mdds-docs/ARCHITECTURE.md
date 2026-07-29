@@ -26,8 +26,8 @@ This example defines a DAG that solves two systems of linear algebraic equations
 
 The user creates:
 
-* Job Profiles;
-* Job Implementations;
+* Worker Profiles;
+* Worker Implementations;
 * a DAG Definition.
 
 MDDS creates the DAG Run when the user starts the DAG. The DAG Run is an immutable snapshot of the concrete execution configuration.
@@ -78,16 +78,16 @@ resultStorages:
     credentialSecretRef: ...
 ```
 
-#### Job Profile
+#### Worker Profile
 
-A Job Profile defines the input slots, output slots, and parameters of an atomic computational operation.
+A Worker Profile is a language-independent contract for an atomic computational operation. It defines the input slots, output slots, and parameters that compatible Worker Implementations must support. It does not represent a running Worker Process.
 
-Example of `job-profiles.yaml`:
+Example of `worker-profiles.yaml`:
 
 ```yaml
 apiVersion: mdds/v1
-kind: JobProfiles
-job-profiles:
+kind: WorkerProfiles
+worker-profiles:
   # Solves a system of linear algebraic equations.
   - id: solving-slae
     inputs:
@@ -121,28 +121,28 @@ job-profiles:
         format: csv
 ```
 
-#### Job Implementation
+#### Worker Implementation
 
-A Job Implementation connects a Job Profile to an OCI image. This binding declares that the referenced OCI image implements the atomic operation described by the Job Profile.
+A Worker Implementation connects a Worker Profile to a concrete OCI image. The image must implement the operation described by the Worker Profile and satisfy the Atomic Worker Image Contract.
 
-Example of `job-implementations.yaml`:
+Example of `worker-implementations.yaml`:
 
 ```yaml
 apiVersion: mdds/v1
-kind: JobImplementations
-job-implementations:
+kind: WorkerImplementations
+worker-implementations:
   - id: solving-slae-python
-    jobProfileId: solving-slae
+    workerProfileId: solving-slae
     ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
 
   - id: vector-sum-python
-    jobProfileId: vector-sum
+    workerProfileId: vector-sum
     ociImageReference: mddsproject/python-worker-vector-sum@sha256:<sha256-digest>
 ```
 
 #### DAG Node
 
-A DAG Node is a configured use of a Job Profile and a Job Implementation within a DAG Definition.
+A DAG Node is a configured use of a Worker Profile and a Worker Implementation within a DAG Definition.
 
 A DAG Node is a logical entity. It is not bound to a particular Kubernetes Pod. During execution, a DAG Node is compiled into an Argo DAG task, and one or more Worker Pods may execute its attempts.
 
@@ -180,8 +180,8 @@ dags:
     #
     nodes:
       - nodeId: solve-a
-        jobProfileId: solving-slae
-        jobImplementationId: solving-slae-python
+        workerProfileId: solving-slae
+        workerImplementationId: solving-slae-python
 
         inputBindings:
           matrix:
@@ -191,12 +191,11 @@ dags:
             from:
               dagInput: rhs-a
 
-        params:
-          tolerance: 1.0e-8
+        params: {}
 
       - nodeId: solve-b
-        jobProfileId: solving-slae
-        jobImplementationId: solving-slae-python
+        workerProfileId: solving-slae
+        workerImplementationId: solving-slae-python
 
         inputBindings:
           matrix:
@@ -206,12 +205,11 @@ dags:
             from:
               dagInput: rhs-b
 
-        params:
-          tolerance: 1.0e-8
+        params: {}
 
       - nodeId: sum-a-b
-        jobProfileId: vector-sum
-        jobImplementationId: vector-sum-python
+        workerProfileId: vector-sum
+        workerImplementationId: vector-sum-python
 
         inputBindings:
           vector-a:
@@ -262,14 +260,14 @@ The DAG Run is created by MDDS when the user starts the DAG. It freezes:
 
 * the DAG structure;
 * concrete input artifacts;
-* Job Profile definitions;
-* Job Implementation definitions;
+* Worker Profile definitions;
+* Worker Implementation definitions;
 * OCI image digests;
 * node parameters;
 * internal run artifact storage;
 * final output destinations.
 
-Subsequent modifications to the original Job Profiles, Job Implementations, or DAG Definition do not affect an existing DAG Run.
+Subsequent modifications to the original Worker Profiles, Worker Implementations, or DAG Definition do not affect an existing DAG Run.
 
 Example of `dag-runs.yaml`:
 
@@ -325,7 +323,7 @@ dag-runs:
       #
       - nodeId: solve-a
 
-        jobProfile:
+        workerProfile:
           id: solving-slae
           inputs:
             - name: matrix
@@ -343,9 +341,9 @@ dag-runs:
               artifactType: numeric-vector
               format: csv
 
-        jobImplementation:
+        workerImplementation:
           id: solving-slae-python
-          jobProfileId: solving-slae
+          workerProfileId: solving-slae
           ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
 
         inputBindings:
@@ -356,15 +354,14 @@ dag-runs:
             from:
               dagInput: rhs-a
 
-        params:
-          tolerance: 1.0e-8
+        params: {}
 
       #
       # Solves the second system.
       #
       - nodeId: solve-b
 
-        jobProfile:
+        workerProfile:
           id: solving-slae
           inputs:
             - name: matrix
@@ -382,9 +379,9 @@ dag-runs:
               artifactType: numeric-vector
               format: csv
 
-        jobImplementation:
+        workerImplementation:
           id: solving-slae-python
-          jobProfileId: solving-slae
+          workerProfileId: solving-slae
           ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
 
         inputBindings:
@@ -395,15 +392,14 @@ dag-runs:
             from:
               dagInput: rhs-b
 
-        params:
-          tolerance: 1.0e-8
+        params: {}
 
       #
       # Calculates the element-wise sum of the two solution vectors.
       #
       - nodeId: sum-a-b
 
-        jobProfile:
+        workerProfile:
           id: vector-sum
           inputs:
             - name: vector-a
@@ -417,9 +413,9 @@ dag-runs:
               artifactType: numeric-vector
               format: csv
 
-        jobImplementation:
+        workerImplementation:
           id: vector-sum-python
-          jobProfileId: vector-sum
+          workerProfileId: vector-sum
           ociImageReference: mddsproject/python-worker-vector-sum@sha256:<sha256-digest>
 
         inputBindings:
@@ -498,10 +494,10 @@ The Argo Workflow specification explicitly defines this command and does not dep
 The Worker Image defines `MDDS_WORKER_NAME`, `MDDS_WORKER_VERSION`, and `MDDS_WORKER_HANDLER`. The generated Argo Workflow supplies `MDDS_ARGO_RETRY_INDEX` for each concrete attempt.
 
 | Variable Name           | Required | Default Value | Meaning                                                                                                                | Example                                              |
-| ----------------------- | -------: | ------------: | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+|-------------------------|---------:|--------------:|------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
 | `MDDS_WORKER_NAME`      |      Yes |             — | Stable name of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                  | `mdds-python-worker-solving-slae-numpy-exact-solver` |
 | `MDDS_WORKER_VERSION`   |      Yes |             — | Version of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                      | `0.1.0`                                              |
-| `MDDS_WORKER_HANDLER`   |      Yes |             — | Python import path of the concrete job handler.                                                                        | `mdds_slae_worker.handler:SlaeJobHandler`            |
+| `MDDS_WORKER_HANDLER`   |      Yes |             — | Python import path of the concrete worker handler.                                                                     | `mdds_slae_worker.handler:SlaeWorkerHandler`         |
 | `MDDS_ARGO_RETRY_INDEX` |      Yes |             — | Zero-based index of the current Argo-managed attempt: `0` for the initial attempt, `1` for the first retry, and so on. | `0`                                                  |
 
 
@@ -509,7 +505,7 @@ The Worker Image defines `MDDS_WORKER_NAME`, `MDDS_WORKER_VERSION`, and `MDDS_WO
 
 A Node Run is the execution of one DAG Node within one DAG Run and is identified by `dagRunId` and `nodeId`. Argo may create one or more Node Attempts for a Node Run. A Node Attempt is identified by `dagRunId`, `nodeId`, and the Argo retry index.
 The Worker Manifest describes one Node Run. It remains unchanged between attempts. The Worker Runtime derives the current Node Attempt identifier from `MDDS_ARGO_RETRY_INDEX`, for example `attempt-0`, `attempt-1`, and so on.
-This is `worker-manifest.json` example for job profile with `id` = `solving-slae` for `nodeId` = `solve-a`:
+This is `worker-manifest.json` example for worker profile with `id` = `solving-slae` for `nodeId` = `solve-a`:
 
 ```json
 {
@@ -540,7 +536,7 @@ This is `worker-manifest.json` example for job profile with `id` = `solving-slae
 }
 ```
 
-This is `worker-manifest.json` example for job profile with `id` = `vector-sum` for `nodeId` = `sum-a-b`:
+This is `worker-manifest.json` example for worker profile with `id` = `vector-sum` for `nodeId` = `sum-a-b`:
 
 ```json
 {
@@ -600,7 +596,7 @@ The worker must read input data only from the paths defined in the Worker Manife
 
 ### Parameters
 
-Job parameters are provided in:
+Worker parameters are provided in:
 
 ```text
 /opt/mdds/config/worker-manifest.json
@@ -678,7 +674,7 @@ The worker must handle process termination correctly.
 
 When it receives `SIGTERM`, the worker must:
 
-1. stop or terminate the job-specific computation;
+1. stop or terminate the worker-specific computation;
 2. forward the signal to any supervised child process;
 3. perform bounded cleanup;
 4. avoid publishing incomplete outputs as successful outputs;
@@ -693,18 +689,18 @@ The Atomic Worker Image Contract is language-independent and mandatory.
 Language-specific runtime APIs are optional convenience layers built on top of this contract. For example, the Python Worker Runtime may preserve the following interface:
 
 ```python
-class JobHandler:
-    def execute(self, context: JobExecutionContext) -> None:
+class WorkerHandler:
+    def execute(self, context: WorkerExecutionContext) -> None:
         ...
 ```
 
-The runtime is responsible for reading the Worker Manifest, preparing `JobExecutionContext`, invoking the handler, validating outputs, writing diagnostic information, handling termination signals, and converting the result into the appropriate process exit code.
+The runtime is responsible for reading the Worker Manifest, preparing `WorkerExecutionContext`, invoking the handler, validating outputs, writing diagnostic information, handling termination signals, and converting the result into the appropriate process exit code.
 
 A user may implement the Atomic Worker Image Contract directly without using a language-specific MDDS runtime.
 
-### Job handler data access pattern
+### Worker handler data access pattern
 
-A concrete `JobHandler` must access job inputs, parameters, and outputs only through `JobExecutionContext`.
+A concrete `WorkerHandler` must access worker inputs, parameters, and outputs only through `WorkerExecutionContext`.
 
 The handler must use logical input slots declared in `manifest.inputs` to read input artifacts:
 
@@ -748,17 +744,17 @@ The Worker Runtime resolves logical input and output slots declared in the Worke
 
 After the Worker process terminates successfully, the Argo `wait` container uploads the output artifacts declared in the generated Workflow specification to attempt-specific locations in RunArtifactStorage. The Worker Runtime does not access object storage directly or publish an authoritative terminal node state.
 
-Conceptually, a job handler follows this structure:
+Conceptually, a worker handler follows this structure:
 
 ```python
-class ExampleJobHandler:
-    def execute(self, context: JobExecutionContext) -> None:
+class ExampleWorkerHandler:
+    def execute(self, context: WorkerExecutionContext) -> None:
         input_a = context.inputs.read("inputSlotA")
         input_b_path = context.inputs.path("inputSlotB")
         required_parameter = context.params.required("requiredParameter")
 
-        # Execute job-specific business logic.
-        output_bytes = run_job_specific_logic(
+        # Execute worker-specific business logic.
+        output_bytes = run_worker_specific_logic(
             input_a,
             input_b_path,
             required_parameter,
@@ -937,7 +933,7 @@ flowchart TD
         MINIO_S3[("MinIO / S3<br/>DataSource, RunArtifactStorage, ResultStorage")]
     end
 
-    USER -->|"creates a DAG, selects data and task implementations, and starts a run"| WEB_CLIENT
+    USER -->|"creates a DAG, selects data and worker implementations, and starts a run"| WEB_CLIENT
     WEB_CLIENT -->|"sends DAG definitions, user selections, and run commands"| WEB_SERVER
     WEB_SERVER -->|"compiles the DAG run into an Argo Workflow and submits it"| ARGO_SERVER
     ARGO_SERVER -->|"creates Workflow Custom Resource"| K8S_API
@@ -948,7 +944,7 @@ flowchart TD
 
 The responsibilities are distributed as follows:
 
-* **MDDS Web Client** — allows users to create a DAG and select data and task implementations.
+* **MDDS Web Client** — allows users to create a DAG and select data and worker implementations.
 * **MDDS Server** — stores the MDDS model, creates a snapshot of a specific DAG run, compiles it into a single Argo Workflow, and submits it through the Argo Server REST API.
 * **Argo Server** — accepts the Workflow and provides an API and UI.
 * **Workflow Controller** — interprets the generated Argo Workflow and creates Pods for system and computational DAG tasks.
