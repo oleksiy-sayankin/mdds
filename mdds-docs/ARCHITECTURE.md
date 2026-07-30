@@ -472,17 +472,16 @@ The worker must run as a finite process. It must perform the assigned operation 
 
 ### Entrypoint
 
-The image must contain an executable at the following absolute path:
+The generated Argo Workflow starts the Worker Process using:
 
 ```text
-/opt/mdds/bin/mdds-worker
+/opt/mdds/bin/mdds-worker run
 ```
 
-MDDS invokes the executable using the following command:
+The Worker Runtime reads the Worker Manifest from the canonical path:
 
 ```text
-/opt/mdds/bin/mdds-worker run \
-    --manifest /opt/mdds/config/worker-manifest.json
+/opt/mdds/config/worker-manifest.json
 ```
 
 The executable may be implemented in any programming language. It may be a native binary, an interpreter launcher, or a wrapper around a language-specific runtime.
@@ -590,19 +589,91 @@ The exact paths and artifact metadata are also provided in the Worker Manifest.
 
 ### Input Artifacts
 
-Argo Workflows retrieves input artifacts from the configured artifact repository and places them at the paths declared in the generated Workflow specification.
+Argo Workflows retrieves computational input artifacts from the configured artifact repository and places them at the paths declared in the generated Workflow specification.
 
 The worker must read input data only from the paths defined in the Worker Manifest. The worker must not interact directly with S3 or any other object storage. Argo artifact containers and trusted MDDS platform components perform all object-storage transfers.
 
-### Parameters
+### Worker Manifest materialization
 
-Worker parameters are provided in:
+Worker parameters and artifact bindings are serialized in the language-independent Worker Manifest. Individual operation parameters are not exposed through language-specific serialization or separate environment variables.
+For each Node Run, MDDS serializes the frozen Worker Manifest and embeds it in the generated Argo DAG task as a raw input artifact.
+Before each Node Attempt starts, the Argo executor materializes the Worker Manifest at the canonical path:
 
 ```text
 /opt/mdds/config/worker-manifest.json
 ```
 
-The worker must not depend on language-specific parameter serialization or environment-variable naming conventions.
+The generated Argo Workflow then starts the Worker Process using:
+
+```text
+/opt/mdds/bin/mdds-worker run
+```
+
+The Worker Manifest is control-plane metadata embedded in the generated Workflow. It is not sourced from DataSource and is not stored as user data in RunArtifactStorage.
+
+The following abbreviated Workflow excerpt illustrates only how the Worker Manifest for `nodeId` `sum-a-b` is embedded and materialized. Computational input and output artifacts, retry configuration, and other generated tasks and templates are omitted. 
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: mdds-run-
+spec:
+  entrypoint: mdds-dag
+
+  templates:
+    - name: mdds-dag
+      dag:
+        tasks:
+          - name: sum-a-b
+            template: vector-sum-worker
+            arguments:
+              artifacts:
+                - name: worker-manifest
+                  raw:
+                    data: |
+                      {
+                        "apiVersion": "mdds/v1",
+                        "kind": "WorkerManifest",
+                        "execution": {
+                          "userId": 12345,
+                          "dagRunId": "<dag-run-id>",
+                          "nodeId": "sum-a-b"
+                        },
+                        "inputs": {
+                          "vector-a": {
+                            "path": "/opt/mdds/inputs/vector-a",
+                            "format": "csv"
+                          },
+                          "vector-b": {
+                            "path": "/opt/mdds/inputs/vector-b",
+                            "format": "csv"
+                          }
+                        },
+                        "params": {},
+                        "outputs": {
+                          "solution": {
+                            "path": "/opt/mdds/outputs/solution",
+                            "format": "csv"
+                          }
+                        }
+                      }
+
+    - name: vector-sum-worker
+      inputs:
+        artifacts:
+          - name: worker-manifest
+            path: /opt/mdds/config/worker-manifest.json
+            mode: 0444
+
+      container:
+        image: >-
+          mddsproject/python-worker-vector-sum@sha256:<image-digest>
+        command:
+          - /opt/mdds/bin/mdds-worker
+        args:
+          - run
+```
 
 ### Output Artifacts
 
@@ -881,15 +952,15 @@ flowchart TD
     DATA_SOURCE["DataSource<br/>Source of declared DAG inputs"]
     WORKER_POD["Worker Pod<br/>/opt/mdds/inputs<br/>/opt/mdds/outputs"]
     RUN_STORAGE["RunArtifactStorage<br/>Internal and intermediate artifacts"]
-    DATA_STORAGE["ResultStorage<br/>Published final outputs"]
+    RESULT_STORAGE["ResultStorage<br/>Published final outputs"]
     USER_DOWNLOAD(["User"])
 
     USER_UPLOAD -->|"Uploads input data"| DATA_SOURCE
     DATA_SOURCE -->|"Trusted input preparation"| RUN_STORAGE
     RUN_STORAGE -->|"Argo stages input artifacts"| WORKER_POD
     WORKER_POD -->|"Argo stores node outputs"| RUN_STORAGE
-    RUN_STORAGE -->|"Trusted result publication"| DATA_STORAGE
-    DATA_STORAGE -->|"Downloads results"| USER_DOWNLOAD
+    RUN_STORAGE -->|"Trusted result publication"| RESULT_STORAGE
+    RESULT_STORAGE -->|"Downloads results"| USER_DOWNLOAD
 ```
 
 ## Resource Limits and Timeouts
