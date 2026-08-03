@@ -475,7 +475,7 @@ The worker must run as a finite process. It must perform the assigned operation 
 The generated Argo Workflow starts the Worker Process using:
 
 ```text
-/opt/mdds/bin/mdds-worker run
+/opt/mdds/bin/mdds-worker
 ```
 
 The Worker Runtime reads the Worker Manifest from the canonical path:
@@ -581,8 +581,8 @@ The worker must use the following filesystem layout:
 Input and output slots are mapped to filesystem paths by slot name:
 
 ```text
-/opt/mdds/inputs/{inputSlotName}
-/opt/mdds/outputs/{outputSlotName}
+/opt/mdds/inputs/{inputSlot}
+/opt/mdds/outputs/{outputSlot}
 ```
 
 The exact paths and artifact metadata are also provided in the Worker Manifest.
@@ -606,7 +606,7 @@ Before each Node Attempt starts, the Argo executor materializes the Worker Manif
 The generated Argo Workflow then starts the Worker Process using:
 
 ```text
-/opt/mdds/bin/mdds-worker run
+/opt/mdds/bin/mdds-worker
 ```
 
 The Worker Manifest is control-plane metadata embedded in the generated Workflow. It is not sourced from DataSource and is not stored as user data in RunArtifactStorage.
@@ -671,8 +671,6 @@ spec:
           mddsproject/python-worker-vector-sum@sha256:<image-digest>
         command:
           - /opt/mdds/bin/mdds-worker
-        args:
-          - run
 ```
 
 ### Output Artifacts
@@ -813,7 +811,9 @@ output_path = context.outputs.path("outputSlot")
 
 The Worker Runtime resolves logical input and output slots declared in the Worker Manifest to runtime-managed local filesystem paths. It reads inputs from and writes outputs to those local paths only.
 
-After the Worker process terminates successfully, the Argo `wait` container uploads the output artifacts declared in the generated Workflow specification to attempt-specific locations in RunArtifactStorage. The Worker Runtime does not access object storage directly or publish an authoritative terminal node state.
+After the Worker process terminates, the Argo `wait` container attempts to upload the output artifacts declared in the generated Workflow specification to attempt-specific locations in RunArtifactStorage.
+
+Only artifacts produced by a Node Attempt whose authoritative Argo state is `Succeeded` may be consumed by downstream tasks or `publish-results`. The existence of an object in RunArtifactStorage does not by itself indicate successful node execution.
 
 Conceptually, a worker handler follows this structure:
 
@@ -836,22 +836,22 @@ class ExampleWorkerHandler:
 
 ### Data flow
 
-In Argo Workflows 4.0, each computational task normally creates a Pod containing three containers:
+In the standard Argo Workflows 4.0 container-template execution model used by MDDS, each computational DAG task runs in a Pod containing three containers:
 
 * the `init` container downloads the input artifacts to their configured local paths;
 * the `main` container runs the user-provided Worker Image;
 * the `wait` container uploads the declared output artifacts after the main container completes.
 
 
-| DAG node or stage                                | Artifact source    | Artifact destination |
-|--------------------------------------------------|--------------------|----------------------|
-| System-generated `stage-inputs` Argo DAG task    | DataSource         | RunArtifactStorage   |
-| Initial DAG node(s)                              | RunArtifactStorage | RunArtifactStorage   |
-| Intermediate DAG node                            | RunArtifactStorage | RunArtifactStorage   |
-| Final computational DAG node(s)                  | RunArtifactStorage | RunArtifactStorage   |
-| System-generated `publish-results` Argo DAG task | RunArtifactStorage | ResultStorage        |
+| DAG task or stage                                                         | Artifact source                  | Artifact destination             | Responsible component                 |
+|---------------------------------------------------------------------------|----------------------------------|----------------------------------|---------------------------------------|
+| System-generated `stage-inputs` Argo DAG task                             | `DataSource`                     | `RunArtifactStorage`             | Trusted system task `stage-inputs`    |
+| Input artifact materialization for each computational DAG task            | `RunArtifactStorage`             | `/opt/mdds/inputs/{inputSlot}`   | Argo Executor (`init` container)      |
+| Computational DAG task                                                    | `/opt/mdds/inputs/{inputSlot}`   | `/opt/mdds/outputs/{outputSlot}` | Worker (`main` container)             |
+| Output artifact collection after the Worker (`main` container) terminates | `/opt/mdds/outputs/{outputSlot}` | `RunArtifactStorage`             | Argo Executor (`wait` container)      |
+| System-generated `publish-results` Argo DAG task                          | `RunArtifactStorage`             | `ResultStorage`                  | Trusted system task `publish-results` |
 
-**RunArtifactStorage** is a run-scoped S3 artifact repository used by Argo to store staged DAG inputs and computational node outputs. Artifacts from different DAG Runs must use isolated storage keys.
+**RunArtifactStorage** is an S3 artifact repository used by Argo to store staged DAG inputs and computational node outputs. Each DAG Run uses an isolated key namespace within the selected repository.
 
 #### Initial DAG node data flow
 
@@ -1036,3 +1036,4 @@ The responsibilities are distributed as follows:
 * **ADR-8**: Each generated Argo template explicitly declares all input and output artifacts together with their corresponding local filesystem paths.
 * **ADR-9**: Argo Workflows is the sole owner of automatic Node Attempt retries. The generated Workflow defines retry eligibility and exposes Argo’s retry index to both artifact-location templates and the Worker Runtime. The canonical MDDS attempt identifier is derived from that index.
 * **ADR-10**: Every standalone MDDS configuration and runtime document declares its contract through the top-level `apiVersion` and `kind` fields. `apiVersion` identifies the versioned schema and semantics, while `kind` identifies the document type. Embedded objects inherit the contract of the enclosing document and do not repeat these fields.
+* **ADR-11**: For each Node Attempt, worker-specific computation executes in a single process and must not create child processes of its own.
