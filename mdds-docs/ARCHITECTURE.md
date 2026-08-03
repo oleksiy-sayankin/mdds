@@ -739,16 +739,17 @@ The result file is diagnostic metadata and is not the authoritative execution st
 
 ### Termination
 
-The worker must handle process termination correctly.
+The Worker Runtime treats `SIGTERM` as an unconditional request to abort the current Node Attempt. Graceful termination of worker-specific computation is not part of the Atomic Worker Image Contract.
 
 When it receives `SIGTERM`, the worker must:
 
-1. stop or terminate the worker-specific computation;
-2. forward the signal to any supervised child process;
-3. perform bounded cleanup;
-4. avoid publishing incomplete outputs as successful outputs;
+1. immediately force-terminate any running supervised worker-specific process;
+2. not forward `SIGTERM` to that process and not wait for handler-defined shutdown or cleanup;
+3. not validate or report the attempt outputs as successful;
+4. return exit code `143` (`128 + SIGTERM`) when it completes its termination path;
 5. terminate before the configured Kubernetes termination grace period expires.
 
+A WorkerHandler must not rely on receiving `SIGTERM`, executing a termination callback, or performing cleanup during termination.
 User-requested cancellation is determined by Argo Workflow state and is not represented by a special worker exit code.
 
 ### Language-Specific Runtime APIs
