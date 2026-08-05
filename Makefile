@@ -19,6 +19,13 @@ WORKER_RUNTIME_TEST := $(WORKER_RUNTIME_ROOT)/src/test/python
 WORKER_RUNTIME_PACKAGE := $(MDDS_WORKER_RUNTIME)
 WORKER_RUNTIME_DIST := $(WORKER_RUNTIME_PACKAGE)/target/dist
 
+MDDS_WORKER_RUNTIME_COMMON := mdds-python-worker-runtime-common
+WORKER_RUNTIME_COMMON_ROOT := $(PROJECT_ROOT)/$(MDDS_WORKER_RUNTIME_COMMON)
+WORKER_RUNTIME_COMMON_MAIN := $(WORKER_RUNTIME_COMMON_ROOT)/src/main/python
+WORKER_RUNTIME_COMMON_TEST := $(WORKER_RUNTIME_COMMON_ROOT)/src/test/python
+WORKER_RUNTIME_COMMON_PACKAGE := $(MDDS_WORKER_RUNTIME_COMMON)
+WORKER_RUNTIME_COMMON_DIST := $(WORKER_RUNTIME_COMMON_PACKAGE)/target/dist
+
 MDDS_WORKER_SLAE := mdds-python-worker-solving-slae
 WORKER_SLAE_ROOT := $(PROJECT_ROOT)/mdds-examples/workers/$(MDDS_WORKER_SLAE)
 WORKER_SLAE_MAIN := $(WORKER_SLAE_ROOT)/src/main/python
@@ -38,6 +45,7 @@ PYTHON_BASE_REQUIREMENTS := deployment/python-base/requirements.txt
 PYTHON_BASE_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
 PYTHON_BASE_REQUIREMENTS_LOCK := deployment/python-base/requirements.lock.txt
 
+PYTHON_WORKER_RUNTIME_COMMON_REQUIREMENTS_LOCK := mdds-deployment/python-worker-runtime-common/requirements.lock.txt
 
 COMMON_WEB_CLIENT_ROOT := ./mdds-examples/web-clients/mdds-common-web-client
 COMMON_WEB_CLIENT_PACKAGE_JSON := $(COMMON_WEB_CLIENT_ROOT)/package.json
@@ -143,6 +151,9 @@ clean_build_artifacts:
 		$(WORKER_RUNTIME_ROOT)/build \
 		$(WORKER_RUNTIME_ROOT)/target \
 		$(WORKER_RUNTIME_ROOT)/src/main/python/*.egg-info \
+		$(WORKER_RUNTIME_COMMON_ROOT)/build \
+		$(WORKER_RUNTIME_COMMON_ROOT)/target \
+		$(WORKER_RUNTIME_COMMON_ROOT)/src/main/python/*.egg-info \
 		$(WORKER_SLAE_ROOT)/build \
 		$(WORKER_SLAE_ROOT)/target \
 		$(WORKER_SLAE_ROOT)/src/main/python/*.egg-info \
@@ -207,6 +218,7 @@ build_all_images:
 	@$(MAKE) build_web_server_docker_image
 	@$(MAKE) build_web_app_docker_image
 	@$(MAKE) build_python_worker_runtime_docker_image
+	@$(MAKE) build_python_worker_runtime_common_docker_image
 	@$(MAKE) build_python_worker_solving_slae_docker_image
 	@$(MAKE) build_observability_images
 
@@ -301,6 +313,42 @@ lock_python_base_requirements:
 		--output-file $(PYTHON_BASE_REQUIREMENTS_LOCK) \
 		$(PYTHON_BASE_REQUIREMENTS)
 	@echo "[INFO] ✅ Python base requirements lock file generated."
+
+#
+# Lock Python Worker Runtime Common dependencies
+#
+.PHONY: lock_python_worker_runtime_common_requirements
+lock_python_worker_runtime_common_requirements:
+	@echo "[INFO] Locking Python Worker Runtime Common dependencies..."
+	uv lock --project $(WORKER_RUNTIME_COMMON_ROOT)
+	uv export --quiet \
+		--project $(WORKER_RUNTIME_COMMON_ROOT) \
+		--locked \
+		--no-dev \
+		--no-emit-project \
+		--format requirements.txt \
+		--output-file \
+			$(abspath $(PYTHON_WORKER_RUNTIME_COMMON_REQUIREMENTS_LOCK))
+	@echo "[INFO] ✅ Python Worker Runtime Common dependencies locked."
+
+
+
+#
+# Build Python Worker Runtime Common Docker image
+#
+build_python_worker_runtime_common_docker_image:
+	$(call log_info,"Building Python Worker Runtime Common Docker image...")
+	docker buildx build -f mdds-deployment/python-worker-runtime-common/Dockerfile --progress=plain --tag $(USER_NAME)/python-worker-runtime-common:$(PROJECT_VERSION) .
+	$(call log_done,"Building Python Worker Runtime Common Docker image completed.")
+
+#
+# Push Python Worker Runtime Common Docker image
+#
+push_python_worker_runtime_common_docker_image:
+	$(call log_info,"Pushing Python Worker Runtime Common Docker image...")
+	docker push $(USER_NAME)/python-worker-runtime-common:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Python Worker Runtime Common Docker image completed.")
+
 
 #
 # Build common Docker that is use as root image for Python images
@@ -681,6 +729,7 @@ build_main_images: build_jars \
 	build_web_app_docker_image \
 	package_python_workers \
 	build_python_worker_runtime_docker_image \
+	build_python_worker_runtime_common_docker_image \
 	build_python_worker_solving_slae_docker_image
 
 
@@ -695,6 +744,7 @@ build_main_images_ci: build_jars_ci \
 	build_web_app_docker_image \
 	package_python_workers \
 	build_python_worker_runtime_docker_image \
+	build_python_worker_runtime_common_docker_image \
 	build_python_worker_solving_slae_docker_image
 
 
@@ -704,6 +754,7 @@ build_main_images_ci: build_jars_ci \
 push_main_images: push_web_server_docker_image \
 	push_web_app_docker_image \
 	push_python_worker_runtime_docker_image \
+	push_python_worker_runtime_common_docker_image \
 	push_python_worker_solving_slae_docker_image
 
 #
@@ -716,6 +767,7 @@ build_and_push_main_images: build_main_images \
 # Reformat all Python code
 #
 reformat_python: reformat_worker_runtime \
+	reformat_worker_runtime_common \
 	reformat_worker_slae \
 	reformat_e2e_tests
 
@@ -723,6 +775,7 @@ reformat_python: reformat_worker_runtime \
 # Check code style for all Python code
 #
 check_python_code_style: check_worker_runtime_code_style \
+	check_worker_runtime_common_code_style \
 	check_worker_slae_code_style \
 	check_e2e_code_style
 
@@ -730,6 +783,7 @@ check_python_code_style: check_worker_runtime_code_style \
 # Test all Python code
 #
 test_python_coverage: test_worker_runtime_coverage \
+	test_worker_runtime_common_coverage \
 	test_worker_slae_coverage
 
 #
@@ -741,6 +795,17 @@ check_worker_runtime_code_style:
 	ruff check $(WORKER_RUNTIME_ROOT) --fix --force-exclude --respect-gitignore
 	PYTHONPATH=$(WORKER_RUNTIME_MAIN):$(WORKER_RUNTIME_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
 	$(call log_done,"Checking worker runtime code style completed.")
+
+
+#
+# Check Worker Runtime Common code style
+#
+check_worker_runtime_common_code_style:
+	$(call log_info,"Checking Worker Runtime Common code style...")
+	pycodestyle $(WORKER_RUNTIME_COMMON_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES) --ignore=E501,W503
+	ruff check $(WORKER_RUNTIME_COMMON_ROOT) --fix --force-exclude --respect-gitignore
+	PYTHONPATH=$(WORKER_RUNTIME_COMMON_MAIN):$(WORKER_RUNTIME_COMMON_TEST):$$PYTHONPATH pylint $(WORKER_RUNTIME_COMMON_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
+	$(call log_done,"Checking Worker Runtime Common code style completed.")
 
 
 #
@@ -772,6 +837,16 @@ reformat_worker_runtime:
 	$(call log_info,"Reformating worker runtime sources...")
 	black $(WORKER_RUNTIME_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
 	$(call log_done,"Reformating worker runtime sources completed.")
+
+
+#
+# Reformat Worker Runtime Common code
+#
+reformat_worker_runtime_common:
+	$(call log_info,"Reformating Worker Runtime Common sources...")
+	black $(WORKER_RUNTIME_COMMON_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
+	$(call log_done,"Reformating Worker Runtime Common sources completed.")
+
 
 
 #
@@ -831,6 +906,20 @@ test_worker_runtime_coverage:
 	    --cov-report=xml:target/python-coverage.xml
 	$(call log_done,"Worker runtime tests with coverage completed.")
 
+
+#
+# Run Worker Runtime Common tests with coverage
+#
+test_worker_runtime_common_coverage:
+	$(call log_info,"Running Worker Runtime Common tests with coverage...")
+	cd $(WORKER_RUNTIME_COMMON_ROOT) && \
+	  PYTHONPATH=src/main/python:src/test/python:$$PYTHONPATH \
+	  python -m pytest src/test/python \
+	    --cov=mdds_worker_runtime_common \
+	    --cov-branch \
+	    --cov-report=term-missing \
+	    --cov-report=xml:target/python-coverage.xml
+	$(call log_done,"Worker Runtime Common tests with coverage completed.")
 
 #
 # Run e2e Python tests
@@ -986,6 +1075,10 @@ sonar_scan:
 		$(call log_error_sh,"Worker Runtime Python coverage report is missing. Run 'make test_python_coverage' first."); \
 		exit 1; \
 	}
+	@test -s $(WORKER_RUNTIME_COMMON_ROOT)/target/python-coverage.xml || { \
+		$(call log_error_sh,"Worker Runtime Common Python coverage report is missing. Run 'make test_python_coverage' first."); \
+		exit 1; \
+	}
 	@test -s $(WORKER_SLAE_ROOT)/target/python-coverage.xml || { \
 		$(call log_error_sh,"SLAE Worker Python coverage report is missing. Run 'make test_python_coverage' first."); \
 		exit 1; \
@@ -1004,7 +1097,7 @@ sonar_scan:
 		SONAR_ORGANIZATION_ARG="-Dsonar.organization=$$SONAR_ORGANIZATION" ; \
 	fi ; \
 	JAVA_COVERAGE_FILES=$$(paste -sd, target/java-coverage-files.txt); \
-	PYTHON_COVERAGE_FILES="$(WORKER_RUNTIME_ROOT)/target/python-coverage.xml,$(WORKER_SLAE_ROOT)/target/python-coverage.xml"; \
+	PYTHON_COVERAGE_FILES="$(WORKER_RUNTIME_ROOT)/target/python-coverage.xml,$(WORKER_RUNTIME_COMMON_ROOT)/target/python-coverage.xml,$(WORKER_SLAE_ROOT)/target/python-coverage.xml"; \
 	JS_COVERAGE_FILES="$(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info"; \
 	mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
@@ -1076,7 +1169,9 @@ build_jars:
 #
 # Package all Python workers
 #
-package_python_workers: package_python_worker_runtime package_python_worker_solving_slae
+package_python_workers: package_python_worker_runtime \
+	package_python_worker_runtime_common \
+	package_python_worker_solving_slae
 
 
 #
@@ -1097,6 +1192,25 @@ package_python_worker_runtime:
 	$(call log_info,"Built artifacts:")
 	@ls -lh "$(WORKER_RUNTIME_DIST)"/*.whl
 
+
+
+#
+# Build Python Worker Runtime Common wheel package
+#
+package_python_worker_runtime_common:
+	$(call log_info,"Building Python Worker Runtime Common wheel package...")
+	@rm -rf \
+	  "$(WORKER_RUNTIME_COMMON_PACKAGE)/build" \
+	  "$(WORKER_RUNTIME_COMMON_DIST)" \
+	  "$(WORKER_RUNTIME_COMMON_PACKAGE)"/src/main/python/*.egg-info
+	@cd "$(WORKER_RUNTIME_COMMON_PACKAGE)" && \
+	  python -m build \
+	    --wheel \
+	    --outdir "target/dist"
+	@test -n "$$(find "$(WORKER_RUNTIME_COMMON_DIST)" -maxdepth 1 -name '*.whl' -print -quit)"
+	$(call log_done,"Python Worker Runtime Common wheel package was built successfully.")
+	$(call log_info,"Built artifacts:")
+	@ls -lh "$(WORKER_RUNTIME_COMMON_DIST)"/*.whl
 
 #
 # Build Python Worker SLAE wheel package

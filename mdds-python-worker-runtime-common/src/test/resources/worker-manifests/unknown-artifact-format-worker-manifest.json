@@ -1,0 +1,28 @@
+{
+  "apiVersion": "mdds/v1",
+  "kind": "WorkerManifest",
+  "execution": {
+    "userId": 12345,
+    "dagRunId": "dag-run-1",
+    "nodeId": "solve-a"
+  },
+  "inputs": {
+    "matrix": {
+      "path": "/opt/mdds/inputs/matrix",
+      "format": "parquet"
+    },
+    "rhs": {
+      "path": "/opt/mdds/inputs/rhs",
+      "format": "csv"
+    }
+  },
+  "params": {
+    "tolerance": 1e-8
+  },
+  "outputs": {
+    "solution": {
+      "path": "/opt/mdds/outputs/solution",
+      "format": "csv"
+    }
+  }
+}

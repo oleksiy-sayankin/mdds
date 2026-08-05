@@ -18,6 +18,7 @@
     <module>mdds-python-worker-runtime</module>
     <module>mdds-examples</module>
     <module>mdds-e2e-tests</module>
+    <module>mdds-python-worker-runtime-common</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
