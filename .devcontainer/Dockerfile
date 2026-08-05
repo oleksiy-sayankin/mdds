@@ -3,11 +3,15 @@
 
 FROM docker:29.5.3 AS docker-cli
 FROM docker/compose-bin:v5.1.4 AS docker-compose
+FROM ghcr.io/astral-sh/uv:0.12.1 AS uv
 FROM python:3.12-slim AS python-base
 FROM eclipse-temurin:21-jdk AS dev-container
 
 
 COPY --from=python-base /usr/local /usr/local
+
+# Copy uv binaries.
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN ldconfig
 
@@ -95,6 +99,21 @@ RUN install -d -m 0755 /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y --no-install-recommends google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
+
+# Install a pinned Codex CLI version system-wide.
+# The standalone installer selects the correct binary for the target architecture
+# and verifies the downloaded release checksum.
+ARG CODEX_VERSION=0.146.0
+
+RUN curl -fsSL https://chatgpt.com/codex/install.sh \
+      -o /tmp/install-codex.sh \
+    && CODEX_RELEASE="${CODEX_VERSION}" \
+       CODEX_NON_INTERACTIVE=1 \
+       CODEX_INSTALL_DIR=/usr/local/bin \
+       CODEX_HOME=/opt/codex \
+       sh /tmp/install-codex.sh \
+    && rm -f /tmp/install-codex.sh \
+    && codex --version
 
 RUN mkdir -p \
       /home/ubuntu/.docker \

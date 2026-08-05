@@ -13,6 +13,7 @@ services:
     volumes:
       - ..:/workspaces/mdds
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.codex:/home/ubuntu/.codex
       - mdds-maven-cache:/home/ubuntu/.m2
       - mdds-npm-cache:/home/ubuntu/.npm
       - mdds-pip-cache:/home/ubuntu/.cache/pip
