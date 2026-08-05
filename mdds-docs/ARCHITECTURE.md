@@ -700,6 +700,7 @@ The worker communicates its primary execution result through the exit status of 
 exit 0 — success
 exit 1 — execution failure; no retry by default
 exit 2 — contract violation; never retry
+exit 143 — the Worker Runtime completed the runtime-managed SIGTERM termination path during supervised worker execution.
 Argo Error / transient infrastructure failure — retry according to platform policy
 ```
 
@@ -709,6 +710,7 @@ MDDS v1 assigns the following conventional meanings:
 0  SUCCESS
 1  EXECUTION_FAILED
 2  WORKER_CONTRACT_VIOLATION
+143  SIGTERM_TERMINATED
 ```
 
 Any other non-zero exit code is also treated as failed execution.
@@ -739,17 +741,20 @@ The result file is diagnostic metadata and is not the authoritative execution st
 
 ### Termination
 
-The Worker Runtime treats `SIGTERM` as an unconditional request to abort the current Node Attempt. Graceful termination of worker-specific computation is not part of the Atomic Worker Image Contract.
+In this version of the Atomic Worker Image Contract, runtime-managed `SIGTERM` handling is guaranteed only while the supervised child process dedicated to executing `WorkerHandler.execute(context)` is running. Worker Runtime setup and finalization operations are expected to be short-lived and are not required to be interruptible through the managed `SIGTERM` path.
+If the main Worker Runtime process receives `SIGTERM` while the supervised `WorkerHandler.execute(context)` process is running, it treats the signal as an unconditional request to abort the current Node Attempt. The Worker Runtime must:
 
-When it receives `SIGTERM`, the worker must:
+1. immediately interrupt its wait for that supervised process and force-terminate it with `SIGKILL`;
+2. not forward `SIGTERM` to the supervised process;
+3. not wait for handler-defined shutdown or cleanup;
+4. not validate or report outputs produced by the aborted attempt as successful;
+5. atomically write a termination diagnostic result to `/opt/mdds/result/result.json` with `exitCode` set to `143`;
+6. exit with code `143` (`128 + SIGTERM`) after completing the runtime-managed termination path;
+7. complete the runtime-managed termination path before the configured Kubernetes termination grace period expires.
 
-1. immediately force-terminate any running supervised worker-specific process;
-2. not forward `SIGTERM` to that process and not wait for handler-defined shutdown or cleanup;
-3. not validate or report the attempt outputs as successful;
-4. return exit code `143` (`128 + SIGTERM`) when it completes its termination path;
-5. terminate before the configured Kubernetes termination grace period expires.
-
-A WorkerHandler must not rely on receiving `SIGTERM`, executing a termination callback, or performing cleanup during termination.
+This guarantee does not apply before the supervised process starts or after it completes. This includes configuration and manifest loading, execution-context construction and persistence, output validation, result persistence, and runtime cleanup. These runtime-owned operations are assumed to be short-lived in this contract version and are not required to be interrupted through the managed `SIGTERM` path.
+Consequently, when `SIGTERM` is received outside the supervised execution phase, this contract version does not guarantee that the Worker Runtime writes a termination `result.json` or exits through its runtime-managed exit-code `143` path.
+A `WorkerHandler` must not rely on receiving `SIGTERM`, executing a termination callback, or performing cleanup during termination.
 User-requested cancellation is determined by Argo Workflow state and is not represented by a special worker exit code.
 
 ### Language-Specific Runtime APIs
