@@ -33,6 +33,13 @@ WORKER_SLAE_TEST := $(WORKER_SLAE_ROOT)/src/test/python
 WORKER_SLAE_PACKAGE := $(WORKER_SLAE_ROOT)
 WORKER_SLAE_DIST := $(WORKER_SLAE_ROOT)/target/dist
 
+MDDS_WORKER_VECTOR_SUM := mdds-python-worker-vector-sum
+WORKER_VECTOR_SUM_ROOT := $(PROJECT_ROOT)/mdds-examples/workers/$(MDDS_WORKER_VECTOR_SUM)
+WORKER_VECTOR_SUM_MAIN := $(WORKER_VECTOR_SUM_ROOT)/src/main/python
+WORKER_VECTOR_SUM_TEST := $(WORKER_VECTOR_SUM_ROOT)/src/test/python
+WORKER_VECTOR_SUM_PACKAGE := $(WORKER_VECTOR_SUM_ROOT)
+WORKER_VECTOR_SUM_DIST := $(WORKER_VECTOR_SUM_ROOT)/target/dist
+
 MDDS_E2E_TESTS := mdds-e2e-tests
 E2E_TESTS_ROOT := $(PROJECT_ROOT)/$(MDDS_E2E_TESTS)
 E2E_TESTS_MAIN := $(E2E_TESTS_ROOT)/src/main/python
@@ -46,6 +53,7 @@ PYTHON_BASE_BUILD_CONSTRAINTS := deployment/python-base/build-constraints.txt
 PYTHON_BASE_REQUIREMENTS_LOCK := deployment/python-base/requirements.lock.txt
 
 PYTHON_WORKER_RUNTIME_COMMON_REQUIREMENTS_LOCK := mdds-deployment/python-worker-runtime-common/requirements.lock.txt
+PYTHON_WORKER_VECTOR_SUM_REQUIREMENTS_LOCK := mdds-deployment/python-worker-vector-sum/requirements.lock.txt
 
 COMMON_WEB_CLIENT_ROOT := ./mdds-examples/web-clients/mdds-common-web-client
 COMMON_WEB_CLIENT_PACKAGE_JSON := $(COMMON_WEB_CLIENT_ROOT)/package.json
@@ -157,6 +165,9 @@ clean_build_artifacts:
 		$(WORKER_SLAE_ROOT)/build \
 		$(WORKER_SLAE_ROOT)/target \
 		$(WORKER_SLAE_ROOT)/src/main/python/*.egg-info \
+		$(WORKER_VECTOR_SUM_ROOT)/build \
+		$(WORKER_VECTOR_SUM_ROOT)/target \
+		$(WORKER_VECTOR_SUM_ROOT)/src/main/python/*.egg-info \
 		$(E2E_TESTS_ROOT)/target \
 		$(COMMON_WEB_CLIENT_ROOT)/target \
 		$(COMMON_WEB_CLIENT_ROOT)/$(NODE_MODULES)
@@ -220,6 +231,7 @@ build_all_images:
 	@$(MAKE) build_python_worker_runtime_docker_image
 	@$(MAKE) build_python_worker_runtime_common_docker_image
 	@$(MAKE) build_python_worker_solving_slae_docker_image
+	@$(MAKE) build_python_worker_vector_sum_docker_image
 	@$(MAKE) build_observability_images
 
 
@@ -332,6 +344,21 @@ lock_python_worker_runtime_common_requirements:
 	@echo "[INFO] ✅ Python Worker Runtime Common dependencies locked."
 
 
+.PHONY: lock_python_worker_vector_sum_requirements
+lock_python_worker_vector_sum_requirements:
+	@echo "[INFO] Locking Python Worker Vector Sum dependencies..."
+	uv lock --project $(WORKER_VECTOR_SUM_ROOT)
+	uv export --quiet \
+		--project $(WORKER_VECTOR_SUM_ROOT) \
+		--locked \
+		--no-dev \
+		--no-emit-project \
+		--prune mdds-python-worker-runtime-common \
+		--format requirements.txt \
+		--output-file \
+			$(abspath $(PYTHON_WORKER_VECTOR_SUM_REQUIREMENTS_LOCK))
+	@echo "[INFO] ✅ Python Worker Vector Sum dependencies locked."
+
 
 #
 # Build Python Worker Runtime Common Docker image
@@ -402,6 +429,27 @@ push_python_worker_solving_slae_docker_image:
 	$(call log_info,"Pushing Docker image for Python Worker solving SLAE...")
 	docker push $(USER_NAME)/python-worker-solving-slae:$(PROJECT_VERSION)
 	$(call log_done,"Pushing Docker image for Python Worker solving SLAE.")
+
+
+
+#
+# Build Docker image for the Vector Sum Python Worker.
+# Requires the Python Worker Runtime Common Docker image and the Vector Sum worker wheel package.
+#
+build_python_worker_vector_sum_docker_image:
+	$(call log_info,"Building Python Worker Vector Sum Docker image...")
+	docker buildx build -f mdds-deployment/python-worker-vector-sum/Dockerfile --progress=plain --tag $(USER_NAME)/python-worker-vector-sum:$(PROJECT_VERSION) .
+	$(call log_done,"Building Python Worker Vector Sum Docker image completed.")
+
+#
+# Push Docker image for Python Worker Vector Sum
+#
+push_python_worker_vector_sum_docker_image:
+	$(call log_info,"Pushing Docker image for Python Worker Vector Sum...")
+	docker push $(USER_NAME)/python-worker-vector-sum:$(PROJECT_VERSION)
+	$(call log_done,"Pushing Docker image for Python Worker Vector Sum.")
+
+
 
 
 #
@@ -730,7 +778,8 @@ build_main_images: build_jars \
 	package_python_workers \
 	build_python_worker_runtime_docker_image \
 	build_python_worker_runtime_common_docker_image \
-	build_python_worker_solving_slae_docker_image
+	build_python_worker_solving_slae_docker_image \
+	build_python_worker_vector_sum_docker_image
 
 
 #
@@ -745,7 +794,8 @@ build_main_images_ci: build_jars_ci \
 	package_python_workers \
 	build_python_worker_runtime_docker_image \
 	build_python_worker_runtime_common_docker_image \
-	build_python_worker_solving_slae_docker_image
+	build_python_worker_solving_slae_docker_image \
+	build_python_worker_vector_sum_docker_image
 
 
 #
@@ -755,7 +805,8 @@ push_main_images: push_web_server_docker_image \
 	push_web_app_docker_image \
 	push_python_worker_runtime_docker_image \
 	push_python_worker_runtime_common_docker_image \
-	push_python_worker_solving_slae_docker_image
+	push_python_worker_solving_slae_docker_image \
+	push_python_worker_vector_sum_docker_image
 
 #
 # Build and push main images.
@@ -769,6 +820,7 @@ build_and_push_main_images: build_main_images \
 reformat_python: reformat_worker_runtime \
 	reformat_worker_runtime_common \
 	reformat_worker_slae \
+	reformat_worker_vector_sum \
 	reformat_e2e_tests
 
 #
@@ -777,6 +829,7 @@ reformat_python: reformat_worker_runtime \
 check_python_code_style: check_worker_runtime_code_style \
 	check_worker_runtime_common_code_style \
 	check_worker_slae_code_style \
+	check_worker_vector_sum_code_style \
 	check_e2e_code_style
 
 #
@@ -784,7 +837,8 @@ check_python_code_style: check_worker_runtime_code_style \
 #
 test_python_coverage: test_worker_runtime_coverage \
 	test_worker_runtime_common_coverage \
-	test_worker_slae_coverage
+	test_worker_slae_coverage \
+	test_worker_vector_sum_coverage
 
 #
 # Check worker runtime code style
@@ -817,6 +871,17 @@ check_worker_slae_code_style:
 	ruff check $(WORKER_SLAE_ROOT) --fix --force-exclude --respect-gitignore
 	PYTHONPATH=$(abspath $(WORKER_RUNTIME_MAIN)):$(WORKER_SLAE_MAIN):$(WORKER_SLAE_TEST):$$PYTHONPATH pylint $(WORKER_SLAE_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
 	$(call log_done,"Checking worker slae style completed.")
+
+
+#
+# Check worker vector sum code style
+#
+check_worker_vector_sum_code_style:
+	$(call log_info,"Checking worker vector sum style...")
+	pycodestyle $(WORKER_VECTOR_SUM_ROOT) --exclude=*$(VENV_DIR)*,*$(BUILD)*,*$(TARGET)*,*$(NODE_MODULES) --ignore=E501,W503
+	ruff check $(WORKER_VECTOR_SUM_ROOT) --fix --force-exclude --respect-gitignore
+	PYTHONPATH=$(abspath $(WORKER_RUNTIME_COMMON_MAIN)):$(WORKER_VECTOR_SUM_MAIN):$(WORKER_VECTOR_SUM_TEST):$$PYTHONPATH pylint $(WORKER_VECTOR_SUM_ROOT)/ --ignore $(VENV_DIR),$(BUILD),$(TARGET),$(NODE_MODULES) --errors-only
+	$(call log_done,"Checking worker vector sum style completed.")
 
 
 #
@@ -856,6 +921,15 @@ reformat_worker_slae:
 	$(call log_info,"Reformating worker slae sources...")
 	black $(WORKER_SLAE_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
 	$(call log_done,"Reformating worker slae sources completed.")
+
+
+#
+# Reformat worker vector sum code
+#
+reformat_worker_vector_sum:
+	$(call log_info,"Reformating worker vector sum sources...")
+	black $(WORKER_VECTOR_SUM_ROOT)  --exclude '/($(VENV_DIR)|$(NODE_MODULES)|$(BUILD)|$(TARGET))/' --verbose
+	$(call log_done,"Reformating worker vector sum sources completed.")
 
 
 #
@@ -944,6 +1018,22 @@ test_worker_slae_coverage:
 	    --cov-report=term-missing \
 	    --cov-report=xml:target/python-coverage.xml
 	$(call log_done,"SLAE Python worker tests with coverage completed.")
+
+
+#
+# Run Vector Sum Python worker tests with coverage
+#
+test_worker_vector_sum_coverage:
+	$(call log_info,"Running Vector Sum Python worker tests with coverage...")
+	cd $(WORKER_VECTOR_SUM_ROOT) && \
+	  PYTHONPATH=$(abspath $(WORKER_RUNTIME_COMMON_ROOT)/src/main/python):src/main/python:src/test/python:$$PYTHONPATH \
+	  python -m pytest src/test/python \
+	    --cov=mdds_python_worker_vector_sum.handler \
+	    --cov-branch \
+	    --cov-report=term-missing \
+	    --cov-report=xml:target/python-coverage.xml
+	$(call log_done,"Vector Sum Python worker tests with coverage completed.")
+
 
 
 test_java_coverage:
@@ -1083,6 +1173,10 @@ sonar_scan:
 		$(call log_error_sh,"SLAE Worker Python coverage report is missing. Run 'make test_python_coverage' first."); \
 		exit 1; \
 	}
+	@test -s $(WORKER_VECTOR_SUM_ROOT)/target/python-coverage.xml || { \
+		$(call log_error_sh,"Vector Sum Worker Python coverage report is missing. Run 'make test_python_coverage' first."); \
+		exit 1; \
+	}
 	@test -s $(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info || { \
 		$(call log_error_sh,"Common Web Client TypeScript coverage report is missing. Run 'make test_common_web_client_coverage' first."); \
 		exit 1; \
@@ -1097,7 +1191,7 @@ sonar_scan:
 		SONAR_ORGANIZATION_ARG="-Dsonar.organization=$$SONAR_ORGANIZATION" ; \
 	fi ; \
 	JAVA_COVERAGE_FILES=$$(paste -sd, target/java-coverage-files.txt); \
-	PYTHON_COVERAGE_FILES="$(WORKER_RUNTIME_ROOT)/target/python-coverage.xml,$(WORKER_RUNTIME_COMMON_ROOT)/target/python-coverage.xml,$(WORKER_SLAE_ROOT)/target/python-coverage.xml"; \
+	PYTHON_COVERAGE_FILES="$(WORKER_RUNTIME_ROOT)/target/python-coverage.xml,$(WORKER_RUNTIME_COMMON_ROOT)/target/python-coverage.xml,$(WORKER_SLAE_ROOT)/target/python-coverage.xml,$(WORKER_VECTOR_SUM_ROOT)/target/python-coverage.xml"; \
 	JS_COVERAGE_FILES="$(COMMON_WEB_CLIENT_ROOT)/target/coverage/lcov.info"; \
 	mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
 	  -Dsonar.projectKey=$(SONAR_PROJECT_KEY) \
@@ -1113,7 +1207,7 @@ sonar_scan:
 	  -Dsonar.issue.ignore.multicriteria.e1.ruleKey=githubactions:S8544 \
 	  -Dsonar.issue.ignore.multicriteria.e1.resourceKey=.github/workflows/build.yml \
 	  -Dsonar.maven.scanAll=true \
-	  -Dsonar.coverage.exclusions='mdds-dto/src/main/java/com/mdds/dto/**/*.java' \
+	  -Dsonar.coverage.exclusions='mdds-dto/src/main/java/com/mdds/dto/**/*.java,**/testing_handlers.py' \
 	  -Dsonar.token=$$TOKEN
 	$(call log_info,"Checking SonarQube Quality Gate status...")
 	@sleep 5
@@ -1171,7 +1265,8 @@ build_jars:
 #
 package_python_workers: package_python_worker_runtime \
 	package_python_worker_runtime_common \
-	package_python_worker_solving_slae
+	package_python_worker_solving_slae \
+	package_python_worker_vector_sum
 
 
 #
@@ -1230,6 +1325,24 @@ package_python_worker_solving_slae:
 	$(call log_info,"Built artifacts:")
 	@ls -lh "$(WORKER_SLAE_DIST)"/*.whl
 
+
+#
+# Build Python Worker Vector Sum wheel package
+#
+package_python_worker_vector_sum:
+	$(call log_info,"Building Python Worker Vector Sum wheel package...")
+	@rm -rf \
+	  "$(WORKER_VECTOR_SUM_PACKAGE)/build" \
+	  "$(WORKER_VECTOR_SUM_DIST)" \
+	  "$(WORKER_VECTOR_SUM_PACKAGE)"/src/main/python/*.egg-info
+	@cd "$(WORKER_VECTOR_SUM_PACKAGE)" && \
+	  python -m build \
+	    --wheel \
+	    --outdir "target/dist"
+	@test -n "$$(find "$(WORKER_VECTOR_SUM_DIST)" -maxdepth 1 -name '*.whl' -print -quit)"
+	$(call log_done,"Python Worker Vector Sum wheel package was built successfully.")
+	$(call log_info,"Built artifacts:")
+	@ls -lh "$(WORKER_VECTOR_SUM_DIST)"/*.whl
 
 
 #

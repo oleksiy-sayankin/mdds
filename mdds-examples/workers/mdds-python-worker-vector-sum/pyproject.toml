@@ -1,0 +1,35 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+[build-system]
+requires = [
+    "setuptools>=77.0.3",
+    "wheel==0.47.0"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mdds-python-worker-vector-sum"
+version = "0.1.0"
+description = "Example Python MDDS WorkerHandler for finding sum of two vectors."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Oleksiy Oleksandrovych Sayankin" }
+]
+
+dependencies = [
+    "mdds-python-worker-runtime-common==0.1.0"
+]
+
+[tool.uv.sources]
+mdds-python-worker-runtime-common = { path = "../../../mdds-python-worker-runtime-common" }
+
+[tool.setuptools]
+package-dir = { "" = "src/main/python" }
+
+[tool.setuptools.packages.find]
+where = ["src/main/python"]
+include = ["mdds_python_worker_vector_sum*"]

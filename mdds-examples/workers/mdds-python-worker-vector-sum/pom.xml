@@ -5,15 +5,10 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>com.mdds</groupId>
-    <artifactId>mdds</artifactId>
+    <artifactId>mdds-examples</artifactId>
     <version>1.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
-  <artifactId>mdds-examples</artifactId>
-  <name>MDDS Examples</name>
-  <packaging>pom</packaging>
-  <modules>
-    <module>web-clients/mdds-common-web-client</module>
-    <module>workers/mdds-python-worker-solving-slae</module>
-    <module>workers/mdds-python-worker-vector-sum</module>
-  </modules>
+  <artifactId>mdds-python-worker-vector-sum</artifactId>
+  <name>MDDS Python Worker Vector Sum</name>
 </project>
