@@ -133,7 +133,7 @@ kind: WorkerImplementations
 worker-implementations:
   - id: solving-slae-python
     workerProfileId: solving-slae
-    ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
+    ociImageReference: mddsproject/python-worker-solving-slae-numpy@sha256:<sha256-digest>
 
   - id: vector-sum-python
     workerProfileId: vector-sum
@@ -344,7 +344,7 @@ dag-runs:
         workerImplementation:
           id: solving-slae-python
           workerProfileId: solving-slae
-          ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
+          ociImageReference: mddsproject/python-worker-solving-slae-numpy@sha256:<sha256-digest>
 
         inputBindings:
           matrix:
@@ -382,7 +382,7 @@ dag-runs:
         workerImplementation:
           id: solving-slae-python
           workerProfileId: solving-slae
-          ociImageReference: mddsproject/python-worker-solving-slae-numpy-exact-solver@sha256:<sha256-digest>
+          ociImageReference: mddsproject/python-worker-solving-slae-numpy@sha256:<sha256-digest>
 
         inputBindings:
           matrix:
@@ -492,12 +492,12 @@ The Argo Workflow specification explicitly defines this command and does not dep
 
 The Worker Image defines `MDDS_WORKER_NAME`, `MDDS_WORKER_VERSION`, and `MDDS_WORKER_HANDLER`. The generated Argo Workflow supplies `MDDS_ARGO_RETRY_INDEX` for each concrete attempt.
 
-| Variable Name           | Required | Default Value | Meaning                                                                                                                | Example                                              |
-|-------------------------|---------:|--------------:|------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
-| `MDDS_WORKER_NAME`      |      Yes |             — | Stable name of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                  | `mdds-python-worker-solving-slae-numpy-exact-solver` |
-| `MDDS_WORKER_VERSION`   |      Yes |             — | Version of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                      | `0.1.0`                                              |
-| `MDDS_WORKER_HANDLER`   |      Yes |             — | Python import path of the concrete worker handler.                                                                     | `mdds_slae_worker.handler:SlaeWorkerHandler`         |
-| `MDDS_ARGO_RETRY_INDEX` |      Yes |             — | Zero-based index of the current Argo-managed attempt: `0` for the initial attempt, `1` for the first retry, and so on. | `0`                                                  |
+| Variable Name           | Required | Default Value | Meaning                                                                                                                | Example                                                           |
+|-------------------------|---------:|--------------:|------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| `MDDS_WORKER_NAME`      |      Yes |             — | Stable name of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                  | `solving-slae-python`                                             |
+| `MDDS_WORKER_VERSION`   |      Yes |             — | Version of the concrete Worker packaged in the OCI image. Used in logs and execution diagnostics.                      | `0.1.0`                                                           |
+| `MDDS_WORKER_HANDLER`   |      Yes |             — | Python import path of the concrete worker handler.                                                                     | `mdds_python_worker_solving_slae_numpy.handler:SlaeWorkerHandler` |
+| `MDDS_ARGO_RETRY_INDEX` |      Yes |             — | Zero-based index of the current Argo-managed attempt: `0` for the initial attempt, `1` for the first retry, and so on. | `0`                                                               |
 
 
 ### Manifest
