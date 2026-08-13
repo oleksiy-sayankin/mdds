@@ -1,0 +1,419 @@
+# Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved.
+# Refer to the LICENSE file in the root directory for full license details.
+
+# Manual Argo Workflow compiled from the MDDS DAG Run `run-123`.
+#
+# Logical computational graph:
+#
+#   solve-a ----\
+#                +--> sum-a-b --> final-solution
+#   solve-b ----/
+#
+# The Workflow contains no separate artifact-transfer tasks. Argo Executor
+# performs input materialization and output publication inside each
+# computational task Pod.
+#
+# Artifact flow:
+#
+#   InputStorage `default-inputs` (`mdds-inputs`)
+#     -> Argo init containers of solve-a and solve-b
+#     -> local Worker input paths under `/opt/mdds/inputs`
+#
+#   local Worker output paths under `/opt/mdds/outputs`
+#     -> Argo wait containers
+#     -> attempt-specific objects in RunArtifactStorage `internal-runs`
+#        (`mdds-runs`)
+#
+#   local output of each terminal computational task
+#     -> the same Argo wait container
+#     -> declared DAG output in OutputStorage `default-outputs`
+#        (`mdds-outputs`)
+#
+# Argo Workflows 4.0.8 may upload a declared output file even when the Worker
+# main container exits with code 1, 2, or 143. Consequently, a partial or
+# otherwise invalid terminal output may reach OutputStorage. This demo accepts
+# that behavior intentionally. Artifact upload does not make the failed or
+# terminated computational task successful.
+#
+# This file assumes the following demo resources already exist in namespace
+# `argo`:
+#
+#   ServiceAccount:
+#     argo-workflow
+#
+#   Kubernetes Secrets, each with keys `accessKey` and `secretKey`:
+#     mdds-object-storage-credentials
+#
+#   MinIO service:
+#     minio.mdds-storage.svc.cluster.local:9000
+#
+#   Buckets:
+#     mdds-inputs
+#     mdds-runs
+#     mdds-outputs
+#
+#   Source objects:
+#     s3://mdds-inputs/users/12345/data/my-data/matrix-a.csv
+#     s3://mdds-inputs/users/12345/data/my-data/rhs-a.csv
+#     s3://mdds-inputs/users/12345/data/my-data/matrix-b.csv
+#     s3://mdds-inputs/users/12345/data/my-data/rhs-b.csv
+#
+# The default Worker image parameters use version tags so the file can be run
+# during local development. For an immutable MDDS DAG Run, replace both values
+# with the published `@sha256:<digest>` references from the frozen Worker
+# Implementations.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: mdds-run-123-
+  namespace: argo
+  labels:
+    app.kubernetes.io/name: mdds-argo-demo
+    app.kubernetes.io/component: workflow
+    app.kubernetes.io/part-of: mdds-demo
+    mdds.io/dag-id: example-dag
+    mdds.io/dag-run-id: run-123
+    workflows.argoproj.io/archive-strategy: "false"
+spec:
+  entrypoint: mdds-dag
+  serviceAccountName: argo-workflow
+
+  arguments:
+    parameters:
+      - name: slae-worker-image
+        value: >-
+          docker.io/mddsproject/python-worker-solving-slae-numpy:0.1.0
+      - name: vector-sum-worker-image
+        value: >-
+          docker.io/mddsproject/python-worker-vector-sum:0.1.0
+
+  templates:
+    #
+    # The root DAG contains only the three computational tasks. Argo Executor
+    # handles all artifact transfers within their Pods.
+    #
+    - name: mdds-dag
+      dag:
+        tasks:
+          # solve-a and solve-b have no DAG dependencies, so Argo may run them
+          # in parallel. Each task binds its declared inputs directly to the
+          # corresponding InputStorage objects. Argo's init container
+          # materializes them at the local paths declared by slae-worker.
+          - name: solve-a
+            template: slae-worker
+            arguments:
+              parameters:
+                - name: node-id
+                  value: solve-a
+              artifacts:
+                - name: worker-manifest
+                  raw:
+                    data: |
+                      {
+                        "apiVersion": "mdds/v1",
+                        "kind": "WorkerManifest",
+                        "execution": {
+                          "userId": 12345,
+                          "dagRunId": "run-123",
+                          "nodeId": "solve-a"
+                        },
+                        "inputs": {
+                          "matrix": {
+                            "path": "/opt/mdds/inputs/matrix",
+                            "format": "csv"
+                          },
+                          "rhs": {
+                            "path": "/opt/mdds/inputs/rhs",
+                            "format": "csv"
+                          }
+                        },
+                        "params": {},
+                        "outputs": {
+                          "solution": {
+                            "path": "/opt/mdds/outputs/solution",
+                            "format": "csv"
+                          }
+                        }
+                      }
+                - name: matrix
+                  s3:
+                    endpoint: minio.mdds-storage.svc.cluster.local:9000
+                    bucket: mdds-inputs
+                    key: users/12345/data/my-data/matrix-a.csv
+                    region: us-east-1
+                    insecure: true
+                    accessKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: accessKey
+                    secretKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: secretKey
+                - name: rhs
+                  s3:
+                    endpoint: minio.mdds-storage.svc.cluster.local:9000
+                    bucket: mdds-inputs
+                    key: users/12345/data/my-data/rhs-a.csv
+                    region: us-east-1
+                    insecure: true
+                    accessKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: accessKey
+                    secretKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: secretKey
+
+          - name: solve-b
+            template: slae-worker
+            arguments:
+              parameters:
+                - name: node-id
+                  value: solve-b
+              artifacts:
+                - name: worker-manifest
+                  raw:
+                    data: |
+                      {
+                        "apiVersion": "mdds/v1",
+                        "kind": "WorkerManifest",
+                        "execution": {
+                          "userId": 12345,
+                          "dagRunId": "run-123",
+                          "nodeId": "solve-b"
+                        },
+                        "inputs": {
+                          "matrix": {
+                            "path": "/opt/mdds/inputs/matrix",
+                            "format": "csv"
+                          },
+                          "rhs": {
+                            "path": "/opt/mdds/inputs/rhs",
+                            "format": "csv"
+                          }
+                        },
+                        "params": {},
+                        "outputs": {
+                          "solution": {
+                            "path": "/opt/mdds/outputs/solution",
+                            "format": "csv"
+                          }
+                        }
+                      }
+                - name: matrix
+                  s3:
+                    endpoint: minio.mdds-storage.svc.cluster.local:9000
+                    bucket: mdds-inputs
+                    key: users/12345/data/my-data/matrix-b.csv
+                    region: us-east-1
+                    insecure: true
+                    accessKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: accessKey
+                    secretKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: secretKey
+                - name: rhs
+                  s3:
+                    endpoint: minio.mdds-storage.svc.cluster.local:9000
+                    bucket: mdds-inputs
+                    key: users/12345/data/my-data/rhs-b.csv
+                    region: us-east-1
+                    insecure: true
+                    accessKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: accessKey
+                    secretKeySecret:
+                      name: mdds-object-storage-credentials
+                      key: secretKey
+
+          # Argo starts sum-a-b only after both SLAE attempts have succeeded
+          # and their output artifacts have been uploaded to RunArtifactStorage.
+          - name: sum-a-b
+            template: vector-sum-worker
+            depends: solve-a.Succeeded && solve-b.Succeeded
+            arguments:
+              artifacts:
+                - name: worker-manifest
+                  raw:
+                    data: |
+                      {
+                        "apiVersion": "mdds/v1",
+                        "kind": "WorkerManifest",
+                        "execution": {
+                          "userId": 12345,
+                          "dagRunId": "run-123",
+                          "nodeId": "sum-a-b"
+                        },
+                        "inputs": {
+                          "vector-a": {
+                            "path": "/opt/mdds/inputs/vector-a",
+                            "format": "csv"
+                          },
+                          "vector-b": {
+                            "path": "/opt/mdds/inputs/vector-b",
+                            "format": "csv"
+                          }
+                        },
+                        "params": {},
+                        "outputs": {
+                          "solution": {
+                            "path": "/opt/mdds/outputs/solution",
+                            "format": "csv"
+                          }
+                        }
+                      }
+                - name: vector-a
+                  from: "{{tasks.solve-a.outputs.artifacts.solution}}"
+                - name: vector-b
+                  from: "{{tasks.solve-b.outputs.artifacts.solution}}"
+
+      # Expose the terminal artifact uploaded directly by the sum-a-b Pod's
+      # Argo wait container in Workflow status and the Argo UI.
+      outputs:
+        artifacts:
+          - name: final-solution
+            from: >-
+              {{tasks.sum-a-b.outputs.artifacts.final-solution}}
+
+    #
+    # Concrete implementation of Worker Profile `solving-slae`.
+    #
+    # Argo materializes `matrix` and `rhs` from the artifact locations supplied
+    # by each DAG task. In this workflow, solve-a and solve-b bind them directly
+    # to InputStorage objects. Argo then starts the inherited Common Runtime
+    # executable and uploads `solution` to the attempt-specific
+    # RunArtifactStorage key.
+    #
+    - name: slae-worker
+      retryStrategy:
+        # Only Argo/infrastructure Error states are retried. Worker exit codes
+        # 1, 2, and 143 are Failed states and are not automatically retried.
+        limit: "2"
+        retryPolicy: OnError
+        backoff:
+          duration: 2s
+          factor: 2
+          maxDuration: 30s
+
+      inputs:
+        parameters:
+          - name: node-id
+        artifacts:
+          - name: worker-manifest
+            path: /opt/mdds/config/worker-manifest.json
+            mode: 0444
+          - name: matrix
+            path: /opt/mdds/inputs/matrix
+            mode: 0444
+          - name: rhs
+            path: /opt/mdds/inputs/rhs
+            mode: 0444
+
+      container:
+        image: "{{workflow.parameters.slae-worker-image}}"
+        imagePullPolicy: IfNotPresent
+        command:
+          - /opt/mdds/bin/mdds-worker
+        env:
+          # The Common Runtime derives attempt-0, attempt-1, ... from this
+          # zero-based Argo retry index. The Worker Manifest stays unchanged.
+          - name: MDDS_ARGO_RETRY_INDEX
+            value: "{{retries}}"
+
+      outputs:
+        artifacts:
+          - name: solution
+            path: /opt/mdds/outputs/solution
+            archive:
+              none: {}
+            s3:
+              endpoint: minio.mdds-storage.svc.cluster.local:9000
+              bucket: mdds-runs
+              key: >-
+                users/12345/dag-runs/run-123/nodes/{{inputs.parameters.node-id}}/attempts/attempt-{{retries}}/outputs/solution
+              region: us-east-1
+              insecure: true
+              accessKeySecret:
+                name: mdds-object-storage-credentials
+                key: accessKey
+              secretKeySecret:
+                name: mdds-object-storage-credentials
+                key: secretKey
+
+    #
+    # Concrete implementation of Worker Profile `vector-sum`.
+    #
+    # The two input artifact references resolve to the successful attempt
+    # outputs of solve-a and solve-b, including the exact S3 object locations.
+    # After the Worker main container terminates, Argo's wait container uploads
+    # the same local `solution` file both to the attempt-specific
+    # RunArtifactStorage key and to the declared OutputStorage key.
+    #
+    - name: vector-sum-worker
+      retryStrategy:
+        limit: "2"
+        retryPolicy: OnError
+        backoff:
+          duration: 2s
+          factor: 2
+          maxDuration: 30s
+
+      inputs:
+        artifacts:
+          - name: worker-manifest
+            path: /opt/mdds/config/worker-manifest.json
+            mode: 0444
+          - name: vector-a
+            path: /opt/mdds/inputs/vector-a
+            mode: 0444
+          - name: vector-b
+            path: /opt/mdds/inputs/vector-b
+            mode: 0444
+
+      container:
+        image: "{{workflow.parameters.vector-sum-worker-image}}"
+        imagePullPolicy: IfNotPresent
+        command:
+          - /opt/mdds/bin/mdds-worker
+        env:
+          - name: MDDS_ARGO_RETRY_INDEX
+            value: "{{retries}}"
+
+      outputs:
+        artifacts:
+          # The Worker Runtime enforces the required output contract before a
+          # successful exit.
+          - name: solution
+            path: /opt/mdds/outputs/solution
+            archive:
+              none: {}
+            s3:
+              endpoint: minio.mdds-storage.svc.cluster.local:9000
+              bucket: mdds-runs
+              key: >-
+                users/12345/dag-runs/run-123/nodes/sum-a-b/attempts/attempt-{{retries}}/outputs/solution
+              region: us-east-1
+              insecure: true
+              accessKeySecret:
+                name: mdds-object-storage-credentials
+                key: accessKey
+              secretKeySecret:
+                name: mdds-object-storage-credentials
+                key: secretKey
+
+          - name: final-solution
+            path: /opt/mdds/outputs/solution
+            archive:
+              none: {}
+            s3:
+              endpoint: minio.mdds-storage.svc.cluster.local:9000
+              bucket: mdds-outputs
+              key: users/12345/data/my-outputs/sum-a-b.csv
+              region: us-east-1
+              insecure: true
+              accessKeySecret:
+                name: mdds-object-storage-credentials
+                key: accessKey
+              secretKeySecret:
+                name: mdds-object-storage-credentials
+                key: secretKey

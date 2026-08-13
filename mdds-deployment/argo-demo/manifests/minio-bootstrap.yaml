@@ -57,24 +57,24 @@ data:
           "Resource": "arn:aws:s3:::mdds-runs/*"
         },
         {
-          "Sid": "WriteResultsBucket",
+          "Sid": "WriteOutputsBucket",
           "Effect": "Allow",
           "Action": [
             "s3:GetBucketLocation",
             "s3:ListBucket",
             "s3:ListBucketMultipartUploads"
           ],
-          "Resource": "arn:aws:s3:::mdds-results"
+          "Resource": "arn:aws:s3:::mdds-outputs"
         },
         {
-          "Sid": "WriteResultsObjects",
+          "Sid": "WriteOutputsObjects",
           "Effect": "Allow",
           "Action": [
             "s3:AbortMultipartUpload",
             "s3:ListMultipartUploadParts",
             "s3:PutObject"
           ],
-          "Resource": "arn:aws:s3:::mdds-results/*"
+          "Resource": "arn:aws:s3:::mdds-outputs/*"
         }
       ]
     }
@@ -134,7 +134,14 @@ spec:
 
               mc_command mb --ignore-existing mdds/mdds-inputs
               mc_command mb --ignore-existing mdds/mdds-runs
-              mc_command mb --ignore-existing mdds/mdds-results
+              mc_command mb --ignore-existing mdds/mdds-outputs
+              
+              sample_data_prefix=mdds/mdds-inputs/users/12345/data/my-data
+  
+              mc_command cp /sample-data/matrix-a.csv "${sample_data_prefix}/matrix-a.csv"
+              mc_command cp /sample-data/rhs-a.csv "${sample_data_prefix}/rhs-a.csv"
+              mc_command cp /sample-data/matrix-b.csv "${sample_data_prefix}/matrix-b.csv"
+              mc_command cp /sample-data/rhs-b.csv "${sample_data_prefix}/rhs-b.csv"
 
               mc_command admin policy create \
                   mdds mdds-artifact-access /policy/policy.json
@@ -188,9 +195,16 @@ spec:
               readOnly: true
             - name: temporary
               mountPath: /tmp
+            - name: sample-data
+              mountPath: /sample-data
+              readOnly: true
       volumes:
         - name: policy
           configMap:
             name: minio-bootstrap-policy
         - name: temporary
           emptyDir: {}
+        - name: sample-data
+          configMap:
+            name: mdds-sample-data
+            defaultMode: 0444

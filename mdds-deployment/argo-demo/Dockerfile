@@ -24,11 +24,23 @@ FROM rancher/k3s@sha256:6a47cea22c4b834d4ba72c89d291696b79ebe406251f90b446e4dff0
 #
 COPY mdds-deployment/argo-demo/manifests/ /opt/argo-bootstrap/manifests/
 
+# Bundle the input artifacts used by the Argo DAG smoke test.
+COPY mdds-deployment/argo-demo/sample-data/ /opt/argo-bootstrap/sample-data/
+
+# Convert the sample files into a Kubernetes manifest consumed by the
+# MinIO bootstrap Job.
+RUN /bin/kubectl create configmap mdds-sample-data \
+      --namespace=mdds-storage \
+      --from-file=/opt/argo-bootstrap/sample-data \
+      --dry-run=client \
+      --output=yaml \
+    > /opt/argo-bootstrap/manifests/sample-data.yaml
+
 #
 # Bundle a sample Argo Workflow for a manual smoke test. This COPY instruction
 # only adds the manifest to the image; it does not submit or execute it.
 #
-COPY mdds-deployment/argo-demo/smoke-tests/argo-hello-world.yaml /opt/argo-bootstrap/smoke-tests/argo-hello-world.yaml
+COPY mdds-deployment/argo-demo/smoke-tests/ /opt/argo-bootstrap/smoke-tests/
 
 # Bundle the startup script and make it executable. It places the HelmChart
 # manifest in the K3s auto-deploy directory and then starts K3s.
