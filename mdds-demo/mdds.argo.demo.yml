@@ -8,6 +8,7 @@ services:
     privileged: true
     ports:
       - "127.0.0.1:2746:32746"
+      - "127.0.0.1:9001:30901"
     tmpfs:
       - /run
       - /var/run

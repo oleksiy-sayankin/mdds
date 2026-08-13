@@ -158,10 +158,10 @@ spec:
           env:
             # SECURITY REVIEW (kubernetes:S5332):
             # Plain HTTP is intentional for this local single-node demo.
-            # MinIO is exposed only through a cluster-internal ClusterIP Service,
-            # its ports are not published by Docker Compose, and the environment
-            # supports only trusted workloads. Production, multi-node, or
-            # untrusted-workload deployments must enable TLS.
+            # The MinIO S3 API remains available only inside the Kubernetes cluster.
+            # The Console is published by Docker Compose only on the host loopback
+            # address 127.0.0.1. Production deployments must enable TLS and proper
+            # external access controls.
             - name: MINIO_ENDPOINT
               value: http://minio.mdds-storage.svc.cluster.local:9000
             - name: MINIO_ROOT_USER
