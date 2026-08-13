@@ -3,7 +3,7 @@
 
 services:
   mdds-argo-demo:
-    image: "${MDDS_ARGO_DEMO_IMAGE}"
+    image: mddsproject/mdds-argo-demo:0.1.0
     hostname: mdds-argo-demo
     privileged: true
     ports:

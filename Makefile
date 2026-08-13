@@ -93,8 +93,6 @@ SONAR_DEFAULT_ADMIN_PASSWORD ?= admin
 SONAR_ADMIN_PASSWORD ?= MddsLocalSonarAdmin2026_A9xQ7mZ2
 SONAR_TOKEN_NAME ?= mdds-local-sonar-token
 
-MDDS_ARGO_DEMO_IMAGE := $(USER_NAME)/mdds-argo-demo:$(PROJECT_VERSION)
-export MDDS_ARGO_DEMO_IMAGE
 
 CHECK_LICENSE_STRING = "Copyright (c) 2025 Oleksiy Oleksandrovych Sayankin. All Rights Reserved."
 
@@ -566,7 +564,7 @@ push_web_server_docker_image:
 #
 build_argo_demo_docker_image:
 	$(call log_info,"Building Docker image for MDDS Argo demo...")
-	docker buildx build -f mdds-deployment/argo-demo/Dockerfile --progress=plain --load --tag $(MDDS_ARGO_DEMO_IMAGE) .
+	docker buildx build -f mdds-deployment/argo-demo/Dockerfile --progress=plain --load --tag $(USER_NAME)/mdds-argo-demo:$(PROJECT_VERSION) .
 	$(call log_done,"Building Docker image for MDDS Argo demo completed.")
 
 #
@@ -574,7 +572,7 @@ build_argo_demo_docker_image:
 #
 push_argo_demo_docker_image:
 	$(call log_info,"Pushing MDDS Argo demo Docker image ...")
-	docker push $(MDDS_ARGO_DEMO_IMAGE)
+	docker push $(USER_NAME)/mdds-argo-demo:$(PROJECT_VERSION)
 	$(call log_done,"Pushing MDDS Argo demo Docker image completed.")
 
 
