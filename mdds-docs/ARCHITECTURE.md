@@ -72,7 +72,7 @@ MDDS creates the DAG Run when the user starts the DAG. The DAG Run is an immutab
 
 * DataSource — a reusable description of a remote S3 data repository. It contains connection metadata and a credential reference used only by trusted input-import components.
 * InputStorage — MDDS-managed object storage containing input artifacts uploaded by users or imported from DataSources. DAG Runs reference input artifacts only through InputStorage.
-* RunArtifactStorage — trusted platform read/write storage for staged DAG inputs and computational node outputs.
+* RunArtifactStorage — trusted platform read/write storage for computational node outputs.
 * OutputStorage — trusted platform write and user read storage for published DAG outputs.
 
 Remote artifacts are imported from a configured DataSource into InputStorage before a DAG Run is created. A DAG Run references only artifacts already stored in InputStorage.
@@ -81,9 +81,9 @@ Remote artifacts are imported from a configured DataSource into InputStorage bef
 flowchart TD
     REMOTE["Remote S3<br/>described by DataSource"] -->|"trusted import"| INPUT["InputStorage"]
     USER["User upload"] --> |"local files upload"|INPUT
-    INPUT -->|"stage-inputs"| RUN["RunArtifactStorage"]
-    RUN <-->|"Argo artifact transfer"| WORKER["Worker Pod local files"]
-    RUN -->|"publish-outputs"| OUTPUT["OutputStorage"]
+    INPUT -->|"Argo 'init' downloads declared DAG inputs"| WORKER["Worker Pod local files"]
+    RUN["RunArtifactStorage"] <-->|"Argo transfers intermediate artifacts"| WORKER
+    WORKER -->|"Argo 'wait' uploads declared DAG outputs"| OUTPUT["OutputStorage"]
 ```
 
 
@@ -329,7 +329,7 @@ dag-runs:
     dagId: example-dag
 
     #
-    # Internal storage for staged DAG inputs and attempt-specific node outputs
+    # Internal storage for attempt-specific node outputs
     #
     runArtifactStorage:
       id: internal-runs
@@ -506,8 +506,6 @@ s3://mdds-runs/users/12345/dag-runs/run-123/nodes/sum-a-b/attempts/attempt-0/out
 
 These internal locations are not selected by the user.
 
-After all computational DAG nodes complete successfully, the system-generated `publish-outputs` Argo DAG task publishes all declared DAG outputs from RunArtifactStorage to their configured OutputStorage destinations. The Argo Workflow succeeds only after `publish-outputs` completes successfully.
-
 #### S3 object key layout
 
 The following bucket names and object key layout apply to the default MDDS-managed S3 storages:
@@ -526,12 +524,6 @@ Common input data storage folder structure:
 
 ```text
 s3://mdds-inputs/users/{userId}/data/{customUserFolder}/{userFile}
-```
-
-The staged DAG inputs are:
-
-```text
-s3://mdds-runs/users/{userId}/dag-runs/{dagRunId}/inputs/{dagInput}
 ```
 
 Attempt specific layout:
@@ -553,15 +545,6 @@ s3://mdds-inputs/users/12345/data/my-data/matrix-a.csv
 s3://mdds-inputs/users/12345/data/my-data/rhs-a.csv
 s3://mdds-inputs/users/12345/data/my-data/matrix-b.csv
 s3://mdds-inputs/users/12345/data/my-data/rhs-b.csv
-```
-
-The staged DAG inputs are:
-
-```text
-s3://mdds-runs/users/12345/dag-runs/run-123/inputs/matrix-a
-s3://mdds-runs/users/12345/dag-runs/run-123/inputs/rhs-a
-s3://mdds-runs/users/12345/dag-runs/run-123/inputs/matrix-b
-s3://mdds-runs/users/12345/dag-runs/run-123/inputs/rhs-b
 ```
 
 Attempt specific layout:
@@ -937,9 +920,11 @@ output_path = context.outputs.path("outputSlot")
 
 The Worker Runtime resolves logical input and output slots declared in the Worker Manifest to runtime-managed local filesystem paths. It reads inputs from and writes outputs to those local paths only.
 
-After the Worker process terminates, the Argo `wait` container attempts to upload the output artifacts declared in the generated Workflow specification to attempt-specific locations in RunArtifactStorage.
+After the Worker process terminates, the Argo `wait` container attempts to upload each declared node output artifact to its attempt-specific location in RunArtifactStorage. If the node output is bound to a declared DAG output, the same wait container also uploads the same local file directly to the configured OutputStorage destination.
 
-Only artifacts produced by a Node Attempt whose authoritative Argo state is `Succeeded` may be consumed by downstream tasks or `publish-outputs`. The existence of an object in RunArtifactStorage does not by itself indicate successful node execution.
+Only artifacts produced by a Node Attempt whose authoritative Argo state is `Succeeded` may be consumed by downstream tasks. The existence of an object in RunArtifactStorage does not by itself indicate successful node execution.
+
+In Argo Workflows 4.0.8, the `wait` container performs output collection after the `main` container terminates, including when `main` exits with code 1, 2, or 143. Therefore, if a declared local output file exists, a partial or otherwise invalid file may be uploaded to RunArtifactStorage and, for a declared DAG output, to OutputStorage. These uploads are independent and non-transactional. The presence of an object in either storage does not indicate a successful Node Attempt; the authoritative state is reported by Argo Workflows.
 
 Conceptually, a worker handler follows this structure:
 
@@ -969,15 +954,13 @@ In the standard Argo Workflows 4.0 container-template execution model used by MD
 * the `wait` container uploads the declared output artifacts after the main container completes.
 
 
-| DAG task or stage                                                         | Artifact source                  | Artifact destination             | Responsible component                 |
-|---------------------------------------------------------------------------|----------------------------------|----------------------------------|---------------------------------------|
-| System-generated `stage-inputs` Argo DAG task                             | `InputStorage`                   | `RunArtifactStorage`             | Trusted system task `stage-inputs`    |
-| Input artifact materialization for each computational DAG task            | `RunArtifactStorage`             | `/opt/mdds/inputs/{inputSlot}`   | Argo Executor (`init` container)      |
-| Computational DAG task                                                    | `/opt/mdds/inputs/{inputSlot}`   | `/opt/mdds/outputs/{outputSlot}` | Worker (`main` container)             |
-| Output artifact collection after the Worker (`main` container) terminates | `/opt/mdds/outputs/{outputSlot}` | `RunArtifactStorage`             | Argo Executor (`wait` container)      |
-| System-generated `publish-outputs` Argo DAG task                          | `RunArtifactStorage`             | `OutputStorage`                  | Trusted system task `publish-outputs` |
+| DAG task or stage                                                         | Artifact source                                                                        | Artifact destination                                                | Responsible component            |
+|---------------------------------------------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------|----------------------------------|
+| Input artifact materialization for each computational DAG task            | `InputStorage` for declared DAG inputs; `RunArtifactStorage` for upstream node outputs | `/opt/mdds/inputs/{inputSlot}`                                      | Argo Executor (`init` container) |
+| Computational DAG task                                                    | `/opt/mdds/inputs/{inputSlot}`                                                         | `/opt/mdds/outputs/{outputSlot}`                                    | Worker (`main` container)        |
+| Output artifact collection after the Worker (`main` container) terminates | `/opt/mdds/outputs/{outputSlot}`                                                       | `RunArtifactStorage` and, for declared DAG outputs, `OutputStorage` | Argo Executor (`wait` container) |
 
-**RunArtifactStorage** is an S3 artifact repository used by Argo to store staged DAG inputs and computational node outputs. Each DAG Run uses an isolated key namespace within the selected repository.
+**RunArtifactStorage** is an S3 artifact repository used by Argo to store computational node outputs. Each DAG Run uses an isolated key namespace within the selected repository.
 
 #### Initial DAG node data flow
 
@@ -985,15 +968,6 @@ In the standard Argo Workflows 4.0 container-template execution model used by MD
 flowchart TD
     INPUT_STORAGE(["InputStorage"])
     RUN_STORAGE(["RunArtifactStorage"])
-
-    subgraph STAGE_INPUTS["System-generated `stage-inputs` Argo DAG task"]
-        STAGER_INPUTS["/opt/mdds/inputs/"]
-        STAGER["Trusted Input Stager Process"]
-        STAGER_OUTPUTS["/opt/mdds/outputs/"]
-
-        STAGER_INPUTS --> STAGER
-        STAGER -->|"Prepares inputs for staging"| STAGER_OUTPUTS
-    end
 
     subgraph INITIAL_NODE["Initial computational DAG node"]
         INPUTS["/opt/mdds/inputs/"]
@@ -1004,9 +978,7 @@ flowchart TD
         WORKER -->|"Writes local files"| OUTPUTS
     end
 
-    INPUT_STORAGE -->|"Argo downloads declared DAG inputs"| STAGER_INPUTS
-    STAGER_OUTPUTS -->|"Argo uploads staged DAG inputs"| RUN_STORAGE
-    RUN_STORAGE -->|"Argo downloads staged DAG inputs"| INPUTS
+    INPUT_STORAGE -->|"Argo downloads declared DAG inputs"| INPUTS
     OUTPUTS -->|"Argo uploads declared node outputs"| RUN_STORAGE
 ```
 
@@ -1044,21 +1016,11 @@ flowchart TD
         WORKER -->|"Writes local files"| OUTPUTS
     end
 
-    subgraph PUBLISH_NODE["System-generated `publish-outputs` Argo DAG task"]
-        PUBLISH_INPUTS["/opt/mdds/inputs/"]
-        PUBLISHER["Trusted Output Publisher Process"]
-        PUBLISH_OUTPUTS["/opt/mdds/outputs/"]
-
-        PUBLISH_INPUTS --> PUBLISHER
-        PUBLISHER -->|"Prepares outputs for publication"| PUBLISH_OUTPUTS
-    end
-
     RUN_STORAGE -->|"Argo downloads input artifacts"| INPUTS
-    OUTPUTS -->|"Argo uploads declared DAG outputs"| RUN_STORAGE
-    RUN_STORAGE -->|"Argo downloads declared DAG outputs"| PUBLISH_INPUTS
-    PUBLISH_OUTPUTS -->|"Argo uploads published outputs"| OUTPUT_STORAGE
+    OUTPUTS -->|"Argo uploads attempt-specific node outputs"| RUN_STORAGE
+    OUTPUTS -->|"Argo uploads declared DAG outputs"| OUTPUT_STORAGE
 ```
-The diagram shows one output-producing computational node. A DAG Run may contain multiple producers of declared DAG outputs; publish-outputs receives artifacts from all such producers.
+The diagram shows one output-producing computational node. A DAG Run may contain multiple producers of declared DAG outputs.
 
 ## Argo Workflow Observer
 
@@ -1084,10 +1046,10 @@ flowchart TD
 
     USER_UPLOAD -->|"Uploads input data"| INPUT_STORAGE
     REMOTE_S3 -->|"Trusted import"| INPUT_STORAGE
-    INPUT_STORAGE -->|"Trusted input preparation"| RUN_STORAGE
-    RUN_STORAGE -->|"Argo stages input artifacts"| WORKER_POD
+    INPUT_STORAGE -->|"Argo 'init' stages declared input artifacts"| WORKER_POD
+    RUN_STORAGE -->|"Argo stages upstream node outputs"| WORKER_POD
     WORKER_POD -->|"Argo stores node outputs"| RUN_STORAGE
-    RUN_STORAGE -->|"Trusted output publication"| OUTPUT_STORAGE
+    WORKER_POD -->|"Argo 'wait' uploads declared DAG outputs"| OUTPUT_STORAGE
     OUTPUT_STORAGE -->|"Downloads outputs"| USER_DOWNLOAD
 ```
 
@@ -1146,7 +1108,7 @@ The responsibilities are distributed as follows:
 * **MDDS Web Client** — allows users to create a DAG and select data and worker implementations.
 * **MDDS Server** — stores the MDDS model, creates a snapshot of a specific DAG run, compiles it into a single Argo Workflow, and submits it through the Argo Server REST API.
 * **Argo Server** — accepts the Workflow and provides an API and UI.
-* **Workflow Controller** — interprets the generated Argo Workflow and creates Pods for system and computational DAG tasks.
+* **Workflow Controller** — interprets the generated Argo Workflow and creates Pods for computational DAG tasks.
 * **Kubernetes/K3s** — schedules and runs Argo-managed task Pods.
 * **MinIO/S3** — stores input data, intermediate artifacts, and output artifacts.
 
@@ -1156,7 +1118,7 @@ The responsibilities are distributed as follows:
 
 * **ADR-1**: MDDS uses the Argo Server REST API as its only execution-platform API. Communication uses HTTPS and JSON. gRPC is not used in MDDS v1.
 * **ADR-2**: User-provided Worker Images never receive direct write access to either InputStorage or OutputStorage. Workers operate only on local input and output paths. Argo and trusted MDDS platform components transfer artifacts between local paths and object storage.
-* **ADR-3**: Intermediate artifacts are written only to run-specific, attempt-specific namespaces. After all computational DAG nodes complete successfully, the system-generated `publish-outputs` Argo DAG task publishes all declared DAG outputs from RunArtifactStorage to their configured OutputStorage destinations. The Workflow succeeds only after output publication succeeds.
+* **ADR-3**: Intermediate artifacts are written only to run-specific, attempt-specific namespaces.
 * **ADR-4**: Storage credentials are mounted only into trusted artifact-transfer or publication components. They are never included in the Worker Manifest or mounted into the user-provided Worker container.
 * **ADR-5**: An OCI Worker Image does not contain input data and does not receive input data during the image build process.
 * **ADR-6**: Argo stages input artifacts into the running Worker Pod before the Worker Process starts.
