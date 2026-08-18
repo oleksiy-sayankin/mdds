@@ -38,6 +38,16 @@ This document is an initial high-level architecture draft. It captures the curre
   * [End-to-End Artifact Flow](#end-to-end-artifact-flow)
   * [Resource Limits and Timeouts](#resource-limits-and-timeouts)
   * [Component Responsibilities](#component-responsibilities)
+  * [Common Layout](#common-layout)
+    * [Data Sources](#data-sources)
+    * [Input Data](#input-data)
+    * [Output Data](#output-data)
+    * [Worker Profiles](#worker-profiles)
+    * [Worker Implementations](#worker-implementations)
+    * [Directed Acyclic Graph](#directed-acyclic-graph)
+      * [Graphical representation of DAG](#graphical-representation-of-dag)
+      * [YAML representation of DAG](#yaml-representation-of-dag)
+    * [DAG Runs](#dag-runs)
   * [Architecture Decision Records](#architecture-decision-records)
 <!-- TOC -->
 
@@ -929,7 +939,7 @@ In Argo Workflows 4.0.8, the `wait` container performs output collection after t
 Conceptually, a worker handler follows this structure:
 
 ```python
-class ExampleWorkerHandler:
+class ExampleWorkerHandler(WorkerHandler):
     def execute(self, context: WorkerExecutionContext) -> None:
         input_a = context.inputs.read("inputSlotA")
         input_b_path = context.inputs.path("inputSlotB")
@@ -1112,6 +1122,239 @@ The responsibilities are distributed as follows:
 * **Kubernetes/K3s** — schedules and runs Argo-managed task Pods.
 * **MinIO/S3** — stores input data, intermediate artifacts, and output artifacts.
 
+## Common Layout
+
+The following wireframes illustrate the intended common layout and the main user interactions for the MDDS Web Client.
+They are conceptual and do not define final component dimensions, field schemas, validation rules, object lifecycles, or API contracts.
+Persistent MDDS resource identifiers are assigned by the system and are not user-editable; the UI primarily exposes mutable display names.
+
+### Data Sources
+
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌───────────────────────────┐                                              │
+│(HH)│ │ 🔍 Search data sources... │                                              │
+│    │ └───────────────────────────┘                                              │ ┌────────┐
+│    ├───────────────────┬────────────────────────────────────────────────────────┤ │ Rename │
+│[DS]│ Data Sources      │ Production S3           [Edit]  [Test connection]  [⋮] │→│ Delete │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ └────────┘
+│(OD)│ [Production S3]   │ displayName: Production S3                             │
+│(WP)│ Local MinIO       │ endpointUrl: https://my.host.com                       │
+│(WI)│                   │ region: us-west-1                                      │
+│(DA)│                   │ bucket: work-data                                      │
+│(DR)│                   │ credentialRef: production-s3-credentials               │
+│    │                   │                                                        │
+│    │                   │                                                        │
+│    │                   │                                                        │
+│(*) │                   │                                                        │
+│(?) ├───────────────────┤                                                        │
+│(u) │(+) Add Data Source│                                                        │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+* `(HH)` — Home icon;
+* `(DS)` — Data Sources;
+* `(ID)` — Input Data;
+* `(OD)` — Output Data;
+* `(WP)` — Worker Profiles;
+* `(WI)` — Worker Implementations;
+* `(DA)` — Directed Acyclic Graph;
+* `(DR)` — DAG Runs;
+* `(*)` — Settings;
+* `(?)` — Help;
+* `(u)` — Account menu.
+
+```text
+      ┌───────────────────┐
+      │ Documentation [↗] │
+(?) → │ About MDDS        │
+      └───────────────────┘
+```
+
+```text
+      ┌───────────────────┐
+      │ Account Settings  │
+(u) → │ Log Out           │
+      └───────────────────┘
+```
+
+
+
+### Input Data
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌───────────────────────────┐                                              │
+│(HH)│ │ 🔍 Search input data...   │                                              │
+│    │ └───────────────────────────┘                                              │ ┌────────┐
+│    ├───────────────────┬────────────────────────────────────────────────────────┤ │ Rename │
+│(DS)│ Input Data        │ matrix-a.csv                   [Edit]  [Download]  [⋮] │→│ Delete │
+│[ID]├───────────────────┼────────────────────────────────────────────────────────┤ └────────┘
+│(OD)│ 📁                │ 1,3                                                    │
+│(WP)│  ├─[matrix-a.csv] │ 4,7                                                    │
+│(WI)│  ├─matrix-b.csv   │                                                        │
+│(DA)│  ├─rhs-a.csv      │                                                        │
+│(DR)│  ├─rhs-b.csv      │                                                        │
+│    │  └─📁my folder    │                                                        │
+│    │       └─data.txt  │                                                        │
+│    │                   │                                                        │
+│(*) │                   │                                                        │
+│(?) ├───────────────────┤                                                        │
+│(u) │(+) Add file       │                                                        │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+### Output Data
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌───────────────────────────┐                                              │
+│(HH)│ │ 🔍 Search output data...  │                                              │
+│    │ └───────────────────────────┘                                              │
+│    ├───────────────────┬────────────────────────────────────────────────────────┤
+│(DS)│ Output Data       │ solution.csv                                [Download] │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤
+│[OD]│ 📁                │ 3                                                      │
+│(WP)│  ├─[solution.csv] │ 5                                                      │
+│(WI)│  ├─result.csv     │                                                        │
+│(DA)│  ├─data.csv       │                                                        │
+│(DR)│  └─my-result.csv  │                                                        │
+│    │                   │                                                        │
+│    │                   │                                                        │
+│    │                   │                                                        │
+│(*) │                   │                                                        │
+│(?) │                   │                                                        │
+│(u) │                   │                                                        │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+
+
+### Worker Profiles
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌──────────────────────────────┐                                           │
+│(HH)│ │ 🔍 Search worker profiles... │                                           │
+│    │ └──────────────────────────────┘                                           │ ┌────────┐
+│    ├───────────────────┬────────────────────────────────────────────────────────┤ │ Rename │
+│(DS)│ Worker Profiles   │ Solving SLAE                   [Edit]  [Validate]  [⋮] │→│ Delete │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ └────────┘
+│(OD)│  ├─[Solving SLAE] │ # Solves a system of linear algebraic equations.       │
+│[WP]│  └─Vector Sum     │ displayName: Solving SLAE                              │
+│(WI)│                   │ inputs:                                                │
+│(DA)│                   │   - name: matrix                                       │
+│(DR)│                   │     artifactType: numeric-matrix                       │
+│    │                   │     format: csv                                        │
+│    │                   │   - name: rhs                                          │
+│    │                   │     artifactType: numeric-vector                       │
+│(*) │                   │     format: csv                                        │
+│(?) ├───────────────────┤ params: []                                             │
+│(u) │(+) Create Profile │ outputs: ...                                           │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+
+### Worker Implementations
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌──────────────────────────────┐                                           │
+│(HH)│ │ 🔍 Search worker implement...│                                           │
+│    │ └──────────────────────────────┘                                           │
+│    ├───────────────────┬────────────────────────────────────────────────────────┤
+│(DS)│ Worker Impl...    │ NumPy SLAE Solver                [Edit]  [Verify]  [⋮] │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤
+│(OD)│  ├─[NumPy SLAE..] │  displayName: NumPy SLAE Solver                        │
+│(WP)│  └─Vector Sum...  │  workerProfile: Solving SLAE                           │
+│[WI]│                   │  ociImageReference: mddsproject/python-worker-sol...   │
+│(DA)│                   │                                                        │
+│(DR)│                   │                                                        │
+│    │                   │                                                        │
+│    │                   │                                                        │
+│    │                   │                                                        │
+│(*) │                   │                                                        │
+│(?) ├───────────────────┤                                                        │
+│(u) │(+) Add Impl...    │                                                        │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+### Directed Acyclic Graph
+
+#### Graphical representation of DAG
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌──────────────────────────────┐                                           │
+│(HH)│ │ 🔍 Search DAGs...            │                                           │
+│    │ └──────────────────────────────┘                                           │ ┌───────────┐
+│    ├───────────────────┬────────────────────────────────────────────────────────┤ │ Duplicate │
+│(DS)│ DAGs              │ [Graph] | YAML          [Edit]  [Validate]  [Run]  [⋮] │→│ Archive   │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ │ Rename    │
+│(OD)│  ├─[Example Dag]  │  ┌─────────┐                                           │ │ Delete    │
+│(WP)│  ├─Test Dag       │  │ solve-a ├───┐                                       │ └───────────┘
+│(WI)│  └─Other Dag      │  └─────────┘   │   ┌─────────┐                         │
+│[DA]│                   │                ├───┤ sum-a-b │                         │
+│(DR)│                   │  ┌─────────┐   │   └─────────┘                         │
+│    │                   │  │ solve-b ├───┘                                       │
+│    │                   │  └─────────┘                                           │
+│    │                   │                                                        │
+│(*) │                   │                                                        │
+│(?) ├───────────────────┤                                                        │
+│(u) │(+) Create DAG     │                                                        │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+
+#### YAML representation of DAG
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌──────────────────────────────┐                                           │
+│(HH)│ │ 🔍 Search DAGs...            │                                           │
+│    │ └──────────────────────────────┘                                           │
+│    ├───────────────────┬────────────────────────────────────────────────────────┤
+│(DS)│ DAGs              │ Graph | [YAML]          [Edit]  [Validate]  [Run]  [⋮] │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤
+│(OD)│  ├─[Example Dag]  │   displayName: Example Dag                             │
+│(WP)│  ├─Test Dag       │   inputs:                                              │
+│(WI)│  └─Other Dag      │     matrix-a:                                          │
+│[DA]│                   │       artifactType: numeric-matrix                     │
+│(DR)│                   │       format: csv                                      │
+│    │                   │     rhs-a:                                             │
+│    │                   │       artifactType: numeric-vector                     │
+│    │                   │       format: csv                                      │
+│(*) │                   │     matrix-b:                                          │
+│(?) ├───────────────────┤       artifactType: numeric-matrix                     │
+│(u) │(+) Create DAG     │       format: csv                                      │
+└────┴───────────────────┴────────────────────────────────────────────────────────┘
+```
+
+
+### DAG Runs
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌──────────────────────────────┐                                           │
+│(HH)│ │ 🔍 Search DAG Runs...        │                                           │
+│    │ └──────────────────────────────┘                                           │
+│    ├──────────────┬───────────┬─────────────┬──────────┬───────────┬────────────┤
+│(DS)│ DAG Run ID ▼ │ DAG     ▼ │ Status    ▼ │ Started ▼│ Duration ▼│ Progress   │
+│(ID)├──────────────┼───────────┼─────────────┼──────────┼───────────┼────────────┤
+│(OD)│ DAG-Run-Id-0 │ My Dag    │ Succeeded   │2026-08-..│ 31s       │ 3/3        │
+│(WP)│ DAG-Run-Id-1 │ Test Dag  │ Cancelled   │2026-08-..│ 0s        │ 0/3        │
+│(WI)│ DAG-Run-Id-2 │ Other Dag │ Running     │2026-08-..│ 8s        │ 2/3        │
+│(DA)│              │           │             │          │           │            │
+│[DR]│              │           │             │          │           │            │
+│    │              │           │             │          │           │            │
+│    │              │           │             │          │           │            │
+│    │              │           │             │          │           │            │
+│(*) │              │           │             │          │           │            │
+│(?) │              │           │             │          │           │            │
+│(u) │              │           │             │          │           │            │
+└────┴──────────────┴───────────┴─────────────┴──────────┴───────────┴────────────┘
+```
 
 
 ## Architecture Decision Records
