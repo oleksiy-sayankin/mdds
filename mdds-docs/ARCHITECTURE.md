@@ -39,6 +39,7 @@ This document is an initial high-level architecture draft. It captures the curre
   * [Resource Limits and Timeouts](#resource-limits-and-timeouts)
   * [Component Responsibilities](#component-responsibilities)
   * [Common Layout](#common-layout)
+    * [Login Page](#login-page)
     * [Data Sources](#data-sources)
     * [Input Data](#input-data)
     * [Output Data](#output-data)
@@ -1127,6 +1128,32 @@ The responsibilities are distributed as follows:
 The following wireframes illustrate the intended common layout and the main user interactions for the MDDS Web Client.
 They are conceptual and do not define final component dimensions, field schemas, validation rules, object lifecycles, or API contracts.
 Persistent MDDS resource identifiers are assigned by the system and are not user-editable; the UI primarily exposes mutable display names.
+
+
+### Login Page
+
+
+```text
+┌──────────────────────────────────────────────┬──────────────────────────────────┐
+│                                              │                                  │
+│                                              │ MDDS — Modeling of the Dynamics  │
+│                                              │ of Distributed Systems           │ 
+│                                              ├──────────────────────────────────┤
+│                                              │                                  │
+│  Distributed Computational Workflow Manager  │                                  │
+│                                              │   ┌───────────────────────────┐  │
+│  MDDS is designed to simplify the creation   │   │ 👤Username                │  │
+│  and execution of distributed computational  │   └───────────────────────────┘  │
+│  workflows whose operations exchange         │   ┌───────────────────────────┐  │
+│  data through explicitly defined             │   │ 🔒Password           (👁) │  │
+│  inputs and outputs.                         │   └───────────────────────────┘  │
+│                                              │   [  Log In  ]   [  Register  ]  │
+│                                              │                                  │
+│                                              │                                  │
+│                                              │                                  │
+│                                              │     Documentation | GitHub       │
+└──────────────────────────────────────────────┴──────────────────────────────────┘
+```
 
 ### Data Sources
 
