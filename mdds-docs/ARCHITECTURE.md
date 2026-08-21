@@ -81,12 +81,12 @@ MDDS creates the DAG Run when the user starts the DAG. The DAG Run is an immutab
 
 #### Data sources and storages
 
-* DataSource — a reusable description of a remote S3 data repository. It contains connection metadata and a credential reference used only by trusted input-import components.
+* DataSource — a reusable description of an external data source from which users can browse and import input artifacts into InputStorage. A DataSource may represent remote object storage, such as Amazon S3, or a user-selected local filesystem location exposed through the Web Client.
 * InputStorage — MDDS-managed object storage containing input artifacts uploaded by users or imported from DataSources. DAG Runs reference input artifacts only through InputStorage.
 * RunArtifactStorage — trusted platform read/write storage for computational node outputs.
 * OutputStorage — trusted platform write and user read storage for published DAG outputs.
 
-Remote artifacts are imported from a configured DataSource into InputStorage before a DAG Run is created. A DAG Run references only artifacts already stored in InputStorage.
+Artifacts selected from a DataSource are copied into InputStorage before they are referenced by a DAG Run. A DAG Run references only artifacts already stored in InputStorage.
 
 ```mermaid
 flowchart TD
@@ -1162,16 +1162,16 @@ Persistent MDDS resource identifiers are assigned by the system and are not user
 ┌────┬────────────────────────────────────────────────────────────────────────────┐
 │    │ ┌───────────────────────────┐                                              │
 │(HH)│ │ 🔍 Search data sources... │                                              │
-│    │ └───────────────────────────┘                                              │ ┌────────┐
-│    ├───────────────────┬────────────────────────────────────────────────────────┤ │ Rename │
-│[DS]│ Data Sources      │ Production S3           [Edit]  [Test connection]  [⋮] │→│ Delete │
-│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ └────────┘
-│(OD)│ [Production S3]   │ displayName: Production S3                             │
-│(WP)│ Local MinIO       │ endpointUrl: https://my.host.com                       │
-│(WI)│                   │ region: us-west-1                                      │
-│(DA)│                   │ bucket: work-data                                      │
-│(DR)│                   │ credentialRef: production-s3-credentials               │
-│    │                   │                                                        │
+│    │ └───────────────────────────┘                                              │
+│    ├───────────────────┬────────────────────────────────────────────────────────┤
+│[DS]│ Data Sources  (+) │ Production S3                                   [Copy] │ → [Copy to Input Data] 
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ 
+│(OD)│ 🛢 [Production S3] │ 📁                                                     │
+│(WP)│ 🛢 Local MinIO     │ ├─[matrix-a.csv] [⋮] → [Copy to Input Data]             │
+│(WI)│ 🛢 Local Folder    │ ├─matrix-b.csv [⋮]                                      │
+│(DA)│                   │ ├─rhs-a.csv [⋮]                                         │
+│(DR)│                   │ ├─rhs-b.csv [⋮]                                         │
+│    │                   │ └─some-data-file.txt [⋮]                                │
 │    │                   │                                                        │
 │    │                   │                                                        │
 │(*) │                   │                                                        │
@@ -1206,6 +1206,76 @@ Persistent MDDS resource identifiers are assigned by the system and are not user
       └───────────────────┘
 ```
 
+```text
+                        ┌───────────────────────────────┐
+                        │ Add Data Source             X │
+                        ├───────────────────────────────┤
+(+) Add Data Source →   │ Object Storage                │
+                        │     🛢 Amazon S3               │
+                        │                               │
+                        │ Local Filesystem              │
+                        │     📁 Browse local           │
+                        └───────────────────────────────┘
+```
+
+A configured Amazon S3 source allows the user to browse the configured S3 bucket through the Web Client.
+
+```text
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ New Amazon S3 Source                                                          X │
+├────────────────┬────────────────────────────────────────────────────────────────┤
+│ [General]      │  🛢 Amazon S3                                                   │
+│                │                                                                │
+│                │  Name                                                          │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │  Authentication                                                │
+│                │  (*) AWS Access Key      () No Authentication                  │
+│                │  The configured S3 storage will be available for browsing.     │
+│                │                                                                │
+│                │  AWS Access Key                                                │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │  AWS Secret Access Key                                         │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │  Endpoint URL                                                  │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │  Region                                                        │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │  Bucket                                                        │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+├────────────────┴────────────────────────────────────────────────────────────────┤
+│                                                            [ Cancel ]  [ Save ] │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Selecting a Local Filesystem source allows the Web Client to browse files and directories under the user-selected root directory. 
+Files are not copied to Input Data until the user explicitly selects a file and starts the copy operation.
+
+```text
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ New Local Filesystem Source                                                   X │
+├────────────────┬────────────────────────────────────────────────────────────────┤
+│ [General]      │  📁 Local Filesystem                                           │
+│                │                                                                │
+│                │  Name                                                          │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │                                                                │
+│                │  Root Directory                                                │
+│                │  ┌─────────────────────────────────────────────────────────┐   │
+│                │  └─────────────────────────────────────────────────────────┘   │
+│                │                                                   [ Browse ]   │
+├────────────────┴────────────────────────────────────────────────────────────────┤
+│                                                            [ Cancel ]  [ Save ] │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
 
 ### Input Data
