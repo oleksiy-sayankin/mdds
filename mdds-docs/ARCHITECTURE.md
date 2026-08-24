@@ -1218,6 +1218,24 @@ Persistent MDDS resource identifiers are assigned by the system and are not user
                         └───────────────────────────────┘
 ```
 
+```text
+                       ┌──────────────────────────────────────────────────────┐
+                       │ Copy to Input Data                                 X │
+                       ├──────────────────────────────────────────────────────┤
+                       │                                                      │
+                       │ Source                                               │
+                       │ matrix-a.csv                                         │
+                       │                                                      │
+[Copy to Input Data] → │ Destination in Input Data                            │
+                       │ ┌──────────────────────────────────────────────────┐ │
+                       │ │ /my-data                                         │ │
+                       │ └──────────────────────────────────────────────────┘ │
+                       │                                                      │
+                       ├──────────────────────────────────────────────────────┤
+                       │                                [ Cancel ]  [ Copy ]  │
+                       └──────────────────────────────────────────────────────┘
+```
+
 A configured Amazon S3 source allows the user to browse the configured S3 bucket through the Web Client.
 
 ```text
