@@ -1129,6 +1129,7 @@ The following wireframes illustrate the intended common layout and the main user
 They are conceptual and do not define final component dimensions, field schemas, validation rules, object lifecycles, or API contracts.
 Persistent MDDS resource identifiers are assigned by the system and are not user-editable; the UI primarily exposes mutable display names.
 
+The REST API operations shown below are conceptual and illustrate the intended Web Client interactions. They do not define the final API contract, request or response schemas, validation rules, or resource lifecycles.
 
 ### Login Page
 
@@ -1154,6 +1155,13 @@ Persistent MDDS resource identifiers are assigned by the system and are not user
 │                                              │     Documentation | GitHub       │
 └──────────────────────────────────────────────┴──────────────────────────────────┘
 ```
+
+| Operation              | Description                               |
+|------------------------|-------------------------------------------|
+| `POST /users/login`    | Log in as an existing user.               |
+| `POST /users/register` | Register new user.                        |
+| `POST /users/logout`   | Log out the current user.                 |
+| `GET /users/me`        | Get information about the logged-in user. |
 
 ### Data Sources
 
@@ -1217,6 +1225,16 @@ Persistent MDDS resource identifiers are assigned by the system and are not user
                         │     📁 Browse local           │
                         └───────────────────────────────┘
 ```
+
+| Operation                                      | Description                                                            |
+|------------------------------------------------|------------------------------------------------------------------------|
+| `POST /data-sources`                           | Create new data source.                                                |
+| `POST /data-sources/{id}/validate`             | Validate an existing data source and check whether it can be accessed. |
+| `PATCH /data-sources/{id}`                     | Modify existing data source.                                           |
+| `DELETE /data-sources/{id}`                    | Delete existing data source.                                           |
+| `GET /data-sources/{id}`                       | Get information about a data source.                                   |
+| `GET /data-sources/{id}/objects?prefix=<path>` | List objects under the specified data source path.                     |
+| `GET /data-sources`                            | Get all data sources for logged-in user.                               |
 
 ```text
                        ┌──────────────────────────────────────────────────────┐
@@ -1320,6 +1338,22 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 └────┴───────────────────┴────────────────────────────────────────────────────────┘
 ```
 
+| Operation                                             | Description                                                   |
+|-------------------------------------------------------|---------------------------------------------------------------|
+| `POST /input-data/copy`                               | Copy a selected artifact from a DataSource into InputStorage. |
+| `PATCH /input-data?objectKey=<object-key>`            | Update input data entry identified by `<object-key>`.         |
+| `DELETE /input-data?objectKey=<object-key>`           | Delete file with `<object-key>`.                              |
+| `GET /input-data?objectKey=<object-key>`              | Read file with `<object-key>`.                                |
+| `GET /input-data/upload-url?objectKey=<object-key>`   | Get `<presigned-upload-url>` for file uploading.              |
+| `GET /input-data/download-url?objectKey=<object-key>` | Get `<presigned-download-url>` for file downloading.          |
+| `GET /input-data`                                     | Get list of available input files for user.                   |
+
+
+| Operation                      | Description                 |
+|--------------------------------|-----------------------------|
+| `GET <presigned-download-url>` | Download file from S3.      |
+| `PUT <presigned-upload-url>`   | Upload file directly to S3. |
+
 ### Output Data
 
 ```text
@@ -1344,7 +1378,16 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 └────┴───────────────────┴────────────────────────────────────────────────────────┘
 ```
 
+| Operation                                              | Description                                            |
+|--------------------------------------------------------|--------------------------------------------------------|
+| `GET /output-data/download-url?objectKey=<object-key>` | Get `<presigned-download-url>` for downloading a file. |
+| `GET /output-data?objectKey=<object-key>`              | Get contents of a file with `<object-key>`.            |
+| `GET /output-data`                                     | Get list of available output files for user.           |
 
+
+| Operation                      | Description            |
+|--------------------------------|------------------------|
+| `GET <presigned-download-url>` | Download file from S3. |
 
 ### Worker Profiles
 
@@ -1370,6 +1413,14 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 └────┴───────────────────┴────────────────────────────────────────────────────────┘
 ```
 
+| Operation                             | Description                                     |
+|---------------------------------------|-------------------------------------------------|
+| `POST /worker-profiles`               | Create worker profile.                          |
+| `POST /worker-profiles/{id}/validate` | Validate worker profile.                        |
+| `PATCH /worker-profiles/{id}`         | Update worker profile.                          |
+| `DELETE /worker-profiles/{id}`        | Delete worker profile.                          |
+| `GET /worker-profiles/{id}`           | Get information about a worker profile.         |
+| `GET /worker-profiles`                | Get list of available worker profiles for user. |
 
 ### Worker Implementations
 
@@ -1395,6 +1446,15 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 └────┴───────────────────┴────────────────────────────────────────────────────────┘
 ```
 
+| Operation                        | Description                                            |
+|----------------------------------|--------------------------------------------------------|
+| `POST /worker-impls`             | Create worker implementation.                          |
+| `POST /worker-impls/{id}/verify` | Verify worker implementation.                          |
+| `PATCH /worker-impls/{id}`       | Update worker implementation.                          |
+| `DELETE /worker-impls/{id}`      | Delete worker implementation.                          |
+| `GET /worker-impls/{id}`         | Get information about a worker implementation.         |
+| `GET /worker-impls`              | Get list of available worker implementations for user. |
+
 ### Directed Acyclic Graph
 
 #### Graphical representation of DAG
@@ -1405,10 +1465,10 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 │(HH)│ │ 🔍 Search DAGs...            │                                           │
 │    │ └──────────────────────────────┘                                           │ ┌───────────┐
 │    ├───────────────────┬────────────────────────────────────────────────────────┤ │ Duplicate │
-│(DS)│ DAGs              │ [Graph] | YAML          [Edit]  [Validate]  [Run]  [⋮] │→│ Archive   │
-│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ │ Rename    │
-│(OD)│  ├─[Example Dag]  │  ┌─────────┐                                           │ │ Delete    │
-│(WP)│  ├─Test Dag       │  │ solve-a ├───┐                                       │ └───────────┘
+│(DS)│ DAGs              │ [Graph] | YAML          [Edit]  [Validate]  [Run]  [⋮] │→│ Rename    │
+│(ID)├───────────────────┼────────────────────────────────────────────────────────┤ │ Delete    │
+│(OD)│  ├─[Example Dag]  │  ┌─────────┐                                           │ └───────────┘
+│(WP)│  ├─Test Dag       │  │ solve-a ├───┐                                       │ 
 │(WI)│  └─Other Dag      │  └─────────┘   │   ┌─────────┐                         │
 │[DA]│                   │                ├───┤ sum-a-b │                         │
 │(DR)│                   │  ┌─────────┐   │   └─────────┘                         │
@@ -1421,6 +1481,16 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 └────┴───────────────────┴────────────────────────────────────────────────────────┘
 ```
 
+| Operation                   | Description                          |
+|-----------------------------|--------------------------------------|
+| `POST /dags`                | Create DAG.                          |
+| `POST /dags/{id}/validate`  | Validate DAG.                        |
+| `POST /dags/{id}/duplicate` | Duplicate DAG.                       |
+| `POST /dags/{id}/run`       | Run DAG.                             |
+| `PATCH /dags/{id}`          | Update DAG.                          |
+| `DELETE /dags/{id}`         | Delete DAG.                          |
+| `GET /dags/{id}`            | Get information about a DAG.         |
+| `GET /dags`                 | Get list of available DAGs for user. |
 
 #### YAML representation of DAG
 
@@ -1471,6 +1541,11 @@ Files are not copied to Input Data until the user explicitly selects a file and 
 └────┴──────────────┴───────────┴─────────────┴──────────┴───────────┴────────────┘
 ```
 
+| Operation                    | Description                              |
+|------------------------------|------------------------------------------|
+| `GET /dag-runs`              | Get list of available DAG runs for user. |
+| `GET /dag-runs/{id}`         | Get information about a DAG run.         |
+| `POST /dag-runs/{id}/cancel` | Cancel DAG run.                          |
 
 ## Architecture Decision Records
 
