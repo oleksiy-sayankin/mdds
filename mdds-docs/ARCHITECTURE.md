@@ -38,6 +38,7 @@ This document is an initial high-level architecture draft. It captures the curre
   * [End-to-End Artifact Flow](#end-to-end-artifact-flow)
   * [Resource Limits and Timeouts](#resource-limits-and-timeouts)
   * [Component Responsibilities](#component-responsibilities)
+  * [Entity Relationship Diagram](#entity-relationship-diagram)
   * [Common Layout](#common-layout)
     * [Login Page](#login-page)
     * [Data Sources](#data-sources)
@@ -1122,6 +1123,100 @@ The responsibilities are distributed as follows:
 * **Workflow Controller** — interprets the generated Argo Workflow and creates Pods for computational DAG tasks.
 * **Kubernetes/K3s** — schedules and runs Argo-managed task Pods.
 * **MinIO/S3** — stores input data, intermediate artifacts, and output artifacts.
+
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    USER {
+        int id
+        string first_name
+        string middle_name
+        string last_name
+        string login
+        string password_hash
+        string email
+    }
+
+    DATA_SOURCE {
+        int id
+        int user_id
+        int data_source_type_id
+        string name
+        json config
+        int credential_id
+    }
+
+    CREDENTIAL {
+        int id
+        int user_id
+        string type
+        string secret_ref
+    }
+
+    DATA_SOURCE_TYPE {
+        int id
+        string name
+    }
+
+    WORKER_PROFILE {
+        int id
+        int user_id
+        string name
+        json data
+    }
+
+    WORKER_IMPL {
+        int id
+        int user_id
+        int worker_profile_id
+        string oci_image_reference
+        int credential_id
+    }
+
+    DAG {
+        string id
+        int user_id
+        string name
+        json data
+    }
+
+    DAG_RUN {
+        string id
+        int user_id
+        string dag_id
+        int status_id
+        timestamp started
+        timeinterval duration
+        string progress
+    }
+
+    DAG_RUN_STATUS {
+        int id
+        string name
+    }
+
+    USER ||--o{ DATA_SOURCE : creates
+    USER ||--o{ CREDENTIAL : creates
+    DATA_SOURCE_TYPE ||--o{ DATA_SOURCE : classifies
+
+    DATA_SOURCE ||--o| CREDENTIAL : "uses credential"
+    WORKER_IMPL ||--o| CREDENTIAL : "uses credential"
+
+    USER ||--o{ WORKER_PROFILE : creates
+    USER ||--o{ WORKER_IMPL : creates
+    WORKER_PROFILE ||--o{ WORKER_IMPL : "has implementations"
+
+    USER ||--o{ DAG : creates
+    DAG ||--o{ DAG_RUN : "has runs"
+    USER ||--o{ DAG_RUN : starts
+
+    DAG_RUN_STATUS ||--o{ DAG_RUN : classifies
+```
+
+`secret_ref` identifies credential material stored in protected secret storage. The `CREDENTIAL` entity stores only a reference and does not contain passwords, access keys, or tokens directly.
+
+The initial implementation may use encrypted PostgreSQL-backed secret storage while keeping the encryption key outside the database. The storage mechanism may later be replaced by an external secret manager.
 
 ## Common Layout
 
