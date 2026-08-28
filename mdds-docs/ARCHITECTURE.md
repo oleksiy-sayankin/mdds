@@ -41,6 +41,9 @@ This document is an initial high-level architecture draft. It captures the curre
   * [Entity Relationship Diagram](#entity-relationship-diagram)
   * [Common Layout](#common-layout)
     * [Login Page](#login-page)
+    * [Left Panel](#left-panel)
+    * [User Administration](#user-administration)
+    * [About MDDS](#about-mdds)
     * [Data Sources](#data-sources)
     * [Input Data](#input-data)
     * [Output Data](#output-data)
@@ -1136,6 +1139,7 @@ erDiagram
         string login
         string password_hash
         string email
+        string role
     }
 
     DATA_SOURCE {
@@ -1251,12 +1255,181 @@ The REST API operations shown below are conceptual and illustrate the intended W
 └──────────────────────────────────────────────┴──────────────────────────────────┘
 ```
 
-| Operation              | Description                               |
-|------------------------|-------------------------------------------|
-| `POST /users/login`    | Log in as an existing user.               |
-| `POST /users/register` | Register new user.                        |
-| `POST /users/logout`   | Log out the current user.                 |
-| `GET /users/me`        | Get information about the logged-in user. |
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            Welcome to MDDS                                      │
+│                                                                                 │
+│                            [ MDDS LOGO ]                                        │
+│                                                                                 │
+│                            Create User Account                                  │
+│                                                                                 │
+│                            First Name     Middle Name     Last Name             │
+│                            ┌─────────┐    ┌─────────┐     ┌─────────┐           │
+│                            └─────────┘    └─────────┘     └─────────┘           │
+│                            Username       Email                                 │
+│                            ┌─────────┐    ┌─────────┐                           │
+│                            └─────────┘    └─────────┘                           │
+│                            Password                                             │
+│                            ┌─────────┐                                          │
+│                            └─────────┘                                          │
+│                            Confirm Password                                     │
+│                            ┌─────────┐                                          │
+│                            └─────────┘                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                        [ Cancel ]   [ Create ]  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+
+
+| Operation              | Description                                      |
+|------------------------|--------------------------------------------------|
+| `POST /users/login`    | Log in as an existing user.                      |
+| `POST /users/register` | Register new user.                               |
+| `POST /users/logout`   | Log out the current user.                        |
+| `GET /users/me`        | Get information about the logged-in user.        |
+| `PATCH /users/me`      | Modify current user.                             |
+| `POST /users`          | Create new user. For admin only.                 |
+| `GET /users`           | Get information about all users. For admin only. |
+| `GET /users/{id}`      | Get information about user. For admin only.      |
+| `PATCH /users/{id}`    | Modify existing user. For admin only.            |
+| `DELETE /users/{id}`   | Delete existing user. For admin only.            |
+
+
+### Left Panel
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │                                                                            │
+│(HH)│                                                                            │
+│    │                                                                            │
+│    │                                                                            │
+│(DS)│                                                                            │
+│[ID]│                                                                            │
+│(OD)│                                                                            │
+│(WP)│                                                                            │
+│(WI)│                            < Working Area >                                │
+│(DA)│                                                                            │
+│(DR)│                                                                            │
+│    │                                                                            │
+│    │                                                                            │
+│    │                                                                            │
+│(*) │                                                                            │
+│(?) │                                                                            │
+│(u) │                                                                            │
+└────┴────────────────────────────────────────────────────────────────────────────┘
+```
+Here:
+
+* `(HH)` — Home icon;
+* `(DS)` — Data Sources;
+* `(ID)` — Input Data;
+* `(OD)` — Output Data;
+* `(WP)` — Worker Profiles;
+* `(WI)` — Worker Implementations;
+* `(DA)` — Directed Acyclic Graph;
+* `(DR)` — DAG Runs;
+* `(*)` — Settings;
+* `(?)` — Help;
+* `(u)` — Account menu.
+
+
+### User Administration
+
+```text
+      ┌───────────────────┐
+      │ Account Settings  │
+(u) → │ Log Out           │
+      └───────────────────┘
+```
+
+Section `[ Users ]` is available for admin user only.
+
+```text
+┌────┬────────────────────────────────────────────────────────────────────────────┐
+│    │ ┌───────────────────────────┐                                              │
+│(HH)│ │ 🔍 Search users...        │                                              │
+│    │ └───────────────────────────┘                                              │
+│    ├───────────────────┬────────────────────────────────────────────────────────┤
+│(DS)│ Settings          │ Users                                     (+) Add User │
+│[ID]├───────────────────┼──────────┬──────────┬────────────────────┬─────────────┤
+│(OD)│ [ Users ]         │ Name     │ Username │ Email              │ Action      │
+│(WP)│                   ├──────────┼──────────┼────────────────────┼─────────────┤
+│(WI)│                   │ Oleksi.. │ oleks    │ oleks@gmail.com    │  [⋮]        │
+│(DA)│                   │ MyTest   │ test     │ test@gmail.com     │  [⋮]        │
+│(DR)│                   │          │          │                    │             │
+│    │                   │          │          │                    │             │
+│    │                   │          │          │                    │             │
+│    │                   │          │          │                    │             │
+│(*) │                   │          │          │                    │             │
+│(?) │                   │          │          │                    │             │
+│(u) │                   │          │          │                    │             │
+└────┴───────────────────┴──────────┴──────────┴────────────────────┴─────────────┘
+```
+Pressing `[⋮]` opens user edit dialog.
+
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Edit User                                                                     X │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│                            First Name     Middle Name     Last Name             │
+│                            ┌─────────┐    ┌─────────┐     ┌─────────┐           │
+│                            └─────────┘    └─────────┘     └─────────┘           │
+│                            Username       Email                                 │
+│                            ┌─────────┐    ┌─────────┐                           │
+│                            └─────────┘    └─────────┘                           │
+│                            Password                                             │
+│                            ┌─────────┐                                          │
+│                            └─────────┘                                          │
+│                            Confirm Password                                     │
+│                            ┌─────────┐                                          │
+│                            └─────────┘                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                           [ Cancel ]  [ Save ]  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### About MDDS
+
+```text
+      ┌───────────────────┐
+      │ Documentation [↗] │
+(?) → │ About MDDS        │
+      └───────────────────┘
+```
+
+```text
+┌───────────────────────────────────────────────────────────────────────┐
+│ About MDDS                                                          X │
+├───────────────────────────────────────────────────────────────────────┤
+│                 MDDS                                                  │
+│                                                                       │
+│                 Build                                                 │
+│                 0.1.0-202608081742240013-19fd7c0                      │
+│                                                                       │
+│                 Edition                                               │
+│                 Community Edition                                     │ 
+│                                                                       │ 
+│ [ MDDS LOGO ]   Build Time                                            │
+│                 08/08/2026 16:50:03                                   │
+│                                                                       │
+│                 Change Time                                           │ 
+│                 08/08/2026 12:11:22                                   │
+│                                                                       │
+│                 Change Hash                                           │
+│                 19fd7c02a78280d6fb85fbb418e106ee46d40676              │
+│                                                                       │
+│                 Copyright © 2025-2026 Oleksiy Oleksandrovych Sayankin │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+| Operation          | Description                             |
+|--------------------|-----------------------------------------|
+| `GET /system/info` | Get MDDS build and edition information. |
+
 
 ### Data Sources
 
@@ -1283,31 +1456,6 @@ The REST API operations shown below are conceptual and illustrate the intended W
 └────┴───────────────────┴────────────────────────────────────────────────────────┘
 ```
 
-* `(HH)` — Home icon;
-* `(DS)` — Data Sources;
-* `(ID)` — Input Data;
-* `(OD)` — Output Data;
-* `(WP)` — Worker Profiles;
-* `(WI)` — Worker Implementations;
-* `(DA)` — Directed Acyclic Graph;
-* `(DR)` — DAG Runs;
-* `(*)` — Settings;
-* `(?)` — Help;
-* `(u)` — Account menu.
-
-```text
-      ┌───────────────────┐
-      │ Documentation [↗] │
-(?) → │ About MDDS        │
-      └───────────────────┘
-```
-
-```text
-      ┌───────────────────┐
-      │ Account Settings  │
-(u) → │ Log Out           │
-      └───────────────────┘
-```
 
 ```text
                         ┌───────────────────────────────┐
