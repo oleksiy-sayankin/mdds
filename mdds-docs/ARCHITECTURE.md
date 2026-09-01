@@ -39,6 +39,12 @@ This document is an initial high-level architecture draft. It captures the curre
   * [Resource Limits and Timeouts](#resource-limits-and-timeouts)
   * [Component Responsibilities](#component-responsibilities)
   * [Entity Relationship Diagram](#entity-relationship-diagram)
+  * [Deployment model](#deployment-model)
+    * [Release contents](#release-contents)
+    * [Deployment target](#deployment-target)
+    * [Deployment dependencies](#deployment-dependencies)
+    * [Installation order](#installation-order)
+    * [MDDS installation](#mdds-installation)
   * [Common Layout](#common-layout)
     * [Login Page](#login-page)
     * [Left Panel](#left-panel)
@@ -1200,6 +1206,24 @@ erDiagram
         string name
     }
 
+    INPUT_STORAGE {
+        int id
+        string name
+        json config
+    }
+
+    RUN_ARTIFACT_STORAGE {
+        int id
+        string name
+        json config
+    }
+
+    OUTPUT_STORAGE {
+        int id
+        string name
+        json config
+    }
+
     USER ||--o{ DATA_SOURCE : creates
     USER ||--o{ CREDENTIAL : creates
     DATA_SOURCE_TYPE ||--o{ DATA_SOURCE : classifies
@@ -1221,6 +1245,110 @@ erDiagram
 `secret_ref` identifies credential material stored in protected secret storage. The `CREDENTIAL` entity stores only a reference and does not contain passwords, access keys, or tokens directly.
 
 The initial implementation may use encrypted PostgreSQL-backed secret storage while keeping the encryption key outside the database. The storage mechanism may later be replaced by an external secret manager.
+
+
+## Deployment model
+
+MDDS targets an existing Kubernetes cluster. An MDDS release provides the MDDS OCI images, Helm chart, and bootstrap model definitions, and defines a pinned and tested set of supported deployment dependencies.
+
+### Release contents
+
+During MDDS installation, the bootstrap model definitions are made available to the MDDS Server under `/opt/mdds/conf/bootstrap`.
+
+```text
+MDDS Release x.y.z
+│
+├── mddsproject/mdds-web-server:x.y.z
+│
+├── worker-examples
+│   ├── mddsproject/some-worker:x.y.z
+│   └── mddsproject/other-worker:x.y.z
+│
+├── Helm chart
+│   └── mdds:x.y.z
+│
+├── bootstrap/
+│   ├── data-sources.yaml
+│   ├── worker-profiles.yaml
+│   ├── worker-implementations.yaml
+│   ├── dags.yaml
+│   ├── input-storages.yaml
+│   ├── run-artifact-storages.yaml
+│   └── output-storages.yaml
+│
+└── Tested dependency set
+    ├── Kubernetes <supported range>
+    ├── PostgreSQL 18 / chart <version>
+    ├── MinIO Operator chart <version>
+    ├── MinIO Tenant chart <version>
+    └── Argo Workflows chart <version>
+```
+
+The MDDS Helm chart may be published as an OCI artifact in an OCI-compatible registry.
+
+### Deployment target
+
+Existing Kubernetes cluster.
+
+### Deployment dependencies
+
+* PostgreSQL
+* MinIO
+* Argo Workflows
+
+### Installation order
+
+```text
+PostgreSQL
+    ↓
+MinIO Operator
+    ↓
+MinIO Tenant
+    ↓
+Argo Workflows
+    ↓
+MDDS
+```
+
+### MDDS installation
+
+On the initial MDDS installation, bootstrap initialization creates a default administrator account and a guest account. The guest account owns the example resources supplied with the MDDS release.
+The concrete initial credentials are deployment-specific. The demo deployment may use predefined credentials for convenience.
+
+
+```shell
+helm install mdds 
+```
+
+Bootstrap sequence is
+
+```text
+Existing Kubernetes cluster
+        |
+        +--> PostgreSQL
+        +--> MinIO Operator / Tenant
+        +--> Argo Workflows
+        |
+        v
+MDDS Helm installation
+        |
+        v
+MDDS Server starts
+        |
+        +--> Flyway creates/migrates schema
+        |
+        +--> Bootstrap Loader reads /opt/mdds/conf/bootstrap
+        |       |
+        |       +--> admin + guest
+        |       +--> example Data Sources
+        |       +--> Worker Profiles
+        |       +--> Worker Implementations
+        |       +--> example DAGs
+        |       +--> storage definitions
+        |
+        v
+PostgreSQL = authoritative MDDS persistent state
+```
 
 ## Common Layout
 
